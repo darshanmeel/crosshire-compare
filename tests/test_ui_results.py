@@ -106,12 +106,6 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     assert not at.exception, at.exception
     assert (saved / f"{pair}__report.html").read_text(encoding="utf-8") == html
     assert any("Saved 1 file to" in s.value for s in at.success)
-    # a folder outside COMPARE_OUT_DIR is refused with a sentence
-    at.text_input(key="save_all_dir").set_value(str(tmp_path / "elsewhere")); at.run()
-    at.button(key="save_all").click(); at.run()
-    assert not at.exception, at.exception
-    assert any("Saves must stay under" in e.value for e in at.error)
-    assert not (tmp_path / "elsewhere").exists()
     # Parquet on the switch: the copies land in the run folder and the zip follows
     assert not any(p.suffix == ".parquet" for p in run["files"].values())
     at.radio(key="out_fmt").set_value("parquet"); at.run()
@@ -123,12 +117,19 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     assert not any(b.key == "write_pq" for b in at.button)
     with zipfile.ZipFile(run["zip"]) as zf:
         assert f"{pair}__paired.parquet" in zf.namelist()
-    # the rerun behind Write Parquet copies stops before the save box is drawn, which drops its
-    # state: the box comes back with the run's own folder, not empty, and Save works at once
+    # the rerun behind Write Parquet copies stops before the save box is drawn. Streamlit 1.56
+    # dropped the box's state on that run and the app seeds it again; 1.64 keeps it. Either way
+    # the box holds the run's own folder, not empty, and Save works at once
     assert at.text_input(key="save_all_dir").value == str(saved)
     at.button(key="save_all").click(); at.run()
     assert not any("Type a folder" in e.value for e in at.error)
     assert (saved / f"{pair}__paired.parquet").exists()
+    # a folder outside COMPARE_OUT_DIR is refused with a sentence
+    at.text_input(key="save_all_dir").set_value(str(tmp_path / "elsewhere")); at.run()
+    at.button(key="save_all").click(); at.run()
+    assert not at.exception, at.exception
+    assert any("Saves must stay under" in e.value for e in at.error)
+    assert not (tmp_path / "elsewhere").exists()
     # Rows to display is display-only: the tables follow it, the run is not stale
     at.text_input(key="save_all_dir").set_value(str(tmp_path / "out" / "typed")); at.run()
     at.number_input(key="disp_rows").set_value(500); at.run()
