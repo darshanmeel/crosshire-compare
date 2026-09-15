@@ -188,7 +188,7 @@ Press **Compare**. Both sides are materialised once as DuckDB tables under the c
 
 ### Auto
 
-Two files in, the rest worked out - brute force, narrated. It reads both files several times over, so on big files cut them first with *Rows to read*.
+Auto does everything by itself: it pairs the columns, works out the types, finds the key, runs the comparison and lists each decision so you can change it. It reads both files several times over, so on big files cut them first with *Rows to read*.
 
 1. **Pair columns.** By name, then similar name, then by their values for whatever is left over.
 2. **Analyse types.** One pass over the first 50,000 rows of each side: how many values read as a number, a number once commas go, an ISO date, day-first, month-first, any known spelling, with a time of day, a boolean. Each pair gets a Type; a side that needs it gets a step - *remove thousands separators*, *to date (%d/%m/%Y)*. Two spellings are only merged when both sides read cleanly.

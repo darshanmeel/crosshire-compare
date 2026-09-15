@@ -164,15 +164,8 @@ def auto_panel() -> None:
     st.markdown("#### Auto")
     A, B = st.session_state.A, st.session_state.B
     both_in = A.loaded and B.loaded
-    st.caption("Two files in, the rest worked out: columns paired by name and by their "
-               "values, every column analysed for number / date / timestamp / boolean and "
-               "the date spelling each side uses, the key found, the rest compared, the "
-               "comparison run - with progress shown, and every decision listed for you "
-               "to change.")
+    st.caption("Auto does everything by itself - pairs the columns, finds the key, "
+               "compares, and lists each decision so you can change it.")
     if st.button("Figure it all out and compare", type="primary", width="stretch",
                  disabled=not both_in, key="auto_btn"):
         st.session_state["auto_request"] = True
-    st.caption("Brute force: this reads both files several times over - on big files "
-               "cut them first with *Rows to read*."
-               + (f" Here: {A.rows:,} × {len(A.schema)} and {B.rows:,} × {len(B.schema)}."
-                  if both_in else ""))
