@@ -146,7 +146,7 @@ def signature(a: Side, b: Side, cfg: dict) -> str:
     """Everything that changes the answer. Used to spot a stale result."""
     payload = {"a": [a.label, a.rows, a.read_key, list(a.schema)],
                "b": [b.label, b.rows, b.read_key, list(b.schema)],
-               "cfg": {k: v for k, v in cfg.items() if k != "name"}}
+               "cfg": {k: v for k, v in cfg.items() if k not in ("name", "notes", "table_formats")}}
     return json.dumps(payload, sort_keys=True, default=str)
 
 

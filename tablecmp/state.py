@@ -7,7 +7,9 @@ from .sources import Side
 
 DEFAULTS = {"A": Side, "B": Side, "result": lambda: None, "cmap": lambda: None,
             "cmap_seed": lambda: None, "map_rev": lambda: 0, "confirmed": lambda: False,
-            "nokey_mode": lambda: "hash"}
+            "nokey_mode": lambda: "hash",
+            "db_passwords": dict,                 # typed this session, never written anywhere
+            "fetched_A": lambda: None, "fetched_B": lambda: None}   # the database fetch each side holds
 
 
 def init_state() -> None:

@@ -1,5 +1,6 @@
 """
-compare_app.py - compare two tables (a CSV or JSON file on each side), row by row, on a key you choose.
+compare_app.py - compare two tables (a CSV or JSON file, or a database table, on each side),
+row by row, on a key you choose.
 
     pip install streamlit duckdb
     pip install desbordante        # optional: exact key discovery
@@ -11,7 +12,9 @@ Everything else - colours, fonts, limits - is in tablecmp/theme.py.
 """
 from __future__ import annotations
 
+import inspect
 import json
+import os
 import re
 import sys
 import time
@@ -43,7 +46,11 @@ if __name__ == "__main__":
     import streamlit.runtime as _rt
     if not _rt.exists():                         # `python compare_app.py`: start the server
         from streamlit.web import bootstrap
-        bootstrap.run(__file__, False, [], {"server.maxUploadSize": THEME["upload_mb"],
+        try:
+            _upload_mb = int(os.environ.get("COMPARE_UPLOAD_MB") or THEME["upload_mb"])
+        except ValueError:
+            _upload_mb = int(THEME["upload_mb"])
+        bootstrap.run(__file__, False, [], {"server.maxUploadSize": _upload_mb,
                                             "browser.gatherUsageStats": False, **STREAMLIT_THEME})
         raise SystemExit
 
@@ -75,20 +82,34 @@ def _version(v: str) -> tuple[int, ...]:
     return tuple(int(x) for x in re.findall(r"\d+", v)[:3])
 
 
-for pkg, need, have in (("streamlit", "1.49", st.__version__), ("duckdb", "1.1", duckdb.__version__)):
+for pkg, need, have in (("streamlit", "1.49", st.__version__), ("duckdb", "1.2", duckdb.__version__)):
     if _version(have) < _version(need):
         st.error(f"{pkg} {need} or newer is needed (found {have}). Run `pip install -U {pkg}`.")
         st.stop()
 
 from tablecmp import ui_columns, ui_keys, ui_results, ui_sidebar, ui_transform   # noqa: E402
 from tablecmp.auto import auto_configure                                          # noqa: E402
+from tablecmp.columns import specs_from                                           # noqa: E402
 from tablecmp.compare import discard_run, OPS, build_filters, run_comparison, signature       # noqa: E402
+from tablecmp.outputs import pair_name, sweep_work_dir, table_formats, write_parquet_copies, write_summary  # noqa: E402
 from tablecmp.profile import profile_tables                                       # noqa: E402
+from tablecmp.report import build_report                                          # noqa: E402
 from tablecmp.sources import Side, preview_rows                                   # noqa: E402
 from tablecmp.state import bump, forget_results, init_state                       # noqa: E402
 from tablecmp.theme import css, status_strip                                      # noqa: E402
 from tablecmp.values import NULL_TOKENS_DEFAULT, ReadOptions                      # noqa: E402
 
+
+@st.cache_resource(show_spinner=False)
+def _sweep_once() -> int:
+    """Old run folders, fetches and snapshots go once per server process, not per session."""
+    try:
+        return sweep_work_dir()
+    except OSError:
+        return 0
+
+
+_sweep_once()
 init_state()
 st.markdown(css(), unsafe_allow_html=True)
 st.markdown(f'<div class="eyebrow">{APP_NAME} · <span>CSV or JSON, either side</span></div>'
@@ -112,20 +133,43 @@ B: Side = st.session_state.B
 if not (A.loaded and B.loaded):
     n = sum(1 for s in (A, B) if s.loaded)
     status_strip(strip, f"{n} of 2 loaded", "-", "-", "-", "-", {"Files": "warn"})
-    st.info("Load **A** and **B** in the sidebar - a CSV or JSON file on each side. For a big file, "
-            "open **Rows to read** there first and cut it down before pressing Load.")
+    st.info("Load **A** and **B** in the sidebar - a CSV or JSON file, or a database table, on each "
+            "side. For a big file, open **Rows to read** there first and cut it down before pressing Load.")
     st.stop()
 
-NA = (st.session_state.get("nick_A") or A.name or "Left").strip()
-NB = (st.session_state.get("nick_B") or B.name or "Right").strip()
+
+def side_name(tag: str, side: Side, default: str) -> str:
+    """The Name box wins; left at its default, a database side is called after its connection."""
+    nick = (st.session_state.get(f"nick_{tag}") or "").strip()
+    return nick if nick and nick != default else (side.name or default).strip()
+
+
+NA = side_name("A", A, "Left")
+NB = side_name("B", B, "Right")
 OPTS = ReadOptions.from_state(st.session_state)
+
+
+def profile_key_for(specs) -> str:
+    """What a profile was measured on - the two reads, the column specs, the null rules."""
+    return json.dumps([A.read_key, B.read_key, [asdict(s) for s in specs], OPTS.tokens, OPTS.trim],
+                      default=str)
+
+
+def current_profile(key: str | None) -> dict | None:
+    prof = st.session_state.get("profile")
+    return prof[1] if prof and key is not None and prof[0] == key else None
+
 
 # ---- Auto -------------------------------------------------------------------
 if st.session_state.pop("auto_request", False):
     with st.status("Working it out…", expanded=True) as box:
         try:
             t0 = time.perf_counter()
-            new_map, notes, chosen, _ = auto_configure(A, B, NA, NB, OPTS, box.write)
+            cm = st.session_state.get("cmap")
+            before = current_profile(profile_key_for(specs_from(cm)) if cm is not None else None)
+            new_map, notes, chosen, made = auto_configure(
+                A, B, NA, NB, OPTS, box.write, profile=before,
+                want_profile=bool(st.session_state.get("auto_profile", True)))
         except (duckdb.Error, RuntimeError) as exc:
             box.update(label="Auto could not finish", state="error")
             st.error(f"Auto stopped: {exc}")
@@ -139,7 +183,9 @@ if st.session_state.pop("auto_request", False):
             st.session_state["auto_go"] = True
             st.session_state["confirmed"] = True
             bump()
-            forget_results()
+            forget_results()                     # drops the profile too - so store it after
+            if made is not None:
+                st.session_state["profile"] = (profile_key_for(specs_from(new_map)), made)
             st.rerun()
 
 # ---- Files ----------------------------------------------------------------
@@ -185,7 +231,8 @@ with st.expander("How values are read - nulls, whitespace, case, tolerance", exp
 
 # ---- Key ---------------------------------------------------------------------
 st.subheader("Key")
-mode = ui_keys.render(A, B, NA, NB, setup, OPTS)
+profile_key = profile_key_for(setup.specs)
+mode = ui_keys.render(A, B, NA, NB, setup, OPTS, profile=current_profile(profile_key))
 key_cell = " + ".join(setup.keys) if setup.keys else f"none - {mode}"
 
 # ---- Rows and profile ---------------------------------------------------------
@@ -202,8 +249,6 @@ with st.expander("Filters - which rows take part, on the common names", expanded
             "Operator": st.column_config.SelectboxColumn(options=OPS),
             "Value": st.column_config.TextColumn(help="in / not in: comma separated. between: two values."),
             "Type": st.column_config.SelectboxColumn(options=["auto", "string", "number", "date"])})
-profile_key = json.dumps([A.read_key, B.read_key, [asdict(s) for s in setup.specs], OPTS.tokens, OPTS.trim],
-                         default=str)
 with st.expander("Profile - statistics and the 10 most and least frequent values, per column, "
                  "per file (only when pressed)", expanded=False):
     if st.button("Profile both files", key="do_profile", type="primary"):
@@ -276,7 +321,9 @@ except ValueError as exc:
 column_rules = {s.canon: {"type": "number", **({"tolerance": s.tolerance} if s.tolerance else {})}
                 for s in setup.specs if s.kind == "number" and s.canon in setup.compare}
 pending = {
-    "name": (A.label.rsplit(".", 1)[0] or "comparison").replace(" ", "_"),
+    "name": pair_name(A, B),
+    "notes": list(st.session_state.get("auto_notes") or []),
+    "table_formats": sorted(table_formats(st.session_state.get("out_fmt"))),
     "mode": mode, "keys": setup.keys, "specs": [asdict(s) for s in setup.specs],
     "compare_columns": setup.compare, "only_a": list(setup.only_a), "only_b": list(setup.only_b),
     "trim": trim, "empty_as_null": empty_as_null,
@@ -284,10 +331,37 @@ pending = {
     "filters": both_f, "left_filters": left_f, "right_filters": right_f,
     "display_rows": int(display_rows), "null_tokens": st.session_state.get("null_tokens", NULL_TOKENS_DEFAULT),
 }
-sig = signature(A, B, pending)
+sig = signature(A, B, pending)                   # name, notes and table_formats do not make a run stale
 run = st.session_state.result
 stale = bool(run) and run.get("signature") != sig
 auto_go = st.session_state.pop("auto_go", False)
+
+
+def write_outputs(new_run: dict, cfg: dict, profile: dict | None) -> None:
+    """The report, the summary sheets and the Parquet copies land in the run folder right away,
+    so Save everything and the zip always hold the full set."""
+    limit = int(cfg["display_rows"])
+    extra = {}
+    accepts = inspect.signature(build_report).parameters
+    if "notes" in accepts:
+        extra["notes"] = cfg.get("notes") or []
+    if "profile" in accepts:
+        extra["profile"] = profile
+    try:
+        html = build_report(new_run, A, B, NA, NB, limit=min(limit, 2000), **extra)
+        new_run["_report"] = html
+        new_run["_report_key"] = ("report", new_run["at"], limit)
+        (Path(new_run["folder"]) / f"{new_run['pair']}__report.html").write_text(
+            html, encoding="utf-8", newline="\n")
+    except (duckdb.Error, KeyError, ValueError, OSError) as exc:
+        st.warning(f"The report could not be written to the run folder: {exc}")
+    try:
+        write_summary(new_run, A, B, NA, NB, notes=cfg.get("notes") or [], profile=profile)
+        if "parquet" in cfg.get("table_formats", []):
+            write_parquet_copies(new_run)
+    except (duckdb.Error, KeyError, ValueError, OSError) as exc:
+        st.warning(f"The summary files could not be written to the run folder: {exc}")
+
 
 if go or auto_go or (stale and auto_rerun):
     if filter_error:
@@ -307,6 +381,7 @@ if go or auto_go or (stale and auto_rerun):
                 st.session_state.result, previous = new_run, run
                 run, stale = new_run, False
                 discard_run(previous)              # only now is it safe to drop the old files
+                write_outputs(new_run, pending, current_profile(profile_key))
         except (duckdb.Error, RuntimeError, ValueError, KeyError) as exc:
             st.error(f"The comparison failed: {exc}" + (" - the previous result is still shown below."
                                                         if run else ""))

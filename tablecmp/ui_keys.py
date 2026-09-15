@@ -11,8 +11,10 @@ from .ui_columns import Setup
 from .values import ReadOptions
 
 
-def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions) -> str:
-    """Returns the pairing mode: key, hash or position."""
+def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
+           profile: dict | None = None) -> str:
+    """Returns the pairing mode: key, hash or position. A current profile, when given, saves
+    Suggest keys measuring the single columns again."""
     keys = setup.keys
     k1, k2, k3 = st.columns([4, 1, 1])
     with k1:
@@ -38,7 +40,7 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions) 
             try:
                 with st.status("Looking for keys…", expanded=True) as box:
                     st.session_state["key_suggestions"] = suggest_keys(
-                        A, B, setup.specs, NA, NB, opts, progress=box.write)
+                        A, B, setup.specs, NA, NB, opts, progress=box.write, profile=profile)
                     table, combos, _ = st.session_state["key_suggestions"]
                     best = combos[0] if combos else None
                     box.update(label=("Best key: " + " + ".join(best)) if best else "No key found",

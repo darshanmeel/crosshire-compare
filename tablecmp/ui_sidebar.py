@@ -1,5 +1,5 @@
-"""The sidebar: load side A and side B - a CSV or JSON file - and the Auto button.
-Nothing else lives here."""
+"""The sidebar: load side A and side B - a CSV or JSON file, or a database table - the Auto
+button and the Connections manager. Nothing else lives here."""
 from __future__ import annotations
 
 import time
@@ -8,8 +8,9 @@ from pathlib import Path
 import duckdb
 import streamlit as st
 
-from .sources import (Side, apply_names, file_stamp, kind_of, looks_headerless, quick_clause,
-                      row_count, short_header, snapshot, source_schema, work_dir)
+from . import ui_database
+from .sources import (Side, apply_names, file_stamp, kind_of, looks_headerless, path_allowed,
+                      quick_clause, row_count, short_header, snapshot, source_schema, work_dir)
 from .state import drop_result
 
 DEFAULT_NAMES = {"A": "Left", "B": "Right"}
@@ -32,23 +33,34 @@ def staged_upload(tag: str, up) -> str:
 def source_panel(tag: str) -> None:
     st.markdown(f"#### File {tag}")
     name = st.text_input("Name", value=DEFAULT_NAMES[tag], key=f"nick_{tag}",
-                         help="What to call this side throughout the app. Keep it short.")
-    how = st.radio("From", ["Upload", "Path on disk"], horizontal=True, key=f"how_{tag}",
+                         help="What to call this side everywhere - and it names every output file: "
+                              "left_compare_right. Defaults: Left and Right. A database side with the "
+                              "default name takes its connection's name.")
+    how = st.radio("From", ["Upload", "Path on disk", "Database"], horizontal=True, key=f"how_{tag}",
                    label_visibility="collapsed")
     path, label, origin = "", "", ""
+    db_side: Side | None = None
     if how == "Upload":
         up = st.file_uploader("CSV or JSON file", type=["csv", "txt", "tsv", "dat", "json", "jsonl", "ndjson", "parquet"],
                               key=f"up_{tag}", help="CSV / delimited text, or JSON - an array of objects or one object per line")
         if up is not None:
             path, label = staged_upload(tag, up), up.name
+    elif how == "Database":
+        path, label, db_side = ui_database.source_panel(tag)
+        if db_side is not None:
+            origin = db_side.origin
+            if name.strip() in ("", DEFAULT_NAMES[tag]):
+                name = db_side.conn
     else:
         p = st.text_input("Path to CSV or JSON", key=f"pt_{tag}",
                           placeholder=r"C:\data\exports\employees_2026-09.csv").strip()
         if p:
-            if Path(p).is_file():
-                path, label = p, Path(p).name
-            else:
+            if not Path(p).is_file():
                 st.error("File not found.")
+            elif not path_allowed(p):
+                st.error("Not under an allowed folder (COMPARE_DATA_DIR).")
+            else:
+                path, label = p, Path(p).name
     kind = kind_of(path) if path else "csv"
 
     delim, hdr = ",", True
@@ -70,9 +82,13 @@ def source_panel(tag: str) -> None:
 
     rev = st.session_state.get(f"where_rev_{tag}", 0)
     with st.expander("Rows to read - filter, order, top N", expanded=False):
-        st.caption("Applied as the file is read, on its own column names, before anything "
-                   "else - how a huge file is made small. Values are text here: "
-                   "`hire_date >= '2026-07-20'`.")
+        if how == "Database":
+            st.caption("Applied to the fetched rows - to cut at the database, put a WHERE in the SQL. "
+                       "Values are text here: `hire_date >= '2026-07-20'`.")
+        else:
+            st.caption("Applied as the file is read, on its own column names, before anything "
+                       "else - how a huge file is made small. Values are text here: "
+                       "`hire_date >= '2026-07-20'`.")
         if cols:
             qc = st.selectbox("Column", cols, key=f"qf_col_{tag}")
             qo = st.selectbox("Condition", QUICK_OPS, key=f"qf_op_{tag}")
@@ -112,18 +128,25 @@ def source_panel(tag: str) -> None:
                  disabled=not cols):
         side = Side(name=name.strip() or tag, label=label, csv_path=path, kind=kind, origin=origin,
                     delimiter=delim, header=hdr, where=where, order_by=list(order),
-                    desc=bool(desc), limit=int(top))
+                    desc=bool(desc), limit=int(top),
+                    **({"conn": db_side.conn, "database": db_side.database, "query": db_side.query,
+                        "fetched_at": db_side.fetched_at, "cap": db_side.cap, "capped": db_side.capped}
+                       if db_side else {}))
         names = names_txt.split(",") if names_txt.strip() else []
         if names and len(names) != len(schema):
             st.warning(f"You gave {len(names)} names but the file has {len(schema)} "
                        "columns - the surplus was ignored / the shortfall kept its original name.")
         side.schema = apply_names(schema, names) if names else dict(schema)
         side.source_columns = list(schema)
+        # a Parquet source with no cut is already what a snapshot would be - no second copy
+        already = kind == "parquet" and not (where.strip() or order or top)
         try:
             with st.spinner("Reading the rows…"):
-                if snap:
+                if snap and not already:
                     pq = work_dir() / f"cmp_{tag}_{int(time.time())}.parquet"
                     snapshot(side, str(pq))
+                else:
+                    side.cache_path = ""
                 side.rows = row_count(side)
         except duckdb.Error as exc:
             st.error(f"Could not read the rows: {exc}")
@@ -135,6 +158,8 @@ def source_panel(tag: str) -> None:
         st.caption(f"**{side.name}** · {side.origin or side.label} - {side.rows:,} rows, "
                    f"{len(side.schema)} columns"
                    + (f"  ·  {side.cut}" if side.cut else "")
+                   + (f"  ·  fetched {side.fetched_at}" if side.fetched_at else "")
+                   + (f"  ·  capped at {side.cap:,}" if side.capped else "")
                    + ("  ·  Parquet snapshot" if side.cache_path else ""))
         if side.rows == 0:
             st.warning("The filter left no rows.")
@@ -155,6 +180,10 @@ def finish(tag: str, side: Side) -> None:
     old: Side = st.session_state[tag]
     if old.cache_path and old.cache_path != side.cache_path:
         Path(old.cache_path).unlink(missing_ok=True)
+    held = st.session_state.get(f"fetched_{tag}")
+    if (old.is_database and old.csv_path and old.csv_path != side.csv_path
+            and not (held and held[1] == old.csv_path)):      # a fetch nothing reads any more
+        Path(old.csv_path).unlink(missing_ok=True)
     st.session_state[tag] = side
     drop_result()
 
@@ -165,6 +194,10 @@ def auto_panel() -> None:
     both_in = A.loaded and B.loaded
     st.caption("Auto does everything by itself - pairs the columns, finds the key, "
                "compares, and lists each decision so you can change it.")
+    st.checkbox("Profile both sides first", value=True, key="auto_profile",
+                help="Counts, nulls and distinct values per column feed the key search and the "
+                     "report's profile sheet. Untick to skip it on a very big pair.")
     if st.button("Figure it all out and compare", type="primary", width="stretch",
                  disabled=not both_in, key="auto_btn"):
         st.session_state["auto_request"] = True
+    ui_database.manager()
