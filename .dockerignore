@@ -1,0 +1,31 @@
+# Docker matches a plain pattern at the context root only; **/ reaches into folders.
+
+# Not part of the image: the repository history, documentation, samples, tests
+.git
+docs/
+examples/
+tests/
+README.html
+scratch*
+
+# Python caches and virtual environments
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# The app's own outputs and scratch: Parquet snapshots, run folders, zips
+**/*.parquet
+*__*/
+out/
+**/*.zip
+
+# Connections and secrets live in the home folder or the env file, never in the image
+.env
+.env.*
+**/connections*.json
+
+# DuckDB files are mounted under /data, not copied
+**/*.duckdb
+**/*.duckdb.wal

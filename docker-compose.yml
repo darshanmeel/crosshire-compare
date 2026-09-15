@@ -1,0 +1,15 @@
+# docker-compose.yml
+services:
+  compare:
+    build: .
+    ports: ["8501:8501"]
+    env_file: .env                 # COMPARE_CONN_<NAME>=<uri>, one per line - see .env.example
+    volumes:
+      - ./data:/data:ro            # files to compare
+      - ./out:/out                 # saved runs
+      - connections:/home/app/.crosshire-compare
+      - work:/work
+    mem_limit: 4g
+volumes:
+  connections: {}
+  work: {}
