@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="t d">
   <title id="t">CrossHire Compare</title>
-  <desc id="d">Two tables, every difference, in one page. Streamlit and DuckDB; CSV or JSON on either side.</desc>
+  <desc id="d">Two tables, every difference, in one page. Streamlit and DuckDB; a CSV, JSON or database table on either side.</desc>
   <rect width="1200" height="360" fill="#0e0d0b"/>
   <!-- the aperture mark: outer thin ring, inner dotted ring, solid disc with a crosshair cut -->
   <g transform="translate(64 142) scale(2.4)">
@@ -29,59 +29,59 @@
       <text x="768" y="162">ROWS THAT DIFFER <tspan fill="#4d4128">·</tspan> LEFT ABOVE RIGHT</text>
     </g>
     <g font-family="Georgia, 'Times New Roman', serif" font-size="22">
-      <text x="768" y="116" fill="#7fb069">2,935</text>
-      <text x="896" y="116" fill="#c97064">14</text>
+      <text x="768" y="116" fill="#7fb069">2,960</text>
+      <text x="896" y="116" fill="#c97064">649</text>
       <text x="1024" y="116" fill="#f4ead6">65</text>
     </g>
     <!-- column headers -->
     <g font-family="ui-monospace, Menlo, Consolas, monospace" font-size="8.5" letter-spacing="0.6" fill="#7a7159">
-      <text x="794" y="184">order_id</text>
-      <text x="874" y="184">trade_ts</text>
-      <text x="962" y="184">qty</text>
-      <text x="1010" y="184">price</text>
-      <text x="1070" y="184">ccy</text>
+      <text x="794" y="184">emp_id</text>
+      <text x="866" y="184">hire_date</text>
+      <text x="946" y="184">salary</text>
+      <text x="1000" y="184">active</text>
+      <text x="1046" y="184">dept</text>
     </g>
     <!-- pair 1 -->
     <rect x="758" y="190" width="364" height="24" fill="#0e0d0b"/>
-    <rect x="956" y="190" width="48" height="24" fill="#4a2521"/>
+    <rect x="940" y="190" width="56" height="24" fill="#4a2521"/>
     <g font-size="10.5" fill="#f4ead6">
       <text x="763" y="206" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="7.5" letter-spacing="1" fill="#7a7159">L</text>
-      <text x="794" y="206">O00017</text>
-      <text x="874" y="206">2026-08-27</text>
-      <text x="962" y="206" fill="#f3cdc4" font-weight="600">1200</text>
-      <text x="1010" y="206">98.40</text>
-      <text x="1070" y="206">GBP</text>
+      <text x="794" y="206">E10017</text>
+      <text x="866" y="206">2018-03-11</text>
+      <text x="946" y="206" fill="#f3cdc4" font-weight="600">9973.89</text>
+      <text x="1000" y="206">false</text>
+      <text x="1046" y="206">Operations</text>
     </g>
     <rect x="758" y="214" width="364" height="24" fill="#f4ead6"/>
-    <rect x="956" y="214" width="48" height="24" fill="#ebc2b7"/>
+    <rect x="940" y="214" width="56" height="24" fill="#ebc2b7"/>
     <g font-size="10.5" fill="#0e0d0b">
       <text x="763" y="230" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="7.5" letter-spacing="1" fill="#7a7159">R</text>
-      <text x="794" y="230">O00017</text>
-      <text x="874" y="230">2026-08-27</text>
-      <text x="962" y="230" fill="#4a2521" font-weight="600">1250</text>
-      <text x="1010" y="230">98.40</text>
-      <text x="1070" y="230">GBP</text>
+      <text x="794" y="230">E10017</text>
+      <text x="866" y="230">2018-03-11</text>
+      <text x="946" y="230" fill="#4a2521" font-weight="600">9993.62</text>
+      <text x="1000" y="230">false</text>
+      <text x="1046" y="230">Operations</text>
     </g>
     <!-- pair 2 -->
     <rect x="758" y="244" width="364" height="24" fill="#0e0d0b"/>
-    <rect x="1004" y="244" width="60" height="24" fill="#4a2521"/>
+    <rect x="1040" y="244" width="82" height="24" fill="#4a2521"/>
     <g font-size="10.5" fill="#f4ead6">
       <text x="763" y="260" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="7.5" letter-spacing="1" fill="#7a7159">L</text>
-      <text x="794" y="260">O00042</text>
-      <text x="874" y="260">2026-08-28</text>
-      <text x="962" y="260">300</text>
-      <text x="1010" y="260" fill="#f3cdc4" font-weight="600">101.25</text>
-      <text x="1070" y="260">EUR</text>
+      <text x="794" y="260">E10042</text>
+      <text x="866" y="260">2024-01-05</text>
+      <text x="946" y="260">5865.69</text>
+      <text x="1000" y="260">true</text>
+      <text x="1046" y="260" fill="#f3cdc4" font-weight="600">Engineering</text>
     </g>
     <rect x="758" y="268" width="364" height="24" fill="#f4ead6"/>
-    <rect x="1004" y="268" width="60" height="24" fill="#ebc2b7"/>
+    <rect x="1040" y="268" width="82" height="24" fill="#ebc2b7"/>
     <g font-size="10.5" fill="#0e0d0b">
       <text x="763" y="284" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="7.5" letter-spacing="1" fill="#7a7159">R</text>
-      <text x="794" y="284">O00042</text>
-      <text x="874" y="284">2026-08-28</text>
-      <text x="962" y="284">300</text>
-      <text x="1010" y="284" fill="#4a2521" font-weight="600">101.30</text>
-      <text x="1070" y="284">EUR</text>
+      <text x="794" y="284">E10042</text>
+      <text x="866" y="284">2024-01-05</text>
+      <text x="946" y="284">5865.69</text>
+      <text x="1000" y="284">true</text>
+      <text x="1046" y="284" fill="#4a2521" font-weight="600">Eng</text>
     </g>
   </g>
 </svg>
