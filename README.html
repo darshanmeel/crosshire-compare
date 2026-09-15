@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CrossHire Compare · how it works</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#0e0d0b;--ink-2:#151310;--ink-3:#1c1916;--rule:#2b2620;--rule-soft:#211d19;--paper:#f2efe9;--paper-2:#cdc6ba;--muted:#918878;--brass:#c8a45c;--brass-dim:#8a713c;--ice:#8fb3c4;--sage:#94ab8e;--rose:#c98f7f;--display:"Newsreader",Georgia,serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;--rail:264px;--pad:clamp(20px,5vw,64px)}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--ink);color:var(--paper-2);font-family:var(--body);font-weight:300;font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased;letter-spacing:.005em}
+::selection{background:var(--brass-dim);color:var(--paper)}
+.rail{position:fixed;left:0;top:0;bottom:0;width:var(--rail);border-right:1px solid var(--rule-soft);padding:42px 28px;display:flex;flex-direction:column;background:var(--ink)}
+.mark{font-family:var(--display);font-size:22px;color:var(--paper)}.mark em{font-style:italic;color:var(--brass)}
+.mark-sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 40px}
+.nav a{display:block;padding:7px 0;color:var(--muted);text-decoration:none;font-size:13.5px;border-bottom:0}
+.nav a:hover{color:var(--paper)}.nav .n{font-family:var(--mono);font-size:10px;color:var(--brass-dim);margin-right:12px}
+.rail-foot{margin-top:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.8}
+.main{margin-left:var(--rail);max-width:1180px;padding:0 var(--pad) 120px}
+.hero{padding:clamp(48px,8vw,96px) 0 clamp(36px,5vw,56px);border-bottom:1px solid var(--rule)}
+.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:26px}.eyebrow span{color:var(--brass)}
+h1{font-family:var(--display);font-weight:300;font-size:clamp(36px,5.6vw,62px);line-height:1.04;letter-spacing:-.02em;color:var(--paper);margin:0 0 24px;max-width:20ch}h1 em{font-style:italic;color:var(--brass)}
+.lede{max-width:66ch;font-size:17.5px;line-height:1.66;margin:0 0 30px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}.pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--rule);border-radius:100px;color:var(--muted)}
+.sec{padding:clamp(40px,5vw,64px) 0;border-bottom:1px solid var(--rule-soft)}
+.sec-head{display:grid;grid-template-columns:72px 1fr;gap:0 24px;margin-bottom:26px}
+.sec-num{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--brass);padding-top:10px}
+.sec-h{font-family:var(--display);font-weight:300;font-size:clamp(26px,3.4vw,38px);line-height:1.14;letter-spacing:-.014em;color:var(--paper);margin:0}.sec-h em{font-style:italic;color:var(--brass)}
+.sec-sub{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px}
+.body{margin-left:96px}@media(max-width:900px){.rail{display:none}.main{margin-left:0}.sec-head{grid-template-columns:1fr}.body{margin-left:0}}
+p{margin:0 0 16px;max-width:70ch}strong{font-weight:500;color:var(--paper)}
+code{font-family:var(--mono);font-size:.88em;background:var(--ink-3);border:1px solid var(--rule-soft);padding:1px 6px;border-radius:3px;color:var(--ice)}
+pre{background:var(--ink-2);border:1px solid var(--rule);border-radius:6px;padding:16px 20px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.7;color:var(--paper-2);margin:0 0 22px}pre code{background:none;border:0;padding:0;color:inherit}
+.note{margin:22px 0;padding:16px 20px;border-left:2px solid var(--brass-dim);background:var(--ink-2);border-radius:0 4px 4px 0;max-width:78ch}
+.note-t{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:8px}
+.note.bad{border-left-color:var(--rose)}.note.bad .note-t{color:var(--rose)}.note.ok{border-left-color:var(--sage)}.note.ok .note-t{color:var(--sage)}
+.note p{margin:0;font-size:14.5px}
+.run{border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin:22px 0}
+.run .row{display:grid;grid-template-columns:44px 1fr;gap:0 18px;padding:16px 22px;border-bottom:1px solid var(--rule-soft);background:var(--ink-2)}
+.run .row:last-child{border-bottom:0}.run .k{font-family:var(--mono);font-size:11px;color:var(--brass);padding-top:4px}
+.run .t{font-weight:500;color:var(--paper);margin-bottom:4px}.run .d{font-size:14px;color:var(--paper-2)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:22px 0}
+.cell{border:1px solid var(--rule);border-radius:6px;padding:16px 18px;background:var(--ink-2)}
+.cell .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:8px}
+.cell .v{font-size:14px;color:var(--paper-2)}.cell .v code{font-size:12px}
+table{border-collapse:collapse;width:100%;margin:18px 0 26px;font-size:14px}
+th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:400;padding:0 16px 10px 0;border-bottom:1px solid var(--rule)}
+td{padding:10px 16px 10px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top;line-height:1.55}td:first-child{color:var(--paper);font-weight:400;white-space:nowrap}
+ul{padding-left:20px;margin:0 0 18px;max-width:72ch}li{margin-bottom:6px}
+.steps{font-family:var(--mono);font-size:12.5px;color:var(--paper-2);line-height:2}.steps .n{color:var(--brass-dim);margin-right:8px}.steps .a{color:var(--muted);margin:0 8px}
+.tree{font-family:var(--mono);font-size:13px;line-height:1.9;color:var(--paper-2)}.tree b{color:var(--paper);font-weight:500}.tree i{color:var(--muted);font-style:normal}
+</style>
+</head>
+<body>
+<aside class="rail">
+  <div class="mark">CrossHire <em>Compare</em></div>
+  <div class="mark-sub">Tables, side by side</div>
+  <nav class="nav">
+    <a href="#start"><span class="n">00</span>Start here</a>
+    <a href="#files"><span class="n">01</span>Files</a>
+    <a href="#columns"><span class="n">02</span>Columns</a>
+    <a href="#values"><span class="n">03</span>Values</a>
+    <a href="#key"><span class="n">04</span>Key</a>
+    <a href="#rows"><span class="n">05</span>Rows</a>
+    <a href="#compare"><span class="n">06</span>Compare</a>
+    <a href="#report"><span class="n">07</span>The report</a>
+    <a href="#auto"><span class="n">08</span>Auto</a>
+    <a href="#speed"><span class="n">09</span>Speed</a>
+    <a href="#layout"><span class="n">10</span>The files</a>
+    <a href="#trouble"><span class="n">11</span>Troubleshooting</a>
+  </nav>
+  <div class="rail-foot">compare_app.py<br>tablecmp/ · csvdiff.py<br>Streamlit · DuckDB</div>
+</aside>
+
+<main class="main">
+<header class="hero" id="start">
+  <div class="eyebrow">CrossHire Compare · <span>CSV or JSON, either side</span> · how it works</div>
+  <h1>Two files, <em>every difference</em>, in one page.</h1>
+  <p class="lede">Load two tables - a CSV or a JSON file on either side. Pair their columns in one table - every column from either file is a row, with a dropdown for its counterpart. Set the type once, add transform steps where a side needs them, tick the key, press <strong>Compare</strong>. Or press <strong>Auto</strong> and let it work the whole thing out, showing what it does as it goes.</p>
+  <div class="pills"><span class="pill">python compare_app.py</span><span class="pill">Streamlit + DuckDB</span><span class="pill">DuckDB reads the files</span><span class="pill">Desbordante finds keys</span><span class="pill">hash mode when there is no key</span></div>
+</header>
+
+<section class="sec">
+  <div class="sec-head"><div class="sec-num">00</div><div><h2 class="sec-h">Start <em>here.</em></h2><div class="sec-sub">install once, run every day</div></div></div>
+  <div class="body">
+<pre><code>pip install streamlit duckdb pandas
+pip install desbordante        # optional - exact key discovery (HyUCC / PyroUCC)
+
+python compare_app.py          # starts the app with its own settings: theme, 4 GB uploads
+streamlit run compare_app.py   # also works</code></pre>
+    <p>Keep <code>compare_app.py</code>, <code>csvdiff.py</code> (the comparison engine) and the <code>tablecmp/</code> folder together. Every setting, colour and font lives in <code>tablecmp/theme.py</code>; the app applies its theme itself when it starts. <strong>The name</strong> is set there too, as <code>APP_NAME</code>, and can be overridden per deployment without touching the code: <code>set COMPARE_APP_NAME=Acme Table Check</code> before starting the app (and <code>COMPARE_APP_TAGLINE</code> for the line under it). It appears in the browser tab, the sidebar mark, the page header and the report.</p>
+    <div class="run">
+      <div class="row"><div class="k">01</div><div><div class="t">Load A and B in the sidebar</div><div class="d">Upload or give a path. For a big file open <em>Rows to read</em> first and cut it down. Both files get a 10-row preview and nothing else runs.</div></div></div>
+      <div class="row"><div class="k">02</div><div><div class="t">Check the column table, press Confirm</div><div class="d">Pairs by name are already made. Fix the rest with the dropdowns, set Type, tick Key and Compare. Confirm folds the table away and shows the setup card: the key, what is compared, what is missing on each side.</div></div></div>
+      <div class="row"><div class="k">03</div><div><div class="t">Transform where a side needs it</div><div class="d">Section 03: pick a column and a side, add steps - trim → left 10 → to date (%d/%m/%Y) - previewed on the first five rows.</div></div></div>
+      <div class="row"><div class="k">04</div><div><div class="t">Press Compare</div><div class="d">Progress is shown step by step. The result stays on screen until the next run - a failure never wipes it, a settings change only marks it stale.</div></div></div>
+    </div>
+    <div class="note ok"><div class="note-t">Or</div><p>Press <strong>Figure it all out and compare</strong> in the sidebar. Auto pairs the columns, works out every type and date spelling, finds the key, compares - narrating each step and listing every decision as a cell you can change.</p></div>
+  </div>
+</section>
+
+<section class="sec" id="files">
+  <div class="sec-head"><div class="sec-num">01</div><div><h2 class="sec-h">Files.</h2><div class="sec-sub">the sidebar - loading only</div></div></div>
+  <div class="body">
+    <p>Each side takes a <strong>CSV</strong> (any delimiter) or a <strong>JSON</strong> file - an array of objects, or one object per line (.jsonl / .ndjson) - by upload or by path; a JSON value that is itself an object or list arrives as its JSON text. Each side has a name (shown everywhere), for CSV a delimiter and a header tick, and <strong>Rows to read</strong>: a WHERE filter on the file's own column names, an order, a top N. All three are applied by DuckDB as the file is read - this is how a 20 GB file becomes the 100,000 rows you actually want. The column / condition / value pickers build the filter for you.</p>
+    <p><strong>Snapshot to Parquet</strong> (on by default) reads the file once with its cut and keeps the rows as a compact Parquet file in the temp folder. Everything after - previews, key search, comparison - reads that instead of re-parsing the file. Untick it only for small files you are re-loading constantly.</p>
+    <p>Under <strong>Advanced</strong>, a comma-separated list of column names overrides a header row that is missing or short. The app warns when the header looks like a data row, or names fewer columns than the data has.</p>
+  </div>
+</section>
+
+<section class="sec" id="columns">
+  <div class="sec-head"><div class="sec-num">02</div><div><h2 class="sec-h">The column <em>table.</em></h2><div class="sec-sub">every column from either file · one place to decide everything</div></div></div>
+  <div class="body">
+    <table>
+      <tr><th>Column</th><th>What it is</th></tr>
+      <tr><td>A column · B column</td><td>Dropdowns. Each row is one column from either file with its counterpart on the other side, or blank. Pick a counterpart for a blank row and the two rows merge; pick a column already used elsewhere and it moves - the row you edited wins. A column never appears twice and never disappears: an unpaired one gets its own row back.</td></tr>
+      <tr><td>Common name</td><td>What the pair is called from here on: in transforms, filters, results, downloads.</td></tr>
+      <tr><td>Type · both sides</td><td>What both sides are converted to before comparing. <code>number</code>: 100.00 = 100 = 1e2. <code>date</code>: 27/08/2026 = 2026-08-27. <code>timestamp</code> keeps the time of day. <code>boolean</code>: 1 = yes = true. A value that will not convert keeps its text, so it shows as a difference rather than vanishing. Both sides - the type is a property of the pair.</td></tr>
+      <tr><td>Key</td><td>Part of the row key. Several ticks make a compound key.</td></tr>
+      <tr><td>Compare</td><td>Compare this column. Ignored on key columns.</td></tr>
+      <tr><td>Matched by · detected</td><td>Information: how the pair was made (name, similar name, guess, data, you, file) and the type DuckDB sniffed in each file.</td></tr>
+    </table>
+    <p><strong>Match by data</strong> reads a sample of both files and pairs the unpaired columns that hold the same values, whatever they are called - <code>Ccy</code> with <code>currency_code</code>. <strong>Save / Load mapping</strong> keeps the whole table, transform steps included, as JSON for the next run of the same two feeds.</p>
+    <p><strong>Confirm columns</strong> folds the table away. The <strong>setup card</strong> under it always shows what the table amounts to: how many pairs, the key, the compare list, how every typed or transformed column is read, and the columns that exist on one side only - those are null on the other side and are not compared.</p>
+  </div>
+</section>
+
+<section class="sec" id="values">
+  <div class="sec-head"><div class="sec-num">03</div><div><h2 class="sec-h">Values: <em>steps</em>, then the type.</h2><div class="sec-sub">per column · per side · previewed on five rows</div></div></div>
+  <div class="body">
+    <p>Both files are read as text. Every value on every side goes through the same stages and comes out as canonical text, so both sides compare on the same thing:</p>
+    <div class="steps"><span class="n">01</span>the side's transform steps<span class="a">→</span><span class="n">02</span>null folding (empty, NULL, N/A, …)<span class="a">→</span><span class="n">03</span>trim<span class="a">→</span><span class="n">04</span>the pair's Type</div>
+    <p style="margin-top:18px">Open <strong>Transform and convert values</strong>, pick a column and a side, and add steps. Each step runs on the result of the one before:</p>
+    <div class="grid">
+      <div class="cell"><div class="k">Text</div><div class="v">trim · upper · lower · left N · right N · characters from N, M long · replace text · regex replace · remove spaces · collapse repeated spaces · strip leading zeros · pad left · digits only · letters and digits only · part N split by S · remove thousands separators</div></div>
+      <div class="cell"><div class="k">Conversions</div><div class="v">to number · to timestamp (format) · to date (format) · to boolean. A conversion step sets the pair's Type for you. Formats come from a picker of what the value looks like - <code>27/08/2026</code> → <code>%d/%m/%Y</code> - or typed in; blank tries the usual spellings.</div></div>
+      <div class="cell"><div class="k">Custom expression</div><div class="v">Any DuckDB expression with <code>x</code> as the value - <code>upper(split_part(x, '-', 1))</code>. A searchable catalog of DuckDB's own text, regex and date functions sits next to it, with a template, a description and an example for each.</div></div>
+    </div>
+    <p>The preview shows the first five rows of that file: in the file, after the steps, compared as - and whether the type conversion succeeds. <strong>Check this column on all rows</strong> counts the values on each side that do not convert, with examples. <strong>Copy to the other side</strong> repeats the same steps there.</p>
+    <div class="note"><div class="note-t">Example</div><p><code>trade_ts</code> holds <code>2026-08-27 10:11:12.123</code> on A and <code>27/08/2026 10:11</code> on B, and you only care about the day. B: <em>left 10 → to date (%d/%m/%Y)</em>. Type becomes <code>date</code>; A's ISO text converts on its own. Both compare as <code>2026-08-27</code>.</p></div>
+    <p><strong>How values are read</strong> holds the global switches: trim, empty = null, ignore case, numeric tolerance, and the list of tokens folded to null.</p>
+  </div>
+</section>
+
+<section class="sec" id="key">
+  <div class="sec-head"><div class="sec-num">04</div><div><h2 class="sec-h">The <em>key.</em></h2><div class="sec-sub">only when asked · or hash when there is none</div></div></div>
+  <div class="body">
+    <p>Tick <strong>Key</strong> in the table and rows are matched on it. Nothing measures the key until you ask: <strong>Check key</strong> counts distinct key values against rows on each side; <strong>Suggest keys</strong> finds the combinations that identify a row on both sides - with Desbordante when it is installed (HyUCC for exact keys on the first 200,000 rows of each side, verified on every row; PyroUCC's almost-unique combinations when nothing is exact), otherwise by measuring every column and growing the most selective ones. The best key is in the status line when it finishes; pick rows from the list and press <strong>Use as key</strong>.</p>
+    <p>With no key ticked, choose how rows are paired:</p>
+    <table>
+      <tr><th>Mode</th><th>How</th><th>When</th></tr>
+      <tr><td>hash</td><td>Every row is hashed over the compared columns and the two multisets are matched. Identical rows pair; the rest are one-sided. The result also says, per column, how many distinct values exist on one side only - where the one-sided rows differ.</td><td>No key at all, or you want to know whether the two files are the same set of rows.</td></tr>
+      <tr><td>position</td><td>Line 1 against line 1.</td><td>Both files sorted identically, same row count.</td></tr>
+    </table>
+    <div class="note bad"><div class="note-t">If everything differs</div><p>A key that pairs every row and then finds every row different usually means the key columns are spelled differently on the two sides - <code>o00001 </code> against <code>O00001</code>. The summary shows sample unmatched key values; give the key column a Type or an <em>upper</em> / <em>trim</em> step.</p></div>
+  </div>
+</section>
+
+<section class="sec" id="rows">
+  <div class="sec-head"><div class="sec-num">05</div><div><h2 class="sec-h">Rows.</h2><div class="sec-sub">filters on the common names · profile on demand</div></div></div>
+  <div class="body">
+    <p><strong>Filters</strong> apply to both sides, or one, after types: <code>=</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>in</code> <code>between</code> <code>like</code> <code>is null</code>. To shrink a big file before it is even read, use <em>Rows to read</em> in the sidebar instead.</p>
+    <p><strong>Profile</strong> runs only when pressed: per column per file, null %, distinct count, min, max, mean, average length - side by side with the gap - and the 10 most and 10 least frequent values, on the same typed values the comparison uses.</p>
+  </div>
+</section>
+
+<section class="sec" id="compare">
+  <div class="sec-head"><div class="sec-num">06</div><div><h2 class="sec-h">Compare, and what <em>comes back.</em></h2><div class="sec-sub">progress shown · result kept · report in the house style</div></div></div>
+  <div class="body">
+    <p>Press <strong>Compare</strong>. Both sides are materialised once as DuckDB tables under the common names with the canonical values applied, then the engine (or the hash matcher) runs on those. The status line narrates: reading A, reading B, matching on the key, comparing N columns, writing the summary. <strong>Re-run on every change</strong> is off by default - the last result stays on screen and is marked stale when settings change.</p>
+    <table>
+      <tr><th>Tab</th><th>What it holds</th></tr>
+      <tr><td>Summary</td><td>Row counts; then <strong>every column from either file</strong> on one sheet - its name on each side, its role (key, compared, paired but not compared, only in A, only in B), how it was read, and for compared columns matched / mismatched / match % - with the one-sided columns called out above it; <strong>Profile by bucket</strong> - the top values of every column for the rows whose keys matched, matched but differ, or exist on one side only, with <em>differences by key value</em> inside the matched-but-different bucket; <strong>differences by key value</strong> - the rows that paired on the key but disagree, grouped by each key column's value, with the columns that differ. The key is identical on both sides for these rows: this is where the differences sit, not what they are.</td></tr>
+      <tr><td>Columns &amp; values</td><td>The rows that differ, A above B, differing cells marked. Then every compared column, worst first: the value pairs behind the count, the distribution on each side. Near-match analysis says whether differences are formatting or data. One-sided rows with top values per column, key columns first.</td></tr>
+      <tr><td>Report</td><td>The house-style HTML report, viewed in the page and downloaded with one button; <strong>Download engine report</strong> is the second button. Section 07 walks through it.</td></tr>
+      <tr><td>Downloads</td><td>Cell differences, one-sided rows, summary CSV and JSON - complete, not just the rows displayed - and a paired side-by-side export.</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="sec" id="report">
+  <div class="sec-head"><div class="sec-num">07</div><div><h2 class="sec-h">The <em>report.</em></h2><div class="sec-sub">one HTML file · Left in black, Right in cream · opens anywhere</div></div></div>
+  <div class="body">
+    <p>The Report tab shows the report in the page. <strong>Download report</strong> saves it through the browser as <code>&lt;pair&gt;__report.html</code>; <strong>Save report to folder</strong> writes it straight to the folder in the box beside it (next to file A by default, or your Downloads folder for an upload) and prints the path - the reliable route for big runs. The Downloads tab has the same <strong>Save everything to folder</strong> for all the CSVs and both reports at once. It is one self-contained file - fonts from Google, everything else inline - so it can be mailed or dropped in a ticket and opens without the app. It is written for the person who did not run the comparison: what was compared, how, and where it went wrong, in that order.</p>
+    <table>
+      <tr><th>Section</th><th>What it says</th></tr>
+      <tr><td>Header</td><td>The two files and the verdict in one line: rows matched, columns compared, rows that differ. The footer records when the run happened and how long it took.</td></tr>
+      <tr><td>The setup</td><td>The key (or <em>hash over N columns</em> / <em>by position</em>), which columns were compared, the columns that exist on one side only, the transform steps and types applied to each side, filters, and how values were read (trim, empty as null, case). Enough to re-run it by hand.</td></tr>
+      <tr><td>Row counts</td><td>Rows read on each side, rows after filters, rows paired, rows only in Left, rows only in Right, rows that differ - as figures and as bars.</td></tr>
+      <tr><td>Every column</td><td>The same sheet as the Summary tab: every column from either file with its name on each side, role, how it was read, and matched / mismatched / match % for the compared ones, worst first. Columns present on one side only are listed in a note above the table so a missing or extra column is never silent. In hash mode the match figures become the number of distinct values present on one side only.</td></tr>
+      <tr><td>Differences by key value</td><td>For rows that paired on the key but disagree: each key column's values with how many rows differ under each value and in which columns. Tells you <em>where</em> the differences cluster - one account, one date - before you look at what they are. If the key is not unique the section says so up front: rows sharing a key are paired in file order (first with first, second with second), and a difference under a repeated key may be two rows swapped rather than a changed value. Below it, every column across the differing rows: top values counted on each side.</td></tr><tr><td>Where they sit</td><td>Each one-sided section opens with the same profile - top values per column, key columns first - because the key values are the reason those rows found no partner. In the app the Summary tab has this as <strong>Profile by bucket</strong>: pick <em>keys matched</em>, <em>matched but different</em>, <em>only in A</em> or <em>only in B</em> and every column's top values for those rows appear, key columns first, counted on both sides for paired rows; the matched-but-different bucket opens with the differences by key value.</td></tr>
+      <tr><td>Rows that differ</td><td>The paired rows, Left above Right, key columns first. <strong>Left rows are black with cream text, Right rows are cream with black text</strong>, and the cells that differ are picked out in the trouble colour on both. A legend sits above the table. Capped at the <em>Rows to display</em> setting; the CSVs hold everything.</td></tr>
+      <tr><td>Only in Left / Only in Right</td><td>The one-sided rows on the same black and cream, key columns first, capped the same way.</td></tr>
+    </table>
+    <p><strong>Download engine report</strong> is the second button: the comparison engine's own side-by-side HTML (<code>&lt;pair&gt;__diff.html</code>) with its tabs, row search and <em>only columns with differences</em> toggle. Same numbers, different presentation; keep whichever the reader prefers.</p>
+  </div>
+</section>
+
+<section class="sec" id="auto">
+  <div class="sec-head"><div class="sec-num">08</div><div><h2 class="sec-h">Auto.</h2><div class="sec-sub">two files in, the rest worked out - brute force, narrated</div></div></div>
+  <div class="body">
+    <div class="run">
+      <div class="row"><div class="k">01</div><div><div class="t">Pair columns</div><div class="d">By name, then similar name, then by their values for whatever is left over.</div></div></div>
+      <div class="row"><div class="k">02</div><div><div class="t">Analyse types</div><div class="d">One pass over the first 50,000 rows of each side: how many values read as a number, a number once commas go, an ISO date, day-first, month-first, any known spelling, with a time of day, a boolean. Each pair gets a Type; a side that needs it gets a step - <em>remove thousands separators</em>, <em>to date (%d/%m/%Y)</em>. Two spellings are only merged when both sides read cleanly.</div></div></div>
+      <div class="row"><div class="k">03</div><div><div class="t">Check case</div><div class="d">Text pairs whose sides only agree once case is ignored get an <em>upper</em> step on both.</div></div></div>
+      <div class="row"><div class="k">04</div><div><div class="t">Find the key</div><div class="d">Same as Suggest keys. The status line shows the key it chose; if nothing is unique, the closest is used and said so; if nothing at all, hash mode.</div></div></div>
+      <div class="row"><div class="k">05</div><div><div class="t">Compare</div><div class="d">Every paired non-key column, immediately. Every decision is listed under Columns as a bullet, and is a cell in the table or a step in the transform section.</div></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="speed">
+  <div class="sec-head"><div class="sec-num">09</div><div><h2 class="sec-h">Speed.</h2><div class="sec-sub">nothing heavy runs unless you press it</div></div></div>
+  <div class="body">
+    <ul>
+      <li>Loading sniffs the schema from a sample and takes one pass to snapshot and count. The 10-row preview stops after 10 rows.</li>
+      <li>A plain rerun - editing the table, opening an expander - runs no query except the five-row transform preview.</li>
+      <li>Key suggestion, key check, profile, type check and the comparison run only on their buttons. Auto runs them all, once, on purpose.</li>
+      <li>The comparison and the key search materialise each side as a DuckDB table under the common names, so the engine reads each file once. Numbers go through a fast 8-decimal decimal first and the wide one only when needed.</li>
+      <li>Measured on 500,000 rows × 6 columns with the real engine: load 1.2 s a side, the comparison itself 7 s (both sides materialised, keyed join, cell differences written), the whole Auto run 16 s including Desbordante and the report.</li>
+      <li>For a very big file, cut it in <em>Rows to read</em> first - a date filter or a top N - and keep the Parquet snapshot on.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="sec" id="layout">
+  <div class="sec-head"><div class="sec-num">10</div><div><h2 class="sec-h">The <em>files.</em></h2><div class="sec-sub">what lives where</div></div></div>
+  <div class="body">
+<div class="tree"><b>compare_app.py</b> <i>· entry point: bootstrap, theme, the page flow</i>
+<b>csvdiff.py</b> <i>· the comparison engine (yours)</i>
+<b>tablecmp/</b>
+   theme.py      <i>· colours, fonts, page CSS, status strip, cards - the only place to change the look</i>
+   sql.py        <i>· quoting, connections</i>
+   sources.py    <i>· one CSV or JSON file and which of its rows to read; schema sniff, snapshot, preview</i>
+   values.py     <i>· transform steps, null folding, types, canonical text, registration, type check</i>
+   columns.py    <i>· the column table: pairing, normalisation, specs, mapping JSON, match by data</i>
+   keys.py       <i>· key uniqueness, affinity, Desbordante / DuckDB suggestion</i>
+   profile.py    <i>· statistics and value frequencies</i>
+   compare.py    <i>· running a comparison (engine, position, hash) and reading it back</i>
+   report.py     <i>· the HTML report</i>
+   auto.py       <i>· two files in, the rest worked out</i>
+   state.py      <i>· session defaults</i>
+   ui_sidebar.py · ui_columns.py · ui_transform.py · ui_keys.py · ui_results.py  <i>· the screens</i></div>
+    <p style="margin-top:22px">The engine is a black box to the app: it receives two DuckDB tables named <code>src_a</code> and <code>src_b</code> with the common column names and canonical values already applied, and the app reads back its counts and its CSV outputs.</p>
+    <h3 style="font-family:var(--display);font-weight:400;font-size:1.3rem;color:var(--paper);margin:28px 0 8px">What comes out</h3>
+    <p>Every run gets a pair name from file A - <code>orders.csv</code> against anything gives the pair <code>orders</code> - and writes into a temp folder that the app cleans up on the next run. The Downloads tab hands each file out; the names are always:</p>
+<div class="tree"><b>orders__report.html</b>      <i>· the house-style report (Download report)</i>
+<b>orders__diff.html</b>        <i>· the engine's own side-by-side report (Engine report)</i>
+<b>orders__cell_diffs.csv</b>   <i>· one line per differing cell: key columns, column_name, left_value, right_value</i>
+<b>orders__left_only.csv</b>    <i>· full rows found only in Left (only written when there are any)</i>
+<b>orders__right_only.csv</b>   <i>· full rows found only in Right</i>
+<b>orders__paired.csv</b>       <i>· the differing rows side by side, one row per pair (paired export)</i>
+<b>orders__summary.csv</b>      <i>· the counts as one row</i>
+<b>orders__summary.json</b>     <i>· the counts plus every setting the run used - key, pairs, steps, filters</i></div>
+    <p>In hash mode there is no <code>cell_diffs</code> file and no engine report - rows either match whole or land in <code>left_only</code> / <code>right_only</code>. The CSVs are complete; only the tables on screen and in the report are capped by <em>Rows to display</em>.</p>
+  </div>
+</section>
+
+<section class="sec" id="trouble">
+  <div class="sec-head"><div class="sec-num">11</div><div><h2 class="sec-h">Troubleshooting.</h2></div></div>
+  <div class="body">
+    <table>
+      <tr><th>Symptom</th><th>Cause · fix</th></tr>
+      <tr><td>Every matched row differs on one column</td><td>Two different fields paired by mistake, or a value that converts on one side only. Check <em>Matched by</em> in the table; open the column in the transform section and press <em>Check this column</em>.</td></tr>
+      <tr><td>Few rows match on the key</td><td>Key values spelled differently - case, padding, a date format. The summary lists sample unmatched values. Give the key column a Type or a step.</td></tr>
+      <tr><td>A date column shows as text</td><td>Add <em>to date</em> with the right format on the side that needs it, or pick the Type and let the built-in spellings read it. Ambiguous day/month order needs the format spelled out.</td></tr>
+      <tr><td>Auto picked a key that is not unique</td><td>It says so. Suggest keys shows the alternatives; or add a column in the table.</td></tr>
+      <tr><td>The comparison failed</td><td>The message is shown and the previous result stays on screen. Usually a filter value or a custom expression DuckDB cannot read - the preview shows DuckDB's own message.</td></tr>
+      <tr><td>Header names look like data</td><td>Untick <em>First row is a header</em> and load again; give names under Advanced if you have them.</td></tr>
+      <tr><td>streamlit / duckdb too old</td><td><code>pip install -U streamlit duckdb</code>. Streamlit 1.49+ and DuckDB 1.1+ are needed.</td></tr>
+    </table>
+  </div>
+</section>
+</main>
+</body>
+</html>
