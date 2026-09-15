@@ -28,6 +28,7 @@ from typing import Any
 
 APP_NAME = os.environ.get("COMPARE_APP_NAME", "CrossHire Compare").strip() or "CrossHire Compare"
 APP_TAGLINE = os.environ.get("COMPARE_APP_TAGLINE", "Tables, side by side").strip()
+CELL_BUDGET = 150_000        # the report shows at most this many cells per row table, whatever the row cap
 
 
 def brand_html() -> str:
