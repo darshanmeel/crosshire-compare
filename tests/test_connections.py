@@ -18,7 +18,7 @@ def test_uri_round_trip_snowflake():
 
 
 @pytest.mark.parametrize("uri", [
-    "databricks://token:dapi123@adb-1.azuredatabricks.net/?http_path=/sql/1.0/warehouses/abc&catalog=main&schema=hr",
+    "databricks://token:EXAMPLE_TOKEN@adb-1.azuredatabricks.net/?http_path=/sql/1.0/warehouses/abc&catalog=main&schema=hr",
     "mssql://svc:pw@sql01.corp:1433/Payroll",
     "oracle://hr_ro:pw@ora01:1521/?service_name=HRPDB",
     "postgresql://reporter:pw@pg01:5432/hr",
@@ -137,10 +137,10 @@ def test_redact():
 
 
 def test_redact_json_shaped_driver_message():
-    s = ('{"headers": {"Authorization": "Bearer dapi123"}, "password": "hunter2", '
+    s = ('{"headers": {"Authorization": "Bearer EXAMPLE_TOKEN"}, "password": "example-pw", '
          'api_key: sk-1, secret: s3} at snowflake://svc:p%40ss@acct/DB')
     r = cx.redact(s)
-    for word in ("dapi123", "hunter2", "sk-1", "s3}", "p%40ss"):
+    for word in ("EXAMPLE_TOKEN", "example-pw", "sk-1", "s3}", "p%40ss"):
         assert word not in r
     assert "snowflake://svc:***@acct/DB" in r
 

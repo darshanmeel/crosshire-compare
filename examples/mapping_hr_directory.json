@@ -1,0 +1,121 @@
+{
+  "columns": [
+    {
+      "a": "emp_id",
+      "b": "id",
+      "name": "emp_id",
+      "type": "text",
+      "key": true,
+      "compare": false,
+      "a_steps": [],
+      "b_steps": [
+        {
+          "op": "upper",
+          "params": {}
+        }
+      ]
+    },
+    {
+      "a": "first_name",
+      "b": "name",
+      "name": "first_name",
+      "type": "text",
+      "key": false,
+      "compare": true,
+      "a_steps": [],
+      "b_steps": [
+        {
+          "op": "part N split by S",
+          "params": {
+            "s": " ",
+            "n": "1"
+          }
+        }
+      ]
+    },
+    {
+      "a": "last_name",
+      "b": "name",
+      "name": "last_name",
+      "type": "text",
+      "key": false,
+      "compare": true,
+      "a_steps": [],
+      "b_steps": [
+        {
+          "op": "part N split by S",
+          "params": {
+            "s": " ",
+            "n": "2"
+          }
+        }
+      ]
+    },
+    {
+      "a": "last_name",
+      "b": "name",
+      "name": "last_name",
+      "type": "text",
+      "key": false,
+      "compare": true,
+      "a_steps": [],
+      "b_steps": [
+        {
+          "op": "part N split by S",
+          "params": {
+            "s": " ",
+            "n": "2"
+          }
+        }
+      ]
+    },
+    {
+      "a": "department",
+      "b": "dept",
+      "name": "department",
+      "type": "text",
+      "key": false,
+      "compare": true,
+      "a_steps": [],
+      "b_steps": [],
+      "case": "ignore"
+    },
+    {
+      "a": "salary",
+      "b": "salary",
+      "name": "salary",
+      "type": "number",
+      "key": false,
+      "compare": true,
+      "a_steps": [],
+      "b_steps": []
+    },
+    {
+      "a": "hire_date",
+      "b": "hire_date",
+      "name": "hire_date",
+      "type": "date",
+      "key": false,
+      "compare": true,
+      "a_steps": [],
+      "b_steps": [
+        {
+          "op": "to date",
+          "params": {
+            "fmt": "%d-%b-%Y"
+          }
+        }
+      ]
+    },
+    {
+      "a": "active",
+      "b": "active",
+      "name": "active",
+      "type": "boolean",
+      "key": false,
+      "compare": true,
+      "a_steps": [],
+      "b_steps": []
+    }
+  ]
+}

@@ -231,10 +231,10 @@ def test_fetch_parquet_stops_when_the_disk_is_nearly_full(tmp_path, monkeypatch)
 
 def test_test_redacts_driver_errors(monkeypatch):
     def bad(c):
-        raise RuntimeError("login failed for postgresql://u:hunter2@h/db password=hunter2")
+        raise RuntimeError("login failed for postgresql://u:example-pw@h/db password=example-pw")
     monkeypatch.setattr(db, "connect", bad)
-    r = db.test(Connection(name="p", kind="postgresql", host="h", user="u", password="hunter2"))
-    assert not r.ok and "hunter2" not in r.message and "Could not connect" in r.message
+    r = db.test(Connection(name="p", kind="postgresql", host="h", user="u", password="example-pw"))
+    assert not r.ok and "example-pw" not in r.message and "Could not connect" in r.message
 
 
 class IdentityCursor(FakeCursor):

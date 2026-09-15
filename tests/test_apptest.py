@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 EX = ROOT / "examples"
 COUNTS = dict(line.split("=") for line in (ROOT / "docs/superpowers/plans/COUNTS.md").read_text().split()
               if "=" in line)      # matched=... only_left=... only_right=... diff_rows=... cells=...
-FAKE_PW = "hunter2-not-a-real-password"
+FAKE_PW = "example-not-a-real-password"
 
 
 def _boot(monkeypatch, tmp_path):
@@ -44,7 +44,7 @@ def _finish(at):
     saved = list((Path(os.environ["COMPARE_OUT_DIR"])).glob(f"{pair}__*"))
     assert saved and (saved[0] / f"{pair}__summary.json").exists()
     blob = "\n".join(p.read_text(encoding="utf-8", errors="ignore") for p in folder.iterdir() if p.suffix in (".csv", ".json", ".html"))
-    assert FAKE_PW not in blob and "hunter2" not in blob
+    assert FAKE_PW not in blob and "example-not" not in blob
     return res
 
 
