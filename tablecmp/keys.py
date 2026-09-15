@@ -6,6 +6,7 @@ import time
 
 import pandas as pd
 
+from .profile import profile_singles
 from .sources import Side, work_dir
 from .sql import ident, lit, scratch
 from .values import ColSpec, ReadOptions, register
@@ -87,10 +88,53 @@ def ucc_candidates(con, view: str, columns: list[str], error: float = 0.0,
     return [c for c in out if 0 < len(c) <= max_lhs]
 
 
+HOW_SINGLE = "unique by itself"
+HOW_GROWN = "grown from the most selective column"
+HOW_HYUCC = "found with Desbordante HyUCC"
+HOW_PYRO = "found with Desbordante PyroUCC as almost unique"
+
+
+def key_reasons(cols: list[str], d: dict[str, int], totals: dict[str, int], affinity: dict[str, int],
+                nulls: dict[str, int], overlap: float, unique_sets: list[frozenset], how: str,
+                name_a: str, name_b: str) -> str:
+    """Why a candidate ranks where it does, as one line of plain reasons."""
+    bits = []
+    idish = [c for c in cols if ID_WORDS.search(c)]
+    measures = [c for c in cols if MEASURE_WORDS.search(c) or affinity[c] <= -4]
+    if measures:
+        bits.append(f"{', '.join(measures)}: a measure"
+                    + (", decimal" if any(affinity[c] <= -4 for c in measures) else "") + " - never a key")
+    elif idish:
+        bits.append("name says identifier" if len(cols) == 1
+                    else f"{idish[0]} says identifier" if len(idish) == 1
+                    else f"{', '.join(idish)} say identifier")
+    else:
+        bits.append("a name, not an identifier" if any(re.search(r"name", c, re.I) for c in cols)
+                    else "no identifier in the name")
+    n_null = sum(nulls.get(c, 0) for c in cols)
+    bits.append("no nulls" if not n_null else f"{n_null:,} nulls")
+    bits.append(f"{d['probe_a']:,} distinct of {totals['probe_a']:,} in {name_a}, "
+                f"{d['probe_b']:,} of {totals['probe_b']:,} in {name_b}")
+    dup_a, dup_b = totals["probe_a"] - d["probe_a"], totals["probe_b"] - d["probe_b"]
+    if dup_a or dup_b:
+        bits.append(" and ".join(f"{n:,} rows in {nm} share it"
+                                 for n, nm in ((dup_a, name_a), (dup_b, name_b)) if n))
+    bits.append("no values in common - the two sides number their rows differently" if overlap == 0
+                else f"{overlap:.1f}% of {name_a}'s values found in {name_b}")
+    for u in unique_sets:
+        if u < set(cols):
+            bits.append(f"adds nothing - {' + '.join(sorted(u))} is already unique")
+            break
+    return " · ".join(bits) + f" · {how}"
+
+
 def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: str,
-                 opts: ReadOptions, progress=None, max_cols: int = 4, want: int = 8
+                 opts: ReadOptions, progress=None, max_cols: int = 4, want: int = 8,
+                 profile: dict | None = None
                  ) -> tuple[pd.DataFrame, list[list[str]], str]:
-    """Candidate keys, best first, plus a note on how they were found."""
+    """Candidate keys, best first - each with how much of A's values B shares and the
+    reasons for its place - plus a note on how they were found. A profile of the same
+    columns supplies the single-column figures, so they are not measured twice."""
     say = progress or (lambda _msg: None)
     candidates = [s.canon for s in specs]
     say(f"Reading both sides ({len(candidates)} columns)…")
@@ -98,13 +142,25 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
     views = ("probe_a", "probe_b")
     totals = {v: con.execute(f"SELECT count(*) FROM {v}").fetchone()[0] for v in views}
 
-    say("Measuring every column…")
+    from_profile = {c: profile_singles(profile, c) for c in candidates}
+    measure = [c for c in candidates if from_profile[c] is None]
+    used_profile = len(measure) < len(candidates)
+    say("Reading the profile…" if used_profile else "Measuring every column…")
     singles: dict[str, dict[str, int]] = {c: {} for c in candidates}
-    for v in views:
-        picks = ", ".join(f"count(DISTINCT {ident(c)})" for c in candidates)
-        row = con.execute(f"SELECT {picks} FROM {v}").fetchone()
-        for c, d in zip(candidates, row):
-            singles[c][v] = d
+    nulls: dict[str, int] = {}
+    if measure:
+        for v in views:
+            picks = ", ".join(f"count(DISTINCT {ident(c)}), count(*) - count({ident(c)})" for c in measure)
+            row = con.execute(f"SELECT {picks} FROM {v}").fetchone()
+            for i, c in enumerate(measure):
+                singles[c][v] = row[2 * i]
+                nulls[c] = nulls.get(c, 0) + row[2 * i + 1]
+    for c, p in from_profile.items():
+        if p is not None:
+            singles[c] = {"probe_a": p["probe_a"], "probe_b": p["probe_b"]}
+            nulls[c] = p["nulls_a"] + p["nulls_b"]
+    # one value (or none) on each side can never tell rows apart
+    candidates = [c for c in candidates if not all(singles[c][v] <= 1 for v in views)]
 
     def distinct(cols: list[str]) -> dict[str, int]:
         if len(cols) == 1:
@@ -115,20 +171,27 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
     def unique(d): return all(d[v] == totals[v] for v in views)
     def selectivity(d): return min(d[v] / max(totals[v], 1) for v in views)
 
-    found: list[tuple[list[str], dict[str, int]]] = []
+    def overlap(cols: list[str]) -> float:
+        """Share of A's distinct key values also present in B."""
+        k = combo(cols)
+        n, m = con.execute(f"SELECT count(DISTINCT {k}), count(DISTINCT {k}) FILTER "
+                           f"(WHERE {k} IN (SELECT {k} FROM probe_b)) FROM probe_a").fetchone()
+        return m / n * 100 if n else 0.0
+
+    found: list[tuple[list[str], dict[str, int], str]] = []
     seen: set[frozenset] = set()
 
-    def offer(cols, d):
+    def offer(cols, d, how):
         if cols and frozenset(cols) not in seen:
             seen.add(frozenset(cols))
-            found.append((cols, d))
+            found.append((cols, d, how))
 
     affinity = {s.canon: key_affinity(s.canon, A.schema.get(s.a_src, ""),
                                       B.schema.get(s.b_src, "")) for s in specs}
     order = {c: i for i, c in enumerate(candidates)}
-    ranked = sorted(candidates, key=lambda c: (-affinity[c], -selectivity(singles[c])))
+    ranked = sorted(candidates, key=lambda c: (-affinity[c], nulls.get(c, 0) > 0, -selectivity(singles[c])))
 
-    def grow(seed_cols, d):
+    def grow(seed_cols, d, how=HOW_GROWN):
         cols = list(seed_cols)
         pool = [c for c in ranked if c not in cols]
         while not unique(d) and len(cols) < max_cols and pool:
@@ -142,7 +205,7 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
                 break
             cols, d = cols + [best], best_d
             pool.remove(best)
-        offer(cols, d)
+        offer(cols, d, how)
 
     if desbordante_available():
         n = min(UCC_SAMPLE, max(totals.values()))
@@ -155,8 +218,8 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
         say(f"Verifying {len(cands)} candidate(s) on every row…")
         for c in sorted(cands, key=lambda c: (len(c), -sum(affinity[x] for x in c)))[:30]:
             cols = sorted(c, key=order.get)
-            offer(cols, distinct(cols))
-        if not any(unique(d) for _, d in found):
+            offer(cols, distinct(cols), HOW_HYUCC)
+        if not any(unique(d) for _, d, _ in found):
             say("Nothing exactly unique - PyroUCC, almost-unique combinations…")
             note += "; nothing was exactly unique, so PyroUCC's almost-unique combinations " \
                     "(≤1% of rows in the way) were added and grown"
@@ -166,23 +229,35 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
             for c in sorted(approx, key=lambda c: (len(c), -sum(affinity[x] for x in c)))[:12]:
                 cols = sorted(c, key=order.get)
                 d = distinct(cols)
-                offer(cols, d)
+                offer(cols, d, HOW_PYRO)
                 if not unique(d):
-                    grow(cols, d)
+                    grow(cols, d, HOW_GROWN + " on top of a PyroUCC combination")
     else:
         note = ("Found by measuring every column and growing the most selective ones - "
                 "`pip install desbordante` for exact key discovery (HyUCC / PyroUCC)")
         say("Growing the most selective columns…")
         for col in ranked:
             if unique(singles[col]):
-                offer([col], singles[col])
+                offer([col], singles[col], HOW_SINGLE)
         for seed in ranked[:4]:
             if len(found) >= want:
                 break
             grow([seed], singles[seed])
+    if used_profile:
+        note += " - single-column figures from the profile"
 
-    found.sort(key=lambda f: (not unique(f[1]), -sum(affinity[c] for c in f[0]),
+    # a combination that only adds columns to a key that is already unique adds nothing,
+    # whatever the affinity of the extra columns says
+    unique_sets = [frozenset(cols) for cols, d, _ in found if unique(d)]
+    def redundant(cols): return any(u < set(cols) for u in unique_sets)
+
+    found.sort(key=lambda f: (not unique(f[1]), redundant(f[0]), -sum(affinity[c] for c in f[0]),
                               len(f[0]), -selectivity(f[1])))
+    found = found[:want * 2]
+    say(f"Overlap between the sides for {len(found)} candidate(s)…")
+    ov = {tuple(cols): overlap(cols) for cols, _, _ in found}
+    found.sort(key=lambda f: (not unique(f[1]), redundant(f[0]), -sum(affinity[c] for c in f[0]),
+                              -round(ov[tuple(f[0])]), len(f[0]), -selectivity(f[1])))
     found = found[:want]
     table = pd.DataFrame([{
         "Key columns": " + ".join(cols),
@@ -190,6 +265,9 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
         f"Distinct in {name_b}": d["probe_b"],
         "Unique on both": "yes" if unique(d) else "no",
         "Duplicate rows": (totals["probe_a"] - d["probe_a"]) + (totals["probe_b"] - d["probe_b"]),
+        "Overlap %": round(ov[tuple(cols)], 1),
         "Looks like a key": "yes" if all(affinity[c] >= 0 for c in cols) else "measure columns",
-    } for cols, d in found])
-    return table, [cols for cols, _ in found], note
+        "Why": key_reasons(cols, d, totals, affinity, nulls, ov[tuple(cols)], unique_sets, how,
+                           name_a, name_b),
+    } for cols, d, how in found])
+    return table, [cols for cols, _, _ in found], note

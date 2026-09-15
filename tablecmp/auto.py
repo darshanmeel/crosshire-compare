@@ -7,6 +7,7 @@ import pandas as pd
 
 from .columns import build_table, match_columns_by_data, pair_rows, set_steps, specs_from
 from .keys import probe, suggest_keys
+from .profile import profile_tables
 from .sources import Side
 from .sql import ident, lit, scratch
 from .values import DATE_TYPES, FALLBACK_FORMATS, ColSpec, ReadOptions, fold_nulls, raw_text
@@ -114,9 +115,12 @@ def case_probe(A: Side, B: Side, specs: list[ColSpec], opts: ReadOptions,
     return out
 
 
-def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions, say
-                   ) -> tuple[pd.DataFrame, list[str], list[str]]:
-    """Pair, type, key, compare - from the data. Returns the column table, the notes, the key."""
+def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions, say,
+                   profile: dict | None = None, want_profile: bool = False
+                   ) -> tuple[pd.DataFrame, list[str], list[str], dict | None]:
+    """Pair, type, key, compare - from the data. Returns the column table, the notes, the key,
+    and the profile that fed the key search: the one passed in, the one made here when
+    `want_profile` is on and none was given, or None."""
     notes: list[str] = []
     say("Pairing columns by name…")
     cmap = build_table(A, B)
@@ -135,7 +139,7 @@ def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions
                     f"{', '.join(r['B column'] for _, r in cmap.iterrows() if r['B column'] and not r['A column']) or 'none'} in {name_b}")
     specs = specs_from(cmap)
     if not specs:
-        return cmap, notes + ["nothing could be paired - stop here"], []
+        return cmap, notes + ["nothing could be paired - stop here"], [], profile
 
     say(f"Analysing {len(specs)} columns on both sides for number, date, timestamp, boolean "
         f"and the date spelling each side uses (first {PROBE_ROWS:,} rows)…")
@@ -156,18 +160,30 @@ def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions
         notes.append(f"{canon}: the two files spell the same values in different case - compared upper-cased")
     specs = specs_from(cmap)
 
+    if want_profile and profile is None:
+        say("Profiling both sides…")
+        profile = profile_tables(A, B, specs, opts, progress=say)
+    if profile:
+        notes += list(profile.get("notes", []))
+
     say("Finding the key - unique column combinations on both sides…")
-    table, combos, how = suggest_keys(A, B, specs, name_a, name_b, opts, progress=say)
+    table, combos, how = suggest_keys(A, B, specs, name_a, name_b, opts, progress=say, profile=profile)
     cmap["Key"] = False
     chosen: list[str] = []
     if combos:
         good = [c for c, u in zip(combos, table["Unique on both"]) if u == "yes"]
         chosen = good[0] if good else combos[0]
         cmap.loc[cmap["Common name"].isin(chosen), "Key"] = True
+        i = combos.index(chosen)
+        # the runner-up is a real alternative, not the chosen key with a column added
+        runner = next((j for j, c in enumerate(combos) if j != i and not set(chosen) < set(c)), None)
         notes.append(f"key: {' + '.join(chosen)}"
                      + ("" if good else " - NOT unique on both sides; the closest found. "
                                          "Rows sharing it are paired in file order")
-                     + f". {how}")
+                     + f" - {table.iloc[i]['Why']}"
+                     + (f". Runner-up: {' + '.join(combos[runner])} - {table.iloc[runner]['Why']}"
+                        if runner is not None else ""))
+        notes.append(f"key search: {how}")
         say(f"Key: {' + '.join(chosen)}" + ("" if good else " (not unique - closest found)"))
     else:
         notes.append("key: none found - rows will be matched by hashing the compared columns")
@@ -175,4 +191,4 @@ def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions
     paired_mask = (cmap["A column"] != "") & (cmap["B column"] != "")
     cmap.loc[paired_mask & ~cmap["Key"], "Compare"] = True
     notes.append(f"comparing all {int((paired_mask & ~cmap['Key']).sum())} paired non-key columns")
-    return cmap, notes, chosen
+    return cmap, notes, chosen, profile

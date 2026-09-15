@@ -125,7 +125,7 @@ if st.session_state.pop("auto_request", False):
     with st.status("Working it out…", expanded=True) as box:
         try:
             t0 = time.perf_counter()
-            new_map, notes, chosen = auto_configure(A, B, NA, NB, OPTS, box.write)
+            new_map, notes, chosen, _ = auto_configure(A, B, NA, NB, OPTS, box.write)
         except (duckdb.Error, RuntimeError) as exc:
             box.update(label="Auto could not finish", state="error")
             st.error(f"Auto stopped: {exc}")

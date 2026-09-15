@@ -84,4 +84,43 @@ def profile_tables(A: Side, B: Side, specs: list[ColSpec], opts: ReadOptions,
         say(f"{side.name or which}: value frequencies…")
         for s in specs:
             out["freq"][s.canon][which] = freq_tables(con, "prof", s.canon)
+    ia, ib = out["stats"]["A"].set_index("Column"), out["stats"]["B"].set_index("Column")
+    both, notes = [], []
+    for s in specs:
+        c = s.canon
+        if c not in ia.index or c not in ib.index:
+            continue
+        rec = {"Column": c, "Type": s.kind,
+               "Nulls A": int(ia.at[c, "Nulls"]), "Nulls B": int(ib.at[c, "Nulls"]),
+               "Distinct A": int(ia.at[c, "Distinct"]), "Distinct B": int(ib.at[c, "Distinct"]),
+               "Rows A": int(ia.at[c, "Rows"]), "Rows B": int(ib.at[c, "Rows"]),
+               "Min A": ia.at[c, "Min"], "Min B": ib.at[c, "Min"],
+               "Max A": ia.at[c, "Max"], "Max B": ib.at[c, "Max"]}
+        rec["constant"] = rec["Distinct A"] <= 1 and rec["Distinct B"] <= 1
+        rec["empty"] = rec["Nulls A"] == rec["Rows A"] and rec["Nulls B"] == rec["Rows B"]
+        if rec["empty"]:
+            notes.append(f"{c}: empty on both sides")
+        elif rec["constant"]:
+            notes.append(f"{c}: constant - one value on each side, never a key")
+        elif max(rec["Distinct A"], rec["Distinct B"]) > 2 * max(1, min(rec["Distinct A"], rec["Distinct B"])):
+            notes.append(f"{c}: {rec['Distinct A']:,} distinct values on {A.name or 'A'} against "
+                         f"{rec['Distinct B']:,} on {B.name or 'B'} - spelled differently, or a different field")
+        both.append(rec)
+    out["both"] = pd.DataFrame(both)
+    out["notes"] = notes
     return out
+
+
+def profile_singles(profile: dict | None, canon: str) -> dict | None:
+    """What the key search needs for one column, from a profile that already measured it:
+    distinct count and nulls per side (keyed like the key probe's views), and whether the
+    column is constant or empty on both sides."""
+    if not profile or "both" not in profile or not len(profile["both"]):
+        return None
+    hit = profile["both"][profile["both"]["Column"] == canon]
+    if not len(hit):
+        return None
+    r = hit.iloc[0]
+    return {"probe_a": int(r["Distinct A"]), "probe_b": int(r["Distinct B"]),
+            "nulls_a": int(r["Nulls A"]), "nulls_b": int(r["Nulls B"]),
+            "constant": bool(r["constant"]) or bool(r["empty"])}
