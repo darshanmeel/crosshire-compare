@@ -11,8 +11,8 @@ environment variable before starting; anything unknown falls back to aurora:
 The name is the other thing you are likely to change per deployment. Either edit APP_NAME
 below, or leave the code alone and set an environment variable before starting:
 
-    set COMPARE_APP_NAME=Acme Table Check        (Windows)
-    export COMPARE_APP_NAME="Acme Table Check"   (macOS / Linux)
+    set COMPARE_APP_NAME=Employee Table Check    (Windows)
+    export COMPARE_APP_NAME="Employee Table Check"   (macOS / Linux)
 
 It shows in the browser tab, the sidebar mark, the page header and the report.
 

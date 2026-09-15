@@ -28,6 +28,22 @@ out/
 *__report.html
 *__diff.html
 diff_config.yaml
+*__columns.csv
+*__profile.csv
+*__row_count_diffs.csv
+*_compare_*__*/
+*.zip
+
+# Connections and secrets live in the home folder, never here
+connections*.json
+.env
+.env.*
+!.env.example
+
+# DuckDB files, except the small committed sample
+*.duckdb
+*.duckdb.wal
+!examples/sample.duckdb
 
 # The app applies its theme in code and must never carry a Streamlit config folder
 .streamlit/

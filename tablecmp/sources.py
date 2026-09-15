@@ -17,7 +17,7 @@ class Side:
     label: str = ""         # the file name
     csv_path: str = ""      # the file read: CSV / Parquet / JSON, or the Parquet a database fetch produced
     kind: str = "csv"       # csv | parquet | json
-    origin: str = ""        # where a database fetch came from, for display ("Snowflake · SALES.ORDERS")
+    origin: str = ""        # where a database fetch came from, for display ("Snowflake · HR.EMPLOYEES")
     cache_path: str = ""    # Parquet snapshot of the rows read, when one was taken
     delimiter: str = ","
     header: bool = True

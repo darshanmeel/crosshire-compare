@@ -44,7 +44,7 @@ def source_panel(tag: str) -> None:
             path, label = staged_upload(tag, up), up.name
     else:
         p = st.text_input("Path to CSV or JSON", key=f"pt_{tag}",
-                          placeholder=r"C:\data\exports\orders_2026-09.csv").strip()
+                          placeholder=r"C:\data\exports\employees_2026-09.csv").strip()
         if p:
             if Path(p).is_file():
                 path, label = p, Path(p).name
@@ -73,13 +73,13 @@ def source_panel(tag: str) -> None:
     with st.expander("Rows to read - filter, order, top N", expanded=False):
         st.caption("Applied as the file is read, on its own column names, before anything "
                    "else - how a huge file is made small. Values are text here: "
-                   "`date >= '2026-07-20'`.")
+                   "`hire_date >= '2026-07-20'`.")
         if cols:
             qc = st.selectbox("Column", cols, key=f"qf_col_{tag}")
             qo = st.selectbox("Condition", QUICK_OPS, key=f"qf_op_{tag}")
             qv = st.text_input("Value", key=f"qf_val_{tag}",
                                disabled=qo in ("is null", "is not null"),
-                               placeholder="2026-07-20 · GB · 100")
+                               placeholder="2026-07-20 · Finance · 100")
             if st.button("Add to filter", key=f"qf_add_{tag}", width="stretch"):
                 clause = quick_clause(qc, qo, qv)
                 cur = st.session_state.get(f"where_{tag}", "")
@@ -89,7 +89,7 @@ def source_panel(tag: str) -> None:
                 st.rerun()
         where = st.text_area("Filter (WHERE)", value=st.session_state.get(f"where_{tag}", ""),
                              key=f"cw_{tag}_{rev}", height=90,
-                             placeholder="date >= '2026-07-20'\nAND country = 'GB'")
+                             placeholder="hire_date >= '2026-07-20'\nAND department = 'Finance'")
         st.session_state[f"where_{tag}"] = where
         order = st.multiselect("Order by", cols, key=f"ob_{tag}_{abs(hash(tuple(cols)))}",
                                placeholder="file order")
@@ -102,7 +102,7 @@ def source_panel(tag: str) -> None:
     with st.expander("Advanced", expanded=False):
         names_txt = st.text_area("Column names - comma separated, overrides the header row",
                                  key=f"nm_{tag}", height=68,
-                                 placeholder="index_symbol, date, next_trading_day, ...",
+                                 placeholder="emp_id, first_name, dept_name, ...",
                                  help="Use this when the header row is missing names.")
         snap = st.checkbox("Snapshot the rows read to Parquet", value=True, key=f"pq_{tag}",
                            help="Reads the CSV once, keeps the result as a compact Parquet "
