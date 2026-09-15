@@ -1,4 +1,5 @@
 # tests/test_keys.py
+from dataclasses import asdict
 from pathlib import Path
 
 from tablecmp.keys import key_uniqueness, suggest_keys
@@ -239,3 +240,29 @@ def test_auto_configure_returns_profile_and_reasons():
     assert prof2 is prof and chosen2 == ["emp_id"]
     _, _, chosen3, prof3 = auto_configure(A, B, "hr", "payroll", OPTS, said.append)
     assert prof3 is None and chosen3 == ["emp_id"]
+
+
+def test_auto_drops_a_profile_measured_on_other_specs(tmp_path):
+    """code is unique as text (001 and 1 differ) but not once Auto types it as a number: a
+    profile taken on the text specs must not feed the key search or be handed back as current."""
+    from tablecmp.auto import auto_configure
+    from tablecmp.columns import build_table, specs_from
+    rows = [["001", 10], ["1", 20], ["2", 30], ["3", 40], ["4", 50]]
+    A, B = _csv_sides(tmp_path, ["code", "amount"], rows, rows)
+    text_specs = specs_from(build_table(A, B))                 # the sniff keeps 001 as text
+    assert {s.canon: s.kind for s in text_specs}["code"] == "text"
+    stale = profile_tables(A, B, text_specs, OPTS)
+    assert stale["specs"] == [asdict(s) for s in text_specs]
+    assert profile_singles(stale, "code")["probe_a"] == 5
+    said: list[str] = []
+    cmap, notes, chosen, prof = auto_configure(A, B, "a", "b", OPTS, said.append,
+                                               profile=stale, want_profile=True)
+    assert {s.canon: s.kind for s in specs_from(cmap)}["code"] == "number"
+    assert prof is not stale and prof["specs"] == [asdict(s) for s in specs_from(cmap)]
+    assert any(m.startswith("Profiling both sides") for m in said)
+    assert profile_singles(prof, "code")["probe_a"] == 4
+    assert chosen != ["code"]                                  # 4 distinct of 5 - not a key on its own
+    assert not any(n.startswith("key: code ") for n in notes)
+    # without a fresh profile wanted, the stale one is dropped rather than passed on
+    _, _, chosen2, prof2 = auto_configure(A, B, "a", "b", OPTS, said.append, profile=stale)
+    assert prof2 is None and chosen2 == chosen

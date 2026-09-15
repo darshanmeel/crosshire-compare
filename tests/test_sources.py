@@ -42,11 +42,18 @@ def test_work_dir_default_is_under_temp(monkeypatch):
 def test_data_roots(tmp_path, monkeypatch):
     monkeypatch.delenv("COMPARE_DATA_DIR", raising=False)
     assert src.data_roots() == [] and src.path_allowed(str(tmp_path / "any.csv"))
-    (tmp_path / "in.csv").write_text("a" + chr(10) + "1" + chr(10))
-    monkeypatch.setenv("COMPARE_DATA_DIR", str(tmp_path))
-    assert src.path_allowed(str(tmp_path / "in.csv"))
-    assert not src.path_allowed(str(Path.home() / "x.csv"))
-    assert not src.path_allowed(str(tmp_path / "missing.csv"))
+    root, other = tmp_path / "root", tmp_path / "other"
+    root.mkdir()
+    other.mkdir()
+    (root / "in.csv").write_text("a" + chr(10) + "1" + chr(10))
+    (other / "x.csv").write_text("a" + chr(10) + "1" + chr(10))
+    monkeypatch.setenv("COMPARE_DATA_DIR", str(root))
+    assert src.path_allowed(str(root / "in.csv"))
+    # a real file outside the root is refused, also when reached by walking up out of the root
+    assert not src.path_allowed(str(other / "x.csv"))
+    assert not src.path_allowed(str(root / ".." / "other" / "x.csv"))
+    # so is a file that does not exist
+    assert not src.path_allowed(str(root / "missing.csv"))
 
 
 def test_scratch_is_utc():

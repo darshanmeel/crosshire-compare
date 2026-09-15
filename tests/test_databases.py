@@ -1,4 +1,5 @@
 # tests/test_databases.py
+import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
 from tablecmp import databases as db
@@ -79,22 +80,28 @@ def test_table_sql_quotes_per_dialect():
         db.table_sql("duckdb", " . ")
 
 
-def test_driver_missing_names_the_package(monkeypatch):
+def _hide_driver(monkeypatch, prefix):
+    """Make any import of the named driver fail, whether or not it is installed here."""
     import builtins
     real = builtins.__import__
 
     def fake(name, *a, **k):
-        if name.startswith("pymssql"):
+        if name.startswith(prefix):
             raise ImportError("no")
         return real(name, *a, **k)
     monkeypatch.setattr(builtins, "__import__", fake)
+
+
+def test_driver_missing_names_the_package(monkeypatch):
+    _hide_driver(monkeypatch, "pymssql")
     with pytest.raises(db.DriverMissing) as e:
         db.connect(Connection(name="p", kind="mssql", host="h", database="d", user="u", password="p"))
     assert "pip install pymssql" in str(e.value)
     assert "SQL Server" in str(e.value)
 
 
-def test_test_reports_a_missing_driver_without_raising():
+def test_test_reports_a_missing_driver_without_raising(monkeypatch):
+    _hide_driver(monkeypatch, "snowflake")
     r = db.test(Connection(name="p", kind="snowflake", host="h", user="u", password="p"))
     assert not r.ok and "snowflake-connector-python" in r.message and r.identity == ""
 
@@ -103,10 +110,11 @@ class FakeCursor:
     description = [("id", None), ("name", None)]
 
     def __init__(self, rows, fail_after=None):
-        self.rows, self.fail_after, self.calls = rows, fail_after, 0
+        self.rows, self.fail_after, self.calls, self.executed = rows, fail_after, 0, []
 
     def execute(self, sql):
         self.sql = sql
+        self.executed.append(sql)
 
     def fetchmany(self, n):
         self.calls += 1
@@ -141,6 +149,74 @@ class FakeConn:
 
     def commit(self):
         raise AssertionError("commit must never be called")
+
+
+def _stub_driver(monkeypatch, module, calls):
+    """A driver module whose connect records its keyword arguments and hands back a FakeConn."""
+    import sys
+    import types
+    m = types.ModuleType(module)
+    m.connect = lambda **kw: calls.append(kw) or FakeConn(FakeCursor([]))
+    monkeypatch.setitem(sys.modules, module, m)
+
+
+def test_connect_passes_the_read_only_switches(monkeypatch):
+    calls = []
+    for module in ("pymssql", "psycopg", "oracledb"):
+        _stub_driver(monkeypatch, module, calls)
+    for kind in ("mssql", "postgresql", "oracle"):
+        con = db.connect(Connection(name="p", kind=kind, host="h", database="d", user="u", password="p", timeout=30))
+    mssql, pg, ora = calls
+    assert mssql["read_only"] is True and mssql["autocommit"] is False
+    assert "-c default_transaction_read_only=on" in pg["options"] and pg["autocommit"] is False
+    assert ora["dsn"] == "h:1521/d" and con.call_timeout == 30_000
+
+
+def test_oracle_sets_the_transaction_read_only_first(tmp_path, monkeypatch):
+    fc = FakeConn(FakeCursor([]))
+    monkeypatch.setattr(db, "connect", lambda c: fc)
+    db.fetch_parquet(Connection(name="p", kind="oracle", host="h", user="u", password="p"),
+                     "SELECT * FROM t", str(tmp_path / "x.parquet"), cap=0)
+    assert fc.cur.executed == ["SET TRANSACTION READ ONLY", "SELECT * FROM t"] and fc.rolled_back
+
+
+class ArrowCursor(FakeCursor):
+    """A cursor of the Arrow-native kinds: fetch_arrow_batches (Snowflake) yields what it was
+    given, fetchmany_arrow (Databricks) hands out one table per call and an empty one at the end."""
+    empty = pa.table({"id": pa.array([], pa.int64()), "name": pa.array([], pa.string())})
+
+    def fetch_arrow_batches(self):
+        yield from self.rows
+
+    def fetchmany_arrow(self, n):
+        return self.rows.pop(0) if self.rows else self.empty
+
+
+def test_fetch_parquet_snowflake_arrow_batches(tmp_path, monkeypatch):
+    t = pa.table({"id": [1, 2, 3], "name": ["a", "b", "c"]})
+    fc = FakeConn(ArrowCursor([t.slice(0, 2), t.slice(2).to_batches()[0]]))   # a Table, then a RecordBatch
+    monkeypatch.setattr(db, "connect", lambda c: fc)
+    out = tmp_path / "x.parquet"
+    r = db.fetch_parquet(Connection(name="p", kind="snowflake", host="h", user="u", password="p"),
+                         "SELECT * FROM t", str(out), cap=0)
+    got = pq.read_table(out)
+    assert r.rows == 3 and r.columns == ["id", "name"] and got.column("id").to_pylist() == [1, 2, 3]
+    assert fc.cur.executed == ["SELECT * FROM t"] and fc.closed
+
+
+def test_fetch_parquet_databricks_arrow_tables(tmp_path, monkeypatch):
+    t = pa.table({"id": [1, 2, 3], "name": ["a", "b", "c"]})
+    fc = FakeConn(ArrowCursor([t.slice(0, 2), t.slice(2)]))
+    monkeypatch.setattr(db, "connect", lambda c: fc)
+    c = Connection(name="p", kind="databricks", host="h", user="u", password="p")
+    r = db.fetch_parquet(c, "SELECT * FROM t", str(tmp_path / "x.parquet"), cap=2)
+    assert r.rows == 2 and r.capped and pq.read_table(tmp_path / "x.parquet").column("name").to_pylist() == ["a", "b"]
+    fc = FakeConn(ArrowCursor([]))
+    monkeypatch.setattr(db, "connect", lambda c: fc)
+    r = db.fetch_parquet(c, "SELECT * FROM t", str(tmp_path / "z.parquet"), cap=0)
+    z = pq.read_table(tmp_path / "z.parquet")
+    assert r.rows == 0 and z.num_rows == 0 and z.column_names == ["id", "name"]
+    assert str(z.schema.field("id").type) == "int64"           # the empty table keeps the real types
 
 
 def test_fetch_parquet_streams_and_caps(tmp_path, monkeypatch):
@@ -289,3 +365,17 @@ def test_duckdb_connection_is_read_only(tmp_path):
 def test_duckdb_missing_file_is_a_failed_test(tmp_path):
     r = db.test(Connection(name="S", kind="duckdb", host=str(tmp_path / "nope.duckdb")))
     assert not r.ok and "Could not connect" in r.message
+
+
+def test_duckdb_connection_cannot_read_other_files(tmp_path):
+    """A DuckDB file source answers SELECTs on its own tables and nothing on the server's disk."""
+    import duckdb
+    path = tmp_path / "t.duckdb"
+    duckdb.connect(str(path)).execute("CREATE TABLE t AS SELECT 1 AS x").close()
+    other = tmp_path / "other.csv"
+    other.write_text("a" + chr(10) + "1" + chr(10), encoding="utf-8")
+    con = db.connect(Connection(name="F", kind="duckdb", host=str(path)))
+    assert con.execute("SELECT * FROM t").fetchall() == [(1,)]
+    with pytest.raises(Exception, match="(?i)permission|external"):
+        con.execute(f"SELECT * FROM read_csv('{other.as_posix()}')").fetchall()
+    con.close()

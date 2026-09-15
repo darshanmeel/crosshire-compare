@@ -197,7 +197,8 @@ def connect(c: Connection):
         raise ValueError(f"Unknown connection kind {kind!r}")
     m = _import(kind)
     if kind == "duckdb":
-        return m.connect(c.host, read_only=True)
+        # read-only, and no reading of other files on the server through the SQL box
+        return m.connect(c.host, read_only=True, config={"enable_external_access": "false"})
     if kind == "snowflake":
         return m.connect(user=c.user, password=c.password, account=c.host, database=c.database or None,
                          schema=c.schema or None, warehouse=c.extra.get("warehouse") or None,

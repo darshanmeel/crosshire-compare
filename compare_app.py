@@ -45,13 +45,23 @@ except ModuleNotFoundError as _exc:                # the package folder is not n
 if __name__ == "__main__":
     import streamlit.runtime as _rt
     if not _rt.exists():                         # `python compare_app.py`: start the server
+        from streamlit import config as _cfg
         from streamlit.web import bootstrap
         try:
             _upload_mb = int(os.environ.get("COMPARE_UPLOAD_MB") or THEME["upload_mb"])
         except ValueError:
             _upload_mb = int(THEME["upload_mb"])
-        bootstrap.run(__file__, False, [], {"server.maxUploadSize": _upload_mb,
-                                            "browser.gatherUsageStats": False, **STREAMLIT_THEME})
+        _opts = {"server.maxUploadSize": _upload_mb, "browser.gatherUsageStats": False, **STREAMLIT_THEME}
+        for _key, _opt in _cfg._config_options_template.items():
+            _raw = os.environ.get(_opt.env_var)  # STREAMLIT_SERVER_PORT and the like, as `streamlit run` reads them
+            if _raw is None or _opt.sensitive:   # the sensitive two Streamlit reads from the environment itself
+                continue
+            if _opt.type is bool:
+                _opts[_key] = _raw.strip().lower() in ("1", "true", "t", "yes", "y", "on")
+            else:
+                _opts[_key] = [_opt.type(v) for v in _raw.split()] if _opt.multiple else _opt.type(_raw)
+        bootstrap.load_config_options(_opts)     # run() only watches config.toml for them; this applies them
+        bootstrap.run(__file__, False, [], _opts)
         raise SystemExit
 
 import duckdb                                     # noqa: E402
@@ -90,7 +100,7 @@ for pkg, need, have in (("streamlit", "1.49", st.__version__), ("duckdb", "1.2",
 from tablecmp import ui_columns, ui_keys, ui_results, ui_sidebar, ui_transform   # noqa: E402
 from tablecmp.auto import auto_configure                                          # noqa: E402
 from tablecmp.columns import specs_from                                           # noqa: E402
-from tablecmp.compare import discard_run, OPS, build_filters, run_comparison, signature       # noqa: E402
+from tablecmp.compare import discard_run, OPS, build_filters, run_comparison, side_labels, signature   # noqa: E402
 from tablecmp.outputs import pair_name, sweep_work_dir, table_formats, write_parquet_copies, write_summary  # noqa: E402
 from tablecmp.profile import profile_tables                                       # noqa: E402
 from tablecmp.report import build_report                                          # noqa: E402
@@ -138,14 +148,8 @@ if not (A.loaded and B.loaded):
     st.stop()
 
 
-def side_name(tag: str, side: Side, default: str) -> str:
-    """The Name box wins; left at its default, a database side is called after its connection."""
-    nick = (st.session_state.get(f"nick_{tag}") or "").strip()
-    return nick if nick and nick != default else (side.name or default).strip()
-
-
-NA = side_name("A", A, "Left")
-NB = side_name("B", B, "Right")
+NA = ui_sidebar.side_name("A")               # the Name box, else the connection, else Left / Right
+NB = ui_sidebar.side_name("B")
 OPTS = ReadOptions.from_state(st.session_state)
 
 
@@ -190,8 +194,8 @@ if st.session_state.pop("auto_request", False):
 
 # ---- Files ----------------------------------------------------------------
 st.subheader("Files")
-st.caption(f"**{NA}** {A.label} - {A.rows:,} rows × {len(A.schema)} columns"
-           + (f" · {A.cut}" if A.cut else "") + f" &nbsp;|&nbsp; **{NB}** {B.label} - "
+st.caption(f"**{NA}** {A.origin or A.label} - {A.rows:,} rows × {len(A.schema)} columns"
+           + (f" · {A.cut}" if A.cut else "") + f" &nbsp;|&nbsp; **{NB}** {B.origin or B.label} - "
            f"{B.rows:,} rows × {len(B.schema)} columns" + (f" · {B.cut}" if B.cut else ""))
 with st.expander("First 10 rows of each file", expanded=False):
     p1, p2 = st.columns(2)
@@ -245,13 +249,13 @@ with st.expander("Filters - which rows take part, on the common names", expanded
     filter_rows = st.data_editor(
         blank, num_rows="dynamic", width="stretch", hide_index=True, key="filters",
         column_config={
-            "Apply to": st.column_config.SelectboxColumn(options=["Both", NA, NB]),
+            "Apply to": st.column_config.SelectboxColumn(options=["Both", *side_labels(NA, NB)]),
             "Column": st.column_config.SelectboxColumn(options=[""] + setup.canon),
             "Operator": st.column_config.SelectboxColumn(options=OPS),
             "Value": st.column_config.TextColumn(help="in / not in: comma separated. between: two values."),
             "Type": st.column_config.SelectboxColumn(options=["auto", "string", "number", "date"])})
 with st.expander("Profile - statistics and the 10 most and least frequent values, per column, "
-                 "per file (only when pressed)", expanded=False):
+                 "per file (Auto fills it in, or press the button)", expanded=False):
     if st.button("Profile both files", key="do_profile", type="primary"):
         try:
             with st.status("Profiling…", expanded=True) as box:
@@ -319,11 +323,14 @@ try:
 except ValueError as exc:
     both_f, left_f, right_f, filter_error = {}, {}, {}, str(exc)
 
+# every compared pair tells the engine its type: a number pair takes its own tolerance or the
+# global one; any other pair pins the tolerance at 0, or the engine would read a text code like
+# 001 against 1 as numbers; a text pair with its own Case beats the Ignore case in values switch
 column_rules = {s.canon: {"type": "number", **({"tolerance": s.tolerance} if s.tolerance else {})}
-                for s in setup.specs if s.kind == "number" and s.canon in setup.compare}
-# a text pair with its own Case beats the Ignore case in values switch
-column_rules.update({s.canon: {"type": "string", "ignore_case": s.case_rule()}
-                     for s in setup.specs if s.case_rule() is not None and s.canon in setup.compare})
+                if s.kind == "number" else
+                {"type": "string", "tolerance": 0.0,
+                 **({"ignore_case": s.case_rule()} if s.case_rule() is not None else {})}
+                for s in setup.specs if s.canon in setup.compare}
 pending = {
     "name": pair_name(NA, NB),
     "notes": list(st.session_state.get("auto_notes") or []),

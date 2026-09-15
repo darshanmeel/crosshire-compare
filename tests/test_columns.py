@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from tablecmp.columns import (MAP_COLS, SHOWN_COLS, apply_mapping_json, build_table, mapping_json, normalise,
+from tablecmp.columns import (MAP_COLS, SHOWN_COLS, apply_mapping_json, build_table, mapping_json, norm_key, normalise,
                               only_in, reused, specs_from)
 from tablecmp.compare import run_comparison
 from tablecmp.keys import key_uniqueness, suggest_keys
@@ -271,12 +271,13 @@ def test_case_cell_beats_the_switch(monkeypatch, tmp_path):
         d = run["result"].diffs_by_column
         return d.get("city", 0), d.get("code", 0)
 
+    text = {"type": "string", "tolerance": 0.0}        # a text pair: never a number, no Case of its own
     run = compare("", False)                            # blank follows the switch: case matters
-    assert diffs(run) == (3, 1) and run["cfg"]["column_rules"] == {}
+    assert diffs(run) == (3, 1) and run["cfg"]["column_rules"] == {"city": text, "code": text}
     assert "case matters · tolerance" in run["_report"]
     run = compare("ignore", False)                      # the cell alone ignores case on city
     assert diffs(run) == (0, 1)
-    assert run["cfg"]["column_rules"] == {"city": {"type": "string", "ignore_case": True}}
+    assert run["cfg"]["column_rules"] == {"city": {**text, "ignore_case": True}, "code": text}
     assert "case matters · <b>ignored on: city</b>" in run["_report"]
     assert "<code>city</code> text · ignore case" in run["_report"]
     sheet = (Path(run["folder"]) / f"{run['pair']}__columns.csv").read_text(encoding="utf-8")
@@ -285,14 +286,46 @@ def test_case_cell_beats_the_switch(monkeypatch, tmp_path):
     page = "\n".join(m.value for m in at.markdown)
     assert "<code>city</code> text · ignore case" in page         # the setup card's Read as row
     run = compare("", True)                             # the switch alone: case ignored everywhere
-    assert diffs(run) == (0, 0) and run["cfg"]["column_rules"] == {}
+    assert diffs(run) == (0, 0) and run["cfg"]["column_rules"] == {"city": text, "code": text}
     assert "<b>case ignored</b> · tolerance" in run["_report"]
     run = compare("exact", True)                        # the cell beats the switch on city
     assert diffs(run) == (3, 0)
-    assert run["cfg"]["column_rules"] == {"city": {"type": "string", "ignore_case": False}}
+    assert run["cfg"]["column_rules"] == {"city": {**text, "ignore_case": False}, "code": text}
     assert "<b>case ignored</b> · <b>exact on: city</b>" in run["_report"]
     run = compare("ignore", True)                       # the cell agrees with the switch: nothing to add
     assert diffs(run) == (0, 0) and "on: city" not in run["_report"]
+
+
+def test_numeric_tolerance_leaves_text_pairs_alone(monkeypatch, tmp_path):
+    """A text code 001 against 1 and a zip 02134 against 2134 stay different with a numeric
+    tolerance above 0: the tolerance is for number pairs only, and every compared pair tells
+    the engine so in its own rule."""
+    from tests.test_apptest import _boot, _load_path, _ok
+    (tmp_path / "left.csv").write_text("id,code,zip,amount\n1,001,02134,10.001\n2,B2,00501,20\n",
+                                       encoding="utf-8")
+    (tmp_path / "right.csv").write_text("id,code,zip,amount\n1,1,2134,10.002\n2,B2,501,20\n",
+                                        encoding="utf-8")
+    at = _boot(monkeypatch, tmp_path)
+    _load_path(at, "A", tmp_path / "left.csv")
+    _load_path(at, "B", tmp_path / "right.csv")
+    A, B = at.session_state["A"], at.session_state["B"]
+    cols = [{"a": "id", "b": "id", "name": "id", "type": "text", "key": True, "compare": False},
+            {"a": "code", "b": "code", "name": "code", "type": "text", "compare": True},
+            {"a": "zip", "b": "zip", "name": "zip", "type": "text", "compare": True, "case": "ignore"},
+            {"a": "amount", "b": "amount", "name": "amount", "type": "number", "compare": True}]
+    at.session_state["cmap"] = apply_mapping_json(json.dumps({"columns": cols}), A, B)
+    at.session_state["map_rev"] += 1
+    _ok(at.run())
+    _ok(at.number_input(key="opt_tol").set_value(0.01).run())
+    _ok(at.button(key="go").click().run())
+    run = at.session_state["result"]
+    res = run["result"]
+    assert not res.error, res.error
+    by = {c: res.diffs_by_column.get(c, 0) for c in ("code", "zip", "amount")}
+    assert by == {"code": 1, "zip": 2, "amount": 0}          # amount's 0.001 gap is inside the tolerance
+    assert run["cfg"]["column_rules"] == {"code": {"type": "string", "tolerance": 0.0},
+                                          "zip": {"type": "string", "tolerance": 0.0, "ignore_case": True},
+                                          "amount": {"type": "number"}}
 
 
 def test_app_flow_with_every_item_together(monkeypatch, tmp_path):
@@ -330,7 +363,7 @@ def test_app_flow_with_every_item_together(monkeypatch, tmp_path):
     assert "department,department,dept,compared,text · ignore case,file," in "\n".join(sheet)
     settings = json.loads((folder / f"{pair}__summary.json").read_text(encoding="utf-8"))["settings"]
     assert settings["tolerance"] == 0.01
-    assert settings["column_rules"]["department"] == {"type": "string", "ignore_case": True}
+    assert settings["column_rules"]["department"] == {"type": "string", "tolerance": 0.0, "ignore_case": True}
     assert next(s for s in settings["specs"] if s["canon"] == "department")["case"] == "ignore"
     assert "ignored on: department" in run["_report"]
     _ok(at.button(key="save_all").click().run())
@@ -348,3 +381,25 @@ def test_apply_mapping_json_skips_an_identical_pair_listed_twice():
     cm = apply_mapping_json(text, A, B)
     pairs = cm[(cm["A column"] == "last_name") & (cm["B column"] == "name")]
     assert len(pairs) == 2 and list(pairs["Common name"]) == ["last_name", "last_name_2"]
+
+
+def test_build_table_pairs_non_ascii_names_by_name_whatever_the_order():
+    """Headers with no ASCII letters (CJK, Cyrillic, accented) pair with their namesake on
+    the other side, not with whatever sits in the same position, and keep their own name."""
+    A = Side(name="a", label="a.csv", schema={"社員番号": "BIGINT", "名前": "VARCHAR", "部署": "VARCHAR"})
+    B = Side(name="b", label="b.csv", schema={"部署": "VARCHAR", "名前": "VARCHAR", "社員番号": "BIGINT"})
+    cm = build_table(A, B)
+    assert _pairs(cm) == [("社員番号", "社員番号"), ("名前", "名前"), ("部署", "部署")]
+    assert list(cm["Matched by"]) == ["name"] * 3
+    assert list(cm["Common name"]) == ["社員番号", "名前", "部署"]
+    assert only_in(cm, "A") == [] and only_in(cm, "B") == []
+    # Cyrillic and accented names likewise: matched case-blind, and a near miss is still
+    # a similar-name guess rather than a "name" match
+    A = Side(name="a", label="a.csv", schema={"Номер": "BIGINT", "Имя": "VARCHAR", "Prénom": "VARCHAR"})
+    B = Side(name="b", label="b.csv", schema={"Prenom": "VARCHAR", "имя": "VARCHAR", "Номер сотр.": "BIGINT"})
+    cm = build_table(A, B)
+    assert _pairs(cm) == [("Номер", "Номер сотр."), ("Имя", "имя"), ("Prénom", "Prenom")]
+    assert list(cm["Matched by"]) == ["guess - check", "name", "similar name"]
+    assert list(cm["Common name"]) == ["номер", "имя", "prénom"]
+    # ASCII names are normalised exactly as before
+    assert norm_key("Emp_ Id") == "emp_id" and norm_key("salary_(usd)") == "salary_usd" and norm_key("  ") == "col"

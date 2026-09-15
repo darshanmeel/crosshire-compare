@@ -1,6 +1,7 @@
 """Per-column statistics and value frequencies, on the same typed values the comparison uses."""
 from __future__ import annotations
 
+from dataclasses import asdict
 from typing import Any
 
 import pandas as pd
@@ -74,7 +75,8 @@ def freq_tables(con, table: str, col: str, n: int = 10) -> tuple[pd.DataFrame, p
 def profile_tables(A: Side, B: Side, specs: list[ColSpec], opts: ReadOptions,
                    progress=None) -> dict:
     say = progress or (lambda _m: None)
-    out: dict[str, Any] = {"stats": {}, "freq": {s.canon: {} for s in specs}}
+    out: dict[str, Any] = {"stats": {}, "freq": {s.canon: {} for s in specs},
+                           "specs": [asdict(s) for s in specs]}      # what it was measured on
     for side, which in ((A, "A"), (B, "B")):
         say(f"Reading {side.name or which}…")
         con = scratch()

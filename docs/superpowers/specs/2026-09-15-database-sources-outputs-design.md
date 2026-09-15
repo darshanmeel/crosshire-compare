@@ -322,7 +322,7 @@ Existing, unchanged: `how_A/B`, `pt_A/B`, `load_A/B`, `auto_btn`, `go`, `disp_ro
   `hire_date >= '2026-07-20'\nAND department = 'Finance'`, `2026-07-20 · Finance · 100`,
   `emp_id, first_name, dept_name, ...`, `"Snowflake · HR.EMPLOYEES"`, `hired_at` for the
   timestamp example; `theme.py` docstring uses `Employee Table Check`; README.md and
-  README.html lose `orders`, `trade_ts`, `Ccy`, `currency_code`, company names.
+  README.html lose the old sales-domain column names and company names.
 - Screenshots in `docs/` retaken: home, loaded, columns, keys with reasons, result, rows,
   report tab, downloads, database panel, connections manager, and the report in both themes.
 

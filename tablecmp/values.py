@@ -243,6 +243,15 @@ def final_kind(steps: list) -> str | None:
     return None
 
 
+def date_format(steps: list) -> str:
+    """The format the last to date / to timestamp step reads with; blank when there is no
+    such step or it tries the usual spellings."""
+    for s in reversed(steps or []):
+        if s["op"] in ("to date", "to timestamp"):
+            return str(s.get("params", {}).get("fmt", "")).strip()
+    return ""
+
+
 # ---- reading one value -------------------------------------------------------
 def fold_nulls(base: str, tokens: tuple[str, ...]) -> str:
     if not tokens:

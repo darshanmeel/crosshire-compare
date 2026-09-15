@@ -35,6 +35,10 @@ A Streamlit front end over DuckDB that compares two tables row by row. Load a CS
 
 Every screenshot below is the app or its report on the sample pair in `examples/` - `hr_employees.csv` against `payroll_employees.csv`, the sides named **HR** and **Payroll** in the sidebar (3,000 employees on the HR side, 2,985 on the Payroll side, every column renamed, the two names joined into one, salaries with thousands separators, dates as dd/mm/yyyy, booleans as Y/N). The run is the one in [Try it on the sample pair](#try-it-on-the-sample-pair): **Figure it all out and compare**, then the one step Auto's guess needs, then **Compare**.
 
+The empty app: File A's panel in the sidebar - the Name box, the **Upload** / **Path on disk** / **Database** radio, the upload box, the delimiter and header tick, *Rows to read* and *Advanced* folded, **Load A** - and on the page the status strip at *0 of 2 loaded* with the one hint that matters next.
+
+![The app before anything is loaded](docs/app-home.png)
+
 Both files loaded. The sidebar holds the sources; the page walks down numbered sections and the strip under the headline says where things stand.
 
 ![The app with both files loaded](docs/app-loaded.png)
@@ -155,7 +159,7 @@ Differences · 2,874 rows matched on emp_id · 5 columns compared · 2,874 rows 
 
 `emp_id` and `id` were paired by their values, but the 3% of ids the directory writes in lower case find no partner, so 96 employees show up as one-sided on each side instead of 30 and 20; `first_name` was paired with the directory's single `name` (`guess - check` again, and every row differs on it); `salary` differs on 369 rows because the float noise counts; `department` on 105, `active` on 29.
 
-Now load the mapping: in the column table press the **Load mapping** box and give it `examples/mapping_hr_directory.json`; open **How values are read** and set *Numeric tolerance* to `0.01`; press **Compare**:
+Now load the mapping: in the column table press **Upload** in the box under **Save mapping** and give it `examples/mapping_hr_directory.json`; open **How values are read** and set *Numeric tolerance* to `0.01`; press **Compare**:
 
 ```
 Differences · 2,970 rows matched on emp_id · 6 columns compared · 357 rows (12.02%) differ in 362 cells · 30 only in HR · 20 only in Directory
@@ -177,7 +181,7 @@ Differences · 2,970 rows matched on emp_id · 6 columns compared · 357 rows (1
 
 ## How a run goes
 
-1. **Load A and B in the sidebar.** Upload, give a path, or fetch from a database. Each side has a name (Left and Right by default) that is shown everywhere and names every output file - `<left>_compare_<right>__report.html` - so name them; the sidebar reminds you under a file side that is still called Left or Right. For a big file open *Rows to read* first and cut it down. Both sides get a 10-row preview and nothing else runs.
+1. **Load A and B in the sidebar.** Upload, give a path, or fetch from a database. Each side has a name (Left and Right by default) that is shown everywhere and names every output file - `<left>_compare_<right>__report.html` - so name them; the sidebar reminds you under a file side that is still called Left or Right, and under either side when both carry the same name. For a big file open *Rows to read* first and cut it down. Both sides get a 10-row preview and nothing else runs.
 2. **Check the column table, press Confirm columns.** Pairs by name are already made. Fix the rest with the dropdowns, set Type, tick Key and Compare. Confirm folds the table away and shows the setup card: the key, what is compared, what is missing on each side.
 3. **Transform where a side needs it.** Pick a column and a side, add steps - trim, left 10, to date (%d/%m/%Y) - previewed on the first five rows.
 4. **Press Compare.** Progress is shown step by step. The result stays on screen until the next run - a failure never wipes it, a settings change only marks it stale. Changing a Name box or *Rows to display* does not; the next Compare picks the new name up.
@@ -188,7 +192,7 @@ Or press **Figure it all out and compare** in the sidebar. Auto pairs the column
 
 ### Sources
 
-Each side comes from one of three places, picked with the **From** radio: **Upload**, **Path on disk**, or **Database**.
+Each side comes from one of three places, picked with the radio under its Name box: **Upload**, **Path on disk**, or **Database**.
 
 A file is a **CSV** (any delimiter), a **JSON** file - an array of objects, or one object per line (`.jsonl` / `.ndjson`) - or a **Parquet** file. A JSON value that is itself an object or list arrives as text, in DuckDB's own spelling of the object or list rather than as JSON; a Parquet BLOB column arrives as hex. With `COMPARE_DATA_DIR` set, a path on disk must sit under one of its folders or the sidebar says *Not under an allowed folder*. Each side has a **Name** (shown everywhere, and the name of every output file), for CSV a delimiter and a *First row is a header* tick, and **Rows to read**: a WHERE filter on the file's own column names, an order, a top N. All three are applied by DuckDB as the file is read - this is how a 20 GB file becomes the 100,000 rows you actually want. The column / condition / value pickers build the filter for you.
 
@@ -221,7 +225,7 @@ Connections are kept the way Airflow keeps them: named, in a file in your home f
 
 **Test** connects, runs the smallest query (`SELECT 1`, or `SELECT 1 FROM dual`) and says who the database thinks you are: *OK - USER · ROLE · WH · DB - 0.6 s* (for a DuckDB file, how many tables it holds), or the driver's own message with every credential blanked.
 
-**The store** is `~/.crosshire-compare/connections.json` (`COMPARE_CONNECTIONS` points it elsewhere): `{"version": 1, "connections": [ … ]}`, one record per connection with its name, kind, host, port, database, schema, user, extras and timeout. The folder is created `0700` and the file written `0600` through a temp file and a rename, so it is never half-written. **Save password** unticked - the rule for anything shared - writes the record with no `password` key at all; the app then asks for the password once per session, in the sidebar, and keeps it in the session only. A saved password is never echoed back into the form.
+**The store** is `~/.crosshire-compare/connections.json` (`COMPARE_CONNECTIONS` points it elsewhere): `{"version": 1, "connections": [ … ]}`, one record per connection with its name, kind, host, port, database, schema, user, `extra` (the kind's own fields: warehouse, role, HTTP path, service name) and timeout. The folder is created `0700` and the file written `0600` through a temp file and a rename, so it is never half-written. **Save password** unticked - the rule for anything shared - writes the record with no `password` key at all; the app then asks for the password once per session, in the sidebar, and keeps it in the session only. A saved password is never echoed back into the form.
 
 **The environment** wins over the file: every `COMPARE_CONN_<NAME>=<uri>` is a connection called `<NAME>`, shown *env · read-only* in the manager, overriding a file connection of the same name (compared ignoring case, because Windows upper-cases variable names). The URI form is Airflow's, one example per kind:
 
@@ -240,7 +244,7 @@ Percent-encode a user name or password with `@`, `:` or `/` in it; add `&timeout
 
 No credential reaches an output, a report, a log line or the screen: driver messages go through a redaction that blanks the value after `password=`, `pwd=`, `token=`, `secret=`, `api_key=` and `authorization:` and the `user:password@` part of any URI, and the only thing about a connection that lands in a report or `summary.json` is its name. `connections*.json`, `.env` and `*.duckdb` (bar the sample) are in `.gitignore` and `.dockerignore`.
 
-What was and was not exercised: the DuckDB kind runs end to end here (the sample database, the headless tests). Snowflake, Databricks, SQL Server, Oracle and Postgres were **not** run against a live server in this repository - their dialects, the read-only guard, the cap and the streamed fetch are covered by tests against a fake DB-API cursor only. The first fetch against a real one is yours; **Test** is the place to start.
+What was and was not exercised: the DuckDB kind runs end to end here (the sample database, the headless tests). Snowflake, Databricks, SQL Server, Oracle and Postgres were **not** run against a live server in this repository - their dialects, the read-only guard, the read-only switch each driver is connected with, the cap and the streamed fetch (row batches and Arrow batches alike) are covered by tests against a stub driver and a fake DB-API cursor only. The first fetch against a real one is yours; **Test** is the place to start.
 
 ### The column table
 
@@ -250,7 +254,7 @@ Every column from either file is a row; one place to decide everything.
 |---|---|
 | Left column, Right column | Dropdowns. Each row is one column from either file with its counterpart on the other side, or blank. Pick a counterpart for a blank row and the two rows merge; pick a column already used elsewhere and it moves - the row you edited wins. A column that is in no pair always has a row of its own; a row with nothing on either side disappears. |
 | Common name | What the pair is called from here on: in transforms, filters, results, downloads. |
-| Type, both sides | What both sides are converted to before comparing: `text`, `number`, `date`, `timestamp`, `boolean`. `number`: 100.00 = 100 = 1e2. `date`: 27/08/2026 = 2026-08-27. `timestamp` keeps the time of day. `boolean`: 1 = yes = true. A value that will not convert keeps its text, so it shows as a difference rather than vanishing. The type is a property of the pair. |
+| Type · both sides | What both sides are converted to before comparing: `text`, `number`, `date`, `timestamp`, `boolean`. `number`: 100.00 = 100 = 1e2. `date`: 27/08/2026 = 2026-08-27. `timestamp` keeps the time of day. `boolean`: 1 = yes = true. A value that will not convert keeps its text, so it shows as a difference rather than vanishing. The type is a property of the pair. |
 | Key | Part of the row key. Several ticks make a compound key. |
 | Compare | Compare this column. Ignored on key columns. |
 | Case | For a text pair: `ignore` or `exact`, or blank to follow the *Ignore case in values* switch under *How values are read*. A pair of any other Type takes no notice of it. |
@@ -262,7 +266,7 @@ The *looks like* cells come from up to 2,000 distinct values of the first 50,000
 
 **A column may be used in more than one pair** - one `name` split into `first_name` and `last_name` with a *part N split by S* step on each pair, N = 1 and N = 2. To pair a column a second time, pick it in the dropdown of a row that is still unpaired on the other side. It keeps a one-sided row only while it is in no pair. The setup card's *Paired* row says `name used 2 times on the Right` when it happens, and the column sheet, the profile and the report list both pairs, each with its own step.
 
-**Match by data** reads a sample of both files and pairs the unpaired columns that hold the same values, whatever they are called - `Dept` with `department`. **Reset to name matches** starts the table over. **Save mapping** writes the pairs as JSON - one entry per pair with `a`, `b`, `name`, `type`, `key`, `compare`, `case`, `a_steps` and `b_steps`, each step as `{"op": "to date", "params": {"fmt": "%d-%b-%Y"}}` - and the **Load mapping** box under it loads one back for the next run of the same two feeds: every pair whose columns both exist is taken, a column named in several entries is paired several times, an identical entry listed twice is taken once, and the unpaired rows are rebuilt from the files. `examples/mapping_hr_directory.json` is one to read. The *looks like* cells are not in the file.
+**Match by data** reads a sample of both files and pairs the unpaired columns that hold the same values, whatever they are called - `Dept` with `department`. **Reset to name matches** starts the table over. **Save mapping** writes the pairs as JSON - one entry per pair with `a`, `b`, `name`, `type`, `key`, `compare`, `case`, `a_steps` and `b_steps`, each step as `{"op": "to date", "params": {"fmt": "%d-%b-%Y"}}` - and the upload box under it (a JSON file) loads one back for the next run of the same two feeds: every pair whose columns both exist is taken, a column named in several entries is paired several times, an identical entry listed twice is taken once, and the unpaired rows are rebuilt from the files. `examples/mapping_hr_directory.json` is one to read. The *looks like* cells are not in the file.
 
 **Confirm columns** folds the table away. The **setup card** under it always shows what the table amounts to: how many pairs and any column used twice, the key, the compare list, how every typed or transformed column is read (`department text · ignore case`, `hire_date date · B: to date (format=%d-%b-%Y)`) with the suggestions not taken, and the columns that exist on one side only - those are null on the other side and are not compared.
 
@@ -285,11 +289,11 @@ Open **Transform and convert values**, pick a column and a side, and add steps. 
 
 A text parameter is taken exactly as typed: one space is a real separator for *part N split by S* and a real find text for *replace text*; only nothing at all is blank, and a step whose find, separator or pad character is blank is refused with *Type the separator first - one space counts*.
 
-The preview shows the first five rows of that file: in the file, after the steps, compared as - and whether the type conversion succeeds. **Check this column on all rows** counts the values on each side that do not convert, with examples. **Copy to Right** (or **Copy to Left**) repeats the same steps on the other side; **Remove last** and **Clear** undo them.
+The preview shows the first five rows of that file: in the file, after the steps, compared as - and whether the type conversion succeeds. **Check this column on all rows** counts the values on each side that do not convert, with examples. **Copy to Right** (or **Copy to Left**) repeats the same steps on the other side; **Remove last** and **Clear** undo them. When both sides have the same name the Side radio and the Copy button say `A · SAMPLE` and `B · SAMPLE`.
 
 An example: `hired_at` holds `2026-08-27 10:11:12.123` on Left and `27/08/2026 10:11` on Right, and you only care about the day. Right: *left 10*, then *to date (%d/%m/%Y)*. Type becomes `date`; Left's ISO text converts on its own. Both compare as `2026-08-27`.
 
-**How values are read** holds the global switches: *Trim whitespace*, *Empty = null*, *Ignore case in values*, *Numeric tolerance*, and the list of tokens folded to null. Case can also be decided per column: the table's **Case** cell on a text pair - `ignore` or `exact` - beats the switch for that column, travels in the mapping JSON as `"case"`, and shows in the setup card, in the report (`case matters · ignored on: department`) and in `columns.csv` as `text · ignore case`. The tolerance applies to every number pair: two values within it are equal.
+**How values are read** holds the global switches: *Trim whitespace*, *Empty = null*, *Ignore case in values*, *Numeric tolerance*, and the list of tokens folded to null. Case can also be decided per column: the table's **Case** cell on a text pair - `ignore` or `exact` - beats the switch for that column, travels in the mapping JSON as `"case"`, and shows in the setup card, in the report (`case matters · ignored on: department`) and in `columns.csv` as `text · ignore case`. The tolerance applies to every number pair, and only to them: two values within it are equal, while a text pair keeps its exact match, so a code of `001` against `1` stays a difference.
 
 ### The key
 
@@ -310,9 +314,9 @@ If everything differs: a key that pairs every row and then finds every row diffe
 
 ### Rows
 
-**Filters** apply to both sides, or one, after types: `=`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `between`, `like`, `is null`, `is not null`, on the common names, each with a Type of `auto`, `string`, `number` or `date`. Values are matched exactly - the *Ignore case* switch does not apply to filters - but they are spelled the way the column is before the engine sees them: on a boolean column `True`, `t`, `yes`, `y` and `1` mean `true` (and their opposites `false`), in lists and ranges too; on a date or timestamp column a value in any of the usual spellings becomes the ISO text the column holds (`05/01/2024` is `2024-01-05`, and keeps the time of day on a timestamp column), and a value that is not a date is refused in a sentence - *filter on 'hire_date': 'not-a-date' is not a date* - shown once above the result, whether or not Compare was pressed. `between` takes two values, comma separated. To shrink a big file before it is even read, use *Rows to read* under that file in the sidebar instead; the caption over the filters says so.
+**Filters** apply to both sides, or one, after types: `=`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `between`, `like`, `is null`, `is not null`, on the common names, each with a Type of `auto`, `string`, `number` or `date`. Values are matched exactly - the *Ignore case* switch does not apply to filters - but they are spelled the way the column is before the engine sees them: on a boolean column `True`, `t`, `yes`, `y` and `1` mean `true` (and their opposites `false`), in lists and ranges too; on a date or timestamp column a value becomes the ISO text the column holds, read with the format the column's own *to date* or *to timestamp* step names on the side the filter applies to, else in any of the usual spellings (`05/01/2024` is `2024-05-01` on a column read with `%m/%d/%Y` and `2024-01-05` without a format; a value the two sides' formats read as different days is refused and asked for in ISO; the time of day is kept on a timestamp column); on a number column the value compares as a number - `10 > 9`, also when the column is the key and never compared, or when rows pair by hashing - and a value that is not a date, or not a number, is refused in a sentence - *filter on 'hire_date': 'not-a-date' is not a date* - shown once above the result, whether or not Compare was pressed. `between` takes two values, comma separated. To shrink a big file before it is even read, use *Rows to read* under that file in the sidebar instead; the caption over the filters says so.
 
-**Profile both files** runs only when pressed: per column per file, null %, distinct count, min, max, mean, average length - side by side with the gap - and the 10 most and 10 least frequent values, on the same typed values the comparison uses. A profile also feeds **Suggest keys** and Auto, goes into the run folder as `profile.csv`, and is dropped when the column table or the reads change.
+**Profile both files** runs only when pressed: per column per file, null %, distinct count, min, max, mean, average length - side by side with the gap - and the 10 most and 10 least frequent values, on the same typed values the comparison uses. A profile also feeds **Suggest keys** and Auto, goes into the run folder as `profile.csv`, and is dropped when the column table or the reads change; the one Auto takes with *Profile both sides first* shows here too, without the press.
 
 ### Compare and results
 
@@ -334,7 +338,7 @@ Auto does everything by itself - pairs the columns, works out the types, finds t
 1. **Pair columns.** By name, then similar name, then by their values for whatever is left over.
 2. **Analyse types.** One pass over the first 50,000 rows of each side: how many values read as a number, a number once commas go, an ISO date, day-first, month-first, any known spelling, with a time of day, a boolean. Each pair gets a Type; a side that needs it gets a step - *remove thousands separators*, *to date (%d/%m/%Y)*. Two spellings are only merged when both sides read cleanly.
 3. **Check case.** Text pairs whose sides only agree once case is ignored get an *upper* step on both. (Auto does not set the Case cell; the step is the decision, visible in the transform section.)
-4. **Profile both sides** - the **Profile both sides first** tick under the button, on by default. Counts, nulls and distinct values per column feed the key search and land in the run folder as `profile.csv`; a constant column, an empty one, or a distinct count that differs more than twice between the sides becomes a note. Untick it on a very big pair.
+4. **Profile both sides** - the **Profile both sides first** tick under the button, on by default. Counts, nulls and distinct values per column feed the key search, show under Rows as the Profile, and land in the run folder as `profile.csv`; a constant column, an empty one, or a distinct count that differs more than twice between the sides becomes a note. Untick it on a very big pair. A profile already taken on the same columns and Types is reused; one taken before Auto changed a Type is measured again, on the typed values.
 5. **Find the key.** Same as Suggest keys. The status line shows the key it chose and the note carries its *Why* and the runner-up; if nothing is unique, the closest is used and said so; if nothing at all, hash mode.
 6. **Compare.** Every paired non-key column, immediately. Every decision is listed under Columns as a bullet, and is a cell in the table or a step in the transform section; the report keeps the list under its Key row as *How this was worked out*.
 
@@ -359,7 +363,7 @@ It is one self-contained file - fonts from Google, everything else inline - so i
 
 ## Outputs
 
-Every run writes one folder with a fixed set of files, named after the two sides. The pair name is `<left>_compare_<right>`, each half the side's **Name** box from the sidebar slugged to letters, digits and underscores (anything else becomes one underscore) - else a database side's connection name, else `Left` / `Right`. The file names play no part. `HR` and `Payroll` give `HR_compare_Payroll`; both sides on the `SAMPLE` connection give `SAMPLE_compare_SAMPLE`; nothing named gives `Left_compare_Right`, and the sidebar reminds you under a file side that is still called Left or Right. The run id is the start time, `YYYYMMDD-HHMMSS`, and the folder is `<COMPARE_WORK_DIR>/<pair>__<run_id>/` (the temp folder when the variable is not set). The Downloads tab hands each file out; the names are always:
+Every run writes one folder with a fixed set of files, named after the two sides. The pair name is `<left>_compare_<right>`, each half the side's **Name** box from the sidebar slugged to letters, digits and underscores (anything else becomes one underscore) - else a database side's connection name, else `Left` / `Right`. The file names play no part. `HR` and `Payroll` give `HR_compare_Payroll`; both sides on the `SAMPLE` connection give `SAMPLE_compare_SAMPLE`; nothing named gives `Left_compare_Right`, and the sidebar reminds you under a file side that is still called Left or Right. Two sides with one name - both on the `SAMPLE` connection - are told apart by their tag wherever one is picked: the transform panel's Side, the filters' *Apply to* and the *Profile by bucket* radio offer `A · SAMPLE` and `B · SAMPLE`, and the sidebar says so under each. The run id is the start time, `YYYYMMDD-HHMMSS`, and the folder is `<COMPARE_WORK_DIR>/<pair>__<run_id>/` (the temp folder when the variable is not set). The Downloads tab hands each file out; the names are always:
 
 ```
 HR_compare_Payroll__report.html      the house-style report (Download report)
@@ -437,7 +441,7 @@ set COMPARE_THEME=violet                              (Windows)
 export COMPARE_APP_NAME="Employee Table Check"        (macOS / Linux)
 ```
 
-Under Docker the image also sets Streamlit's own `STREAMLIT_SERVER_HEADLESS`, `STREAMLIT_SERVER_ADDRESS`, `STREAMLIT_SERVER_PORT`, `STREAMLIT_BROWSER_GATHER_USAGE_STATS` and `STREAMLIT_LOGGER_LEVEL`. The radii, fonts and colours live in `tablecmp/theme.py`.
+Under Docker the image also sets Streamlit's own `STREAMLIT_SERVER_HEADLESS`, `STREAMLIT_SERVER_ADDRESS`, `STREAMLIT_SERVER_PORT`, `STREAMLIT_BROWSER_GATHER_USAGE_STATS` and `STREAMLIT_LOGGER_LEVEL`; `python compare_app.py` reads these and every other `STREAMLIT_*` variable the way `streamlit run` does, so they work outside Docker too. The radii, fonts and colours live in `tablecmp/theme.py`.
 
 ## Docker
 
@@ -518,7 +522,7 @@ Matching strategies: `key` (join on one or more business-key columns, recommende
 Small, verified steps. Before handing over a change:
 
 1. `python -m py_compile compare_app.py tablecmp/*.py` - everything must compile.
-2. `python -m pytest tests -q` - the suite (139 tests, about a minute and a half): units for every module - connections and URIs, the dialects and the read-only guard, the fetch against a fake cursor and DuckDB end to end, the column table, the looks-like sniff, keys and reasons, the outputs and the sweep, the report - and the whole app headless through Streamlit's `AppTest`: the file flow and the database flow on the sample pair, asserting the counts in `docs/superpowers/plans/COUNTS.md` and grepping every output for the fake password. The database tests set `COMPARE_CONNECTIONS` to a temp file, so your own connections are never read or written.
+2. `python -m pytest tests -q` - the suite (158 tests, about a minute and a half): units for every module - the start-up settings, connections and URIs, the dialects and the read-only guard, the read-only switches passed to a stub driver, the fetch against a fake cursor and DuckDB end to end, the column table, the looks-like sniff, keys and reasons, the outputs and the sweep, the report - and the whole app headless through Streamlit's `AppTest`: the file flow and the database flow on the sample pair, asserting the counts in `docs/superpowers/plans/COUNTS.md` and grepping every output for the fake password. The database tests set `COMPARE_CONNECTIONS` to a temp file, so your own connections are never read or written.
 3. To drive the app yourself, the same way the tests do - check the numbers, not just that it ran:
 
 ```python
@@ -549,7 +553,7 @@ Conventions the code keeps: identifiers go through `sql.ident`, literals through
 | Few rows match on the key | Key values spelled differently - case, padding, a date format. The summary lists sample unmatched values; *Check key* counts null keys. Give the key column a Type or a step. |
 | A date column shows as text | Look at its *looks like* cell: add *to date* with that format on the side that needs it, or pick the Type and let the built-in spellings read it. Ambiguous day/month order needs the format spelled out. |
 | Auto picked a key that is not unique | It says so, with the reason. Suggest keys shows the alternatives with their overlap; or tick a column in the table. |
-| The comparison failed | The message is shown and the previous result stays on screen. Usually a filter value or a custom expression DuckDB cannot read - the preview shows DuckDB's own message; a filter value that is not a date is refused before the run. |
+| The comparison failed | The message is shown and the previous result stays on screen. Usually a filter value or a custom expression DuckDB cannot read - the preview shows DuckDB's own message; a filter value that is not a date or not a number is refused before the run. |
 | Header names look like data | Untick *First row is a header* and load again; give names under Advanced if you have them. |
 | An upload over 200 MB is refused | Start the app with `python compare_app.py` (4 GB, or `COMPARE_UPLOAD_MB`) instead of `streamlit run`, or load the file by path. |
 | *Not under an allowed folder (COMPARE_DATA_DIR)* | The server restricts paths on disk to the folders in `COMPARE_DATA_DIR` (`/data` under Docker). Put the file there, or upload it. |

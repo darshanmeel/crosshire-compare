@@ -28,13 +28,15 @@ SHOWN_COLS = MAP_COLS[:12]
 
 
 def norm_key(name: str) -> str:
-    return re.sub(r"[^0-9a-z]+", "_", str(name).strip().lower()).strip("_") or "col"
+    """The common name a column gets by default: case-folded, runs of anything that is
+    not a letter or digit (in any script) turned into one underscore."""
+    return re.sub(r"[\W_]+", "_", str(name).strip().casefold()).strip("_") or "col"
 
 
 def suggest_pairs(from_cols: list[str], to_cols: list[str]) -> dict[str, tuple[str, bool]]:
     """Pair columns by squashed-name similarity: {from: (to, confident)}."""
     def squash(x: str) -> str:
-        return re.sub(r"[^0-9a-z]", "", x.lower())
+        return re.sub(r"[\W_]", "", x.casefold())
     pool = {c: squash(c) for c in to_cols}
     out: dict[str, tuple[str, bool]] = {}
     used: set[str] = set()
@@ -344,8 +346,8 @@ def match_columns_by_data(A: Side, B: Side, spare_a: list[str], spare_b: list[st
             containment = len(shared) / min(len(va), len(vb))
             jaccard = len(shared) / len(va | vb)
             name_bonus = difflib.SequenceMatcher(
-                None, re.sub(r"[^a-z0-9]", "", ca.lower()),
-                re.sub(r"[^a-z0-9]", "", cb.lower())).ratio()
+                None, re.sub(r"[\W_]", "", ca.casefold()),
+                re.sub(r"[\W_]", "", cb.casefold())).ratio()
             scored.append((containment + 0.15 * jaccard + 0.1 * name_bonus,
                            containment, jaccard, name_bonus, ca, cb, shared))
     scored.sort(reverse=True, key=lambda r: r[0])

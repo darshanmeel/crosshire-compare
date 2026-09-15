@@ -12,6 +12,7 @@ with the canonical values applied, so whatever runs next reads them once.
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -20,13 +21,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import pandas as pd
 
 from .profile import label
 from .sources import Side, work_dir
 from .sql import ident, lit, scratch
 from .theme import THEME
-from .values import FALLBACK_FORMATS, ColSpec, ReadOptions, register
+from .values import FALLBACK_FORMATS, ColSpec, ReadOptions, date_format, register
 
 OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "not in", "between", "like", "is null", "is not null"]
 OP_MAP = {"=": "eq", "!=": "ne", ">": "gt", ">=": "ge", "<": "lt", "<=": "le",
@@ -85,38 +87,83 @@ class Outcome:
 
 
 # ---- filters -----------------------------------------------------------------
-def date_texts(col: str, values: list[str], full: bool) -> list[str]:
-    """Each typed value as the ISO text a date column holds - read the way the column is,
-    any of the usual spellings - so the engine compares like with like and never sees a
-    ConversionException. `full` keeps the time of day (a timestamp column); otherwise a
-    value at midnight is a plain date. A value that is not a date raises ValueError."""
+def date_texts(col: str, values: list[str], full: bool, formats: dict[str, str] | None = None
+               ) -> list[str]:
+    """Each typed value as the ISO text a date column holds - read the way the column is:
+    with the format its to date / to timestamp step names (`formats`: side name -> format,
+    for the sides the filter applies to), else any of the usual spellings - so the engine
+    compares like with like and never sees a ConversionException. `full` keeps the time of
+    day (a timestamp column); otherwise a value at midnight is a plain date. A value that is
+    not a date, or that the two sides' formats read as different days, raises ValueError."""
     if not values:
         return []
+    named = [(side, f) for side, f in (formats or {}).items() if f]
     fl = "[" + ", ".join(lit(f) for f in FALLBACK_FORMATS) + "]"
-    ts = f"coalesce(try_cast(v AS TIMESTAMP), try_strptime(v, {fl}))"
-    day = f"CAST({ts} AS DATE)"
-    text = (f"CAST({ts} AS VARCHAR)" if full
-            else f"CASE WHEN {ts} = CAST({day} AS TIMESTAMP) THEN CAST({day} AS VARCHAR) "
-                 f"ELSE CAST({ts} AS VARCHAR) END")
+    reads = ([f"try_strptime(v, {lit(f)})" for _, f in named]
+             + [f"coalesce(try_cast(v AS TIMESTAMP), try_strptime(v, {fl}))"])
+
+    def text(ts: str) -> str:
+        day = f"CAST({ts} AS DATE)"
+        return (f"CAST({ts} AS VARCHAR)" if full
+                else f"CASE WHEN {ts} = CAST({day} AS TIMESTAMP) THEN CAST({day} AS VARCHAR) "
+                     f"ELSE CAST({ts} AS VARCHAR) END")
     con = scratch()
-    got = con.execute(f"SELECT v, {text} FROM (SELECT unnest([{', '.join(lit(v) for v in values)}]) AS v)"
-                      ).fetchall()
-    con.close()
+    try:
+        got = con.execute(f"SELECT v, {', '.join(text(ts) for ts in reads)} "
+                          f"FROM (SELECT unnest([{', '.join(lit(v) for v in values)}]) AS v)").fetchall()
+    except duckdb.Error as exc:
+        raise ValueError(f"filter on {col!r}: the column's date format cannot be read - {exc}") from None
+    finally:
+        con.close()
     out = []
-    for v, t in got:
+    for v, *own, usual in got:
+        seen = [(side, f, t) for (side, f), t in zip(named, own) if t is not None]
+        if len({t for _, _, t in seen}) > 1:
+            (sa, fa, ta), (sb, fb, tb) = seen[0], seen[-1]
+            raise ValueError(f"filter on {col!r}: {v!r} is {ta} to {sa} ({fa}) and {tb} to {sb} ({fb}) "
+                             f"- spell it {ta} or {tb}")
+        t = seen[0][2] if seen else usual
         if t is None:
             raise ValueError(f"filter on {col!r}: {v!r} is not a date")
         out.append(str(t))
     return out
 
 
+def number_texts(col: str, values: list[str]) -> list[str]:
+    """Each typed value as the number a number column holds - 9, 10.5, -3, 1e+20 - so both the
+    engine and filter_sql compare numbers and only ever splice a number into the SQL. A
+    value that is not a number (inf and nan included) raises ValueError."""
+    out = []
+    for v in values:
+        try:
+            n = float(v)
+        except ValueError:
+            n = math.nan
+        if not math.isfinite(n):
+            raise ValueError(f"filter on {col!r}: {v!r} is not a number")
+        out.append(repr(n).removesuffix(".0"))
+    return out
+
+
+def side_labels(name_a: str, name_b: str) -> tuple[str, str]:
+    """The two names as a widget can offer them: as they are, unless both sides carry the same
+    name - two database sides on one connection - when the tag tells them apart (A · SAMPLE)."""
+    if name_a != name_b:
+        return name_a, name_b
+    return f"A · {name_a}", f"B · {name_b}"
+
+
 def build_filters(rows: pd.DataFrame, name_a: str, name_b: str,
                   specs: list[ColSpec] | None = None) -> tuple[dict, dict, dict]:
     """The Rows filters as the engine's dicts: (both, left, right). With the column specs a
     value is spelled the way its column is: True / yes / 1 on a boolean column is "true",
-    a date in any of the usual spellings is ISO text, and a value that is not a date at
-    all is refused with a sentence before the engine ever sees it."""
-    kinds = {s.canon: s.kind for s in specs or []}
+    a date is ISO text - read with the format the column's own to date / to timestamp step
+    names on the side the filter applies to, else in any of the usual spellings - a number
+    column compares as numbers (type number, so 10 > 9 whether or not the column is compared
+    or a key), and a value that is not a date or a number at all is refused with a sentence
+    before the engine ever sees it."""
+    by = {s.canon: s for s in specs or []}
+    label_a, label_b = side_labels(name_a, name_b)
     both: dict[str, Any] = {}
     left: dict[str, Any] = {}
     right: dict[str, Any] = {}
@@ -124,6 +171,8 @@ def build_filters(rows: pd.DataFrame, name_a: str, name_b: str,
         col, op = str(r.get("Column") or "").strip(), str(r.get("Operator") or "").strip()
         if not col or not op:
             continue
+        where = str(r.get("Apply to") or "Both")
+        side = "A" if where == label_a else "B" if where == label_b else ""     # "": both
         raw = str(r.get("Value") or "").strip()
         spec: dict[str, Any] = {}
         kind = str(r.get("Type") or "auto")
@@ -142,16 +191,20 @@ def build_filters(rows: pd.DataFrame, name_a: str, name_b: str,
         else:
             spec[key] = raw
         if key not in ("like", "is_null", "not_null"):
-            own = kinds.get(col, "text")
+            s = by.get(col)
+            own = s.kind if s else "text"
             values = spec[key] if isinstance(spec[key], list) else [spec[key]]
             if own == "boolean" and kind in ("auto", "string"):
                 values = [BOOL_WORDS.get(v.lower(), v) for v in values]
             elif kind == "date" or (kind == "auto" and own in ("date", "timestamp")):
-                values = date_texts(col, values, full=kind == "auto" and own == "timestamp")
+                formats = {name: date_format(s.steps(w)) for w, name in (("A", label_a), ("B", label_b))
+                           if s and side in ("", w)}
+                values = date_texts(col, values, full=kind == "auto" and own == "timestamp", formats=formats)
+            elif kind == "number" or (kind == "auto" and own == "number"):
+                values = number_texts(col, values)
+                spec["type"] = "number"
             spec[key] = values if isinstance(spec[key], list) else values[0]
-        where = str(r.get("Apply to") or "Both")
-        target = both if where == "Both" else left if where == name_a else \
-            right if where == name_b else both
+        target = left if side == "A" else right if side == "B" else both
         target.setdefault(col, {}).update(spec)
     return both, left, right
 
@@ -289,8 +342,8 @@ def hash_compare(con, cfg: dict, folder: Path, say) -> Outcome:
     for side in ("src_a", "src_b"):                  # every column, so one-sided rows come out whole
         con.execute(f"CREATE OR REPLACE TABLE h_{side[-1]} AS "
                     f"SELECT {h} AS __h, row_number() OVER (PARTITION BY {h}) AS __k, * FROM {side}")
-    res.rows_left = res.rows_left_read = con.execute("SELECT count(*) FROM h_a").fetchone()[0]
-    res.rows_right = res.rows_right_read = con.execute("SELECT count(*) FROM h_b").fetchone()[0]
+    res.rows_left = con.execute("SELECT count(*) FROM h_a").fetchone()[0]     # after the filter; the rows
+    res.rows_right = con.execute("SELECT count(*) FROM h_b").fetchone()[0]    # read are counted by the caller
     say("Matching identical rows…")
     res.matched_rows = con.execute(
         "SELECT count(*) FROM h_a a JOIN h_b b ON a.__h = b.__h AND a.__k = b.__k").fetchone()[0]

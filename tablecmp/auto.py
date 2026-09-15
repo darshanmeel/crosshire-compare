@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import asdict
 
 import pandas as pd
 
@@ -119,8 +120,9 @@ def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions
                    profile: dict | None = None, want_profile: bool = False
                    ) -> tuple[pd.DataFrame, list[str], list[str], dict | None]:
     """Pair, type, key, compare - from the data. Returns the column table, the notes, the key,
-    and the profile that fed the key search: the one passed in, the one made here when
-    `want_profile` is on and none was given, or None."""
+    and the profile that fed the key search: the one passed in when it was measured on the
+    specs Auto settled on, the one made here when `want_profile` is on and there was no such
+    profile, or None."""
     notes: list[str] = []
     say("Pairing columns by name…")
     cmap = build_table(A, B)
@@ -160,6 +162,10 @@ def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions
         notes.append(f"{canon}: the two files spell the same values in different case - compared upper-cased")
     specs = specs_from(cmap)
 
+    # a profile measured on other specs - the ones before the retyping, usually - would
+    # feed the key search counts of differently typed values
+    if profile is not None and profile.get("specs") != [asdict(s) for s in specs]:
+        profile = None
     if want_profile and profile is None:
         say("Profiling both sides…")
         profile = profile_tables(A, B, specs, opts, progress=say)

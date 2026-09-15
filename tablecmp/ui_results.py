@@ -8,7 +8,7 @@ import duckdb
 import streamlit as st
 
 from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows, diffs_by_key_value, matched_values,
-                      near_match, style_pairs, top_values, value_pairs)
+                      near_match, side_labels, style_pairs, top_values, value_pairs)
 from .outputs import default_save_folder, save_target, table_formats, verdict_of, write_parquet_copies, zip_run
 from .report import build_report
 from .sources import Side
@@ -199,14 +199,15 @@ def columns_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode, limit) -> No
 def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
     """Top values per column for each bucket of unhappy rows - the profile of what went wrong."""
     buckets = []
+    label_a, label_b = side_labels(NA, NB)       # the radio picks by label: two SAMPLEs stay apart
     if res.matched_rows and keys:
         buckets.append(("matched", f"Keys matched ({res.matched_rows:,})"))
     if res.diff_rows and keys:
         buckets.append(("differ", f"Matched but different ({res.diff_rows:,})"))
     if res.only_left:
-        buckets.append(("left", f"Only in {NA} ({res.only_left:,})"))
+        buckets.append(("left", f"Only in {label_a} ({res.only_left:,})"))
     if res.only_right:
-        buckets.append(("right", f"Only in {NB} ({res.only_right:,})"))
+        buckets.append(("right", f"Only in {label_b} ({res.only_right:,})"))
     if not buckets:
         return
     st.markdown("#### Profile by bucket")

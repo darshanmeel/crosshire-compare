@@ -5,6 +5,7 @@ import duckdb
 import streamlit as st
 
 from .columns import set_steps
+from .compare import side_labels
 from .sources import Side
 from .state import bump, forget_results
 from .theme import esc
@@ -37,8 +38,9 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions) 
             "**Check this column**. The preview is the first five rows of that file.")
         h1, h2, h3 = st.columns([3, 2, 2])
         canon = h1.selectbox("Column", setup.canon, key="tx_col")
-        side_name = h2.radio("Side", [NA, NB], key="tx_side", horizontal=True)
-        which = "A" if side_name == NA else "B"
+        labels = dict(zip("AB", side_labels(NA, NB)))      # the tag is the value: two SAMPLEs stay apart
+        which = h2.radio("Side", list(labels), key="tx_side", horizontal=True, format_func=labels.get)
+        side_name = labels[which]
         spec = next(s for s in setup.specs if s.canon == canon)
         side = A if which == "A" else B
         kind_now = spec.kind
@@ -103,7 +105,7 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions) 
             if st.button("Clear", key="tx_clear", width="stretch", disabled=not steps):
                 _save(canon, which, [], kind)
             other = "B" if which == "A" else "A"
-            if st.button(f"Copy to {NB if which == 'A' else NA}", key="tx_copy", width="stretch",
+            if st.button(f"Copy to {labels[other]}", key="tx_copy", width="stretch",
                          disabled=not steps):
                 _save(canon, other, steps, kind)
 

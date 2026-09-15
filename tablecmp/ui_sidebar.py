@@ -30,6 +30,14 @@ def staged_upload(tag: str, up) -> str:
     return str(tmp)
 
 
+def side_name(tag: str) -> str:
+    """What the page calls a side: the Name box wins; left at its default, a database side is
+    called after its connection (the name it was loaded with), a file side Left or Right."""
+    side: Side = st.session_state[tag]
+    box = (st.session_state.get(f"nick_{tag}") or "").strip()
+    return box if box and box != DEFAULT_NAMES[tag] else (side.name or DEFAULT_NAMES[tag]).strip()
+
+
 def source_panel(tag: str) -> None:
     st.markdown(f"#### File {tag}")
     name = st.text_input("Name", value=DEFAULT_NAMES[tag], key=f"nick_{tag}",
@@ -162,7 +170,11 @@ def source_panel(tag: str) -> None:
                    + (f"  ·  capped at {side.cap:,}" if side.capped else "")
                    + ("  ·  Parquet snapshot" if side.cache_path else ""))
         box = (st.session_state.get(f"nick_{tag}") or "").strip()
-        if not side.is_database and box in ("", DEFAULT_NAMES[tag]):
+        other = side_name("B" if tag == "A" else "A")
+        if side_name(tag) == other:              # two database sides on one connection, typically
+            st.caption(f"Both sides are called {other} - name this one to tell them apart; the "
+                       "names are on every output file (left_compare_right).")
+        elif not side.is_database and box in ("", DEFAULT_NAMES[tag]):
             st.caption("Name this side - it names every output file (left_compare_right).")
         if side.rows == 0:
             st.warning("The filter left no rows." if side.cut else
@@ -201,8 +213,9 @@ def auto_panel() -> None:
     st.caption("Auto does everything by itself - pairs the columns, finds the key, "
                "compares, and lists each decision so you can change it.")
     st.checkbox("Profile both sides first", value=True, key="auto_profile",
-                help="Counts, nulls and distinct values per column feed the key search and the "
-                     "report's profile sheet. Untick to skip it on a very big pair.")
+                help="Counts, nulls and distinct values per column feed the key search, the "
+                     "Profile section under Rows and the profile.csv in the run folder. "
+                     "Untick to skip it on a very big pair.")
     if st.button("Figure it all out and compare", type="primary", width="stretch",
                  disabled=not both_in, key="auto_btn"):
         st.session_state["auto_request"] = True

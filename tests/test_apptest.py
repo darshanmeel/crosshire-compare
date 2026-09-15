@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
+from tablecmp.columns import specs_from
+
 ROOT = Path(__file__).resolve().parent.parent
 EX = ROOT / "examples"
 COUNTS = dict(line.split("=") for line in (ROOT / "docs/superpowers/plans/COUNTS.md").read_text().split()
@@ -40,6 +42,13 @@ def _finish(at):
     for suffix in ("summary.json", "summary.csv", "columns.csv", "cell_diffs.csv", "left_only.csv",
                    "right_only.csv", "paired.csv", "report.html", "diff.html", "profile.csv"):
         assert (folder / f"{pair}__{suffix}").exists(), suffix
+    # Auto's profile fills the Profile section under Rows with its button never pressed,
+    # and the label and the tick's help say where the profile goes - no report sheet holds it
+    box = next(e for e in at.expander if e.label.startswith("Profile - "))
+    assert "Auto fills it in" in box.label and "only when pressed" not in box.label, box.label
+    assert box.dataframe, "Auto's profile is not shown"
+    tick = at.checkbox(key="auto_profile").help
+    assert "Profile section" in tick and "profile.csv" in tick and "report" not in tick, tick
     _ok(at.button(key="save_all").click().run())
     saved = list((Path(os.environ["COMPARE_OUT_DIR"])).glob(f"{pair}__*"))
     assert saved and (saved[0] / f"{pair}__summary.json").exists()
@@ -52,6 +61,11 @@ def _name_hints(at) -> list[str]:
     return [c.value for c in at.sidebar.caption if "Name this side" in c.value]
 
 
+def _files_line(at) -> str:
+    """The page's Files caption: one line, both sides."""
+    return next(c.value for c in at.main.caption if " rows × " in c.value)
+
+
 def test_file_flow(monkeypatch, tmp_path):
     at = _boot(monkeypatch, tmp_path)
     assert not _name_hints(at)                     # nothing loaded, nothing to name yet
@@ -61,6 +75,8 @@ def test_file_flow(monkeypatch, tmp_path):
         _ok(at.button(key=f"load_{tag}").click().run())
         assert at.session_state[tag].loaded, tag
     assert len(_name_hints(at)) == 2               # both file sides still called Left / Right
+    assert _files_line(at) == ("**Left** hr_employees.csv - 3,000 rows × 7 columns &nbsp;|&nbsp; "
+                               "**Right** payroll_employees.csv - 2,985 rows × 7 columns")
     res = _finish(at)
     assert res["pair"] == "Left_compare_Right"     # the defaults, not the file stems
 
@@ -97,10 +113,32 @@ def test_database_flow(monkeypatch, tmp_path):
         side = at.session_state[tag]
         assert side.loaded and side.is_database and side.kind == "parquet", tag
     assert not _name_hints(at)                     # a database side is called after its connection
+    # ... so both are SAMPLE here, and each panel says so (A's from the run after B loaded);
+    # the names still name the run
+    at = _ok(at.run())
+    assert [c.value for c in at.sidebar.caption if c.value.startswith("Both sides are called SAMPLE")] == [
+        "Both sides are called SAMPLE - name this one to tell them apart; the names are on every "
+        "output file (left_compare_right)."] * 2
+    # the page's Files line names the tables, like the sidebar and the report - not a made-up file
+    assert _files_line(at) == (
+        "**SAMPLE** DuckDB file · hr.employees - 3,000 rows × 7 columns &nbsp;|&nbsp; "
+        "**SAMPLE** DuckDB file · payroll.employees - 2,985 rows × 7 columns")
     res = _finish(at)
     assert res["pair"] == "SAMPLE_compare_SAMPLE"
     js = json.loads((Path(res["folder"]) / f"{res['pair']}__summary.json").read_text(encoding="utf-8"))
     assert js["sources"]["A"]["connection"] == "SAMPLE" and js["sources"]["A"]["sql"].startswith("SELECT")
+    # where a side is picked the tag keeps the two SAMPLEs apart: a step added to B lands on B
+    side_pick = at.radio(key="tx_side")
+    assert side_pick.options == ["A · SAMPLE", "B · SAMPLE"]
+    side_pick.set_value("B").run()
+    at.selectbox(key="tx_op").select("trim").run()
+    at = _ok(at.button(key="tx_add").click().run())
+    canon = at.selectbox(key="tx_col").value
+    spec = next(s for s in specs_from(at.session_state["cmap"]) if s.canon == canon)
+    assert spec.a_steps == [] and spec.b_steps == [{"op": "trim", "params": {}}], canon
+    assert [b.label for b in at.main.button if b.label.startswith("Copy to")] == ["Copy to A · SAMPLE"]
+    assert at.radio(key="bucket_pick").options[-2:] == [
+        f"Only in A · SAMPLE ({int(COUNTS['only_left']):,})", f"Only in B · SAMPLE ({int(COUNTS['only_right']):,})"]
 
 
 def _load_path(at, tag, path):
