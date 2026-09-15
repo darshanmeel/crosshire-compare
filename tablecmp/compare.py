@@ -13,9 +13,9 @@ from __future__ import annotations
 
 import json
 import shutil
-import tempfile
 import time
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -153,13 +153,22 @@ def signature(a: Side, b: Side, cfg: dict) -> str:
 # ---- running ---------------------------------------------------------------
 def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = "",
                    previous: dict | None = None, progress=None) -> dict:
+    """One run: <work_dir>/<pair>__<run_id>/ holding every file the engine and we write,
+    flat, each named <pair>__<what>. The run dict carries the result, the folder, the files,
+    the open connection and the verdict."""
+    from .outputs import run_id, verdict_of
     say = progress or (lambda _m: None)
     mode = cfg["mode"]
     specs = [ColSpec(**d) for d in cfg["specs"]]
     keys = list(cfg["keys"]) if mode == "key" else []
     con = scratch(ordered=True)   # file order is what pairs duplicate keys (1st with 1st) - keep it
-    out = Path(tempfile.mkdtemp(prefix="cmp_", dir=str(work_dir())))
-    folder = out / cfg["name"]
+    started = datetime.now().astimezone()
+    rid = run_id(started)
+    out = work_dir() / f"{cfg['name']}__{rid}"
+    while out.exists():                                  # two runs in one second
+        rid += "a"
+        out = work_dir() / f"{cfg['name']}__{rid}"
+    folder = out / cfg["name"]                           # the engine writes under <out>/<name>
     folder.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
 
@@ -178,18 +187,18 @@ def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = ""
     res.rows_left_read = res.rows_left_read or n_a
     res.rows_right_read = res.rows_right_read or n_b
     elapsed = time.perf_counter() - t0
-    say(f"Done in {elapsed:.1f}s - writing the summary…")
-    record = asdict(res)
-    (folder / f"{cfg['name']}__summary.json").write_text(
-        json.dumps({"settings": {k: v for k, v in cfg.items() if k != "display_rows"},
-                    "result": record}, indent=2, default=str), encoding="utf-8")
-    pd.DataFrame([{k: (", ".join(map(str, v)) if isinstance(v, (list, dict)) else v)
-                   for k, v in record.items()}]).to_csv(
-        folder / f"{cfg['name']}__summary.csv", index=False)
-    files = {p.name: p for p in folder.glob("*")}
-    return {"result": res, "folder": folder, "files": files, "seconds": elapsed,
-            "con": con, "left": "src_a", "right": "src_b", "cfg": cfg, "signature": sig,
-            "at": time.strftime("%H:%M:%S"), "mode": mode}
+    for p in folder.iterdir():                           # flatten: <out>/<name>/x -> <out>/x
+        p.rename(out / p.name)
+    folder.rmdir()
+    run = {"result": res, "folder": out, "files": {p.name: p for p in out.glob("*")}, "seconds": elapsed,
+           "con": con, "left": "src_a", "right": "src_b", "cfg": cfg, "signature": sig,
+           "at": started.strftime("%H:%M:%S"), "mode": mode, "run_id": rid, "pair": cfg["name"],
+           "started_at": started.isoformat(timespec="seconds"), "verdict": verdict_of(res, mode)}
+    if res.error:
+        return run                                       # nothing paired; the app discards the folder
+    say("Writing the paired rows…")
+    write_paired(run, keys, list(res.columns_compared or cfg["compare_columns"]))
+    return run
 
 
 def engine_compare(con, cfg: dict, folder: Path, out: Path, keys: list[str], say) -> Outcome:
@@ -207,6 +216,7 @@ def engine_compare(con, cfg: dict, folder: Path, out: Path, keys: list[str], say
         "right_filters": cfg["right_filters"],
         "html_limit": cfg["display_rows"],
         "html_all_limit": cfg["display_rows"],
+        "write_empty": True,                 # the fixed file set: empty tables keep their header
         "mode": "key" if keys else "row_number",
         "case_insensitive_columns": False,   # our views already carry the exact canonical names
     })
@@ -228,13 +238,11 @@ def hash_compare(con, cfg: dict, folder: Path, say) -> Outcome:
         if where:
             con.execute(f"CREATE OR REPLACE TABLE {side} AS SELECT * FROM {side} WHERE {where}")
             setattr(res, "filter_left" if side == "src_a" else "filter_right", where)
-    picks = ", ".join(ident(c) for c in cols)
     h = "hash(concat_ws(chr(1), " + ", ".join(f"coalesce({ident(c)}, chr(2))" for c in cols) + "))"
     say(f"Hashing every row over {len(cols)} columns on both sides…")
-    for side in ("src_a", "src_b"):
+    for side in ("src_a", "src_b"):                  # every column, so one-sided rows come out whole
         con.execute(f"CREATE OR REPLACE TABLE h_{side[-1]} AS "
-                    f"SELECT {h} AS __h, row_number() OVER (PARTITION BY {h}) AS __k, {picks} "
-                    f"FROM {side}")
+                    f"SELECT {h} AS __h, row_number() OVER (PARTITION BY {h}) AS __k, * FROM {side}")
     res.rows_left = res.rows_left_read = con.execute("SELECT count(*) FROM h_a").fetchone()[0]
     res.rows_right = res.rows_right_read = con.execute("SELECT count(*) FROM h_b").fetchone()[0]
     say("Matching identical rows…")
@@ -243,7 +251,7 @@ def hash_compare(con, cfg: dict, folder: Path, say) -> Outcome:
     for tag, mine, other, fname in (("left", "h_a", "h_b", "left_only"),
                                     ("right", "h_b", "h_a", "right_only")):
         path = folder / f"{cfg['name']}__{fname}.csv"
-        con.execute(f"COPY (SELECT {picks} FROM {mine} m WHERE NOT EXISTS (SELECT 1 FROM {other} o "
+        con.execute(f"COPY (SELECT * EXCLUDE (__h, __k) FROM {mine} m WHERE NOT EXISTS (SELECT 1 FROM {other} o "
                     f"WHERE o.__h = m.__h AND o.__k = m.__k)) TO {lit(str(path))} (HEADER)")
         setattr(res, f"only_{tag}", con.execute(
             f"SELECT count(*) FROM {mine} m WHERE NOT EXISTS (SELECT 1 FROM {other} o "
@@ -287,9 +295,14 @@ def pair_views(run: dict, keys: list[str]) -> None:
 
 
 def discard_run(run: dict | None) -> None:
-    """Remove a run's temp folder - only ever called once a newer run has replaced it."""
+    """Remove a run's folder and its zip - only ever called once a newer run has replaced it.
+    The folder sits directly in the work folder next to fetches and snapshots, so only the
+    folder itself goes, never its parent."""
     if run and run.get("folder"):
-        shutil.rmtree(Path(run["folder"]).parent, ignore_errors=True)
+        shutil.rmtree(Path(run["folder"]), ignore_errors=True)
+        z = run.get("zip")
+        if z:
+            Path(z).unlink(missing_ok=True)
 
 
 def join_on(keys: list[str]) -> str:
@@ -496,6 +509,40 @@ def paired_frame(run: dict, keys: list[str], cols: list[str], limit: int) -> pd.
                    **{c: row[f"{prefix}{c}"] for c in cols}}
             rows.append(rec)
     return pd.DataFrame(rows, columns=["Side"] + keys + cols) if rows else pd.DataFrame()
+
+
+def write_paired(run: dict, keys: list[str], cols: list[str]) -> Path:
+    """Every paired row side by side - keys, then a_<col>, b_<col> - straight from DuckDB.
+    In hash mode nothing pairs by key, so the file is a header only."""
+    con = run["con"]
+    path = Path(run["folder"]) / f"{run['cfg']['name']}__paired.csv"
+    if run["mode"] == "hash":
+        pd.DataFrame(columns=cols).to_csv(path, index=False, lineterminator="\n")
+        run["files"][path.name] = path
+        return path
+    pair_views(run, keys)
+    sel = ", ".join([f"l.{ident(k)} AS {ident(k)}" for k in keys]
+                    + [f"l.{ident(c)} AS {ident('a_' + c)}" for c in cols]
+                    + [f"r.{ident(c)} AS {ident('b_' + c)}" for c in cols])
+    con.execute(f"COPY (SELECT {sel or 'l.__rn'} FROM cmp_l l JOIN cmp_r r ON {join_on(keys)} ORDER BY l.__rn) "
+                f"TO {lit(str(path))} (HEADER)")
+    run["files"][path.name] = path
+    return path
+
+
+def value_pairs(run: dict, n: int = 5) -> dict[str, pd.DataFrame]:
+    """Per differing column: the n most frequent (left value, right value) pairs with count and %."""
+    if not cells_table(run):
+        return {}
+    con = run["con"]
+    df = con.execute(f"""
+        SELECT column_name AS col, coalesce(left_value, {lit(label(None))}) AS a,
+               coalesce(right_value, {lit(label(None))}) AS b,
+               count(*) AS n, count(*) * 100.0 / sum(count(*)) OVER (PARTITION BY column_name) AS pct
+        FROM cd GROUP BY 1, 2, 3
+        QUALIFY row_number() OVER (PARTITION BY column_name ORDER BY count(*) DESC, a, b) <= {int(n)}
+        ORDER BY col, n DESC, a, b""").fetchdf()
+    return {col: sub.drop(columns=["col"]).reset_index(drop=True) for col, sub in df.groupby("col", sort=False)}
 
 
 def bucket_profile(run: dict, keys: list[str], cols: list[str], bucket: str,
