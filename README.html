@@ -5,51 +5,51 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CrossHire Compare · how it works</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,300;1,6..72,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300;1,9..144,400&family=Inter:ital,wght@0,300;0,400;0,500;0,600;1,400&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <style>
-:root{--ink:#0e0d0b;--ink-2:#151310;--ink-3:#1c1916;--rule:#2b2620;--rule-soft:#211d19;--paper:#f2efe9;--paper-2:#cdc6ba;--muted:#918878;--brass:#c8a45c;--brass-dim:#8a713c;--ice:#8fb3c4;--sage:#94ab8e;--rose:#c98f7f;--display:"Newsreader",Georgia,serif;--body:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,monospace;--rail:264px;--pad:clamp(20px,5vw,64px)}
+:root{--fs-bg:#0e0d0b;--fs-panel:#17150f;--fs-surface:#1f1c14;--fs-surface2:#2a261c;--fs-line:#2a261c;--fs-text:#f4ead6;--fs-text2:#b8ad94;--fs-text3:#7a7159;--fs-text4:#4d4128;--fs-accent:#f4b87c;--fs-accent-h:#f6c48d;--fs-accent-dim:rgba(244,184,124,0.12);--fs-accent-subtle:rgba(244,184,124,0.06);--fs-accent-border:rgba(244,184,124,0.25);--fs-accent-line:rgba(244,184,124,0.28);--fs-border:rgba(244,184,124,0.08);--fs-border2:rgba(244,184,124,0.15);--fs-pos:#7fb069;--fs-neg:#c97064;--fs-warn:#d4a24c;--r-sm:6px;--r-md:12px;--r-lg:18px;--font-display:"Fraunces", Georgia, serif;--font-sans:"Inter", system-ui, -apple-system, sans-serif;--font-mono:"JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;--diff-left-bg:#4a2521;--diff-left-fg:#f3cdc4;--diff-right-bg:#ebc2b7;--diff-right-fg:#4a2521;--rail:264px;--pad:clamp(20px,5vw,64px)}
 *{box-sizing:border-box}html{scroll-behavior:smooth}
-body{margin:0;background:var(--ink);color:var(--paper-2);font-family:var(--body);font-weight:300;font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased;letter-spacing:.005em}
-::selection{background:var(--brass-dim);color:var(--paper)}
-.rail{position:fixed;left:0;top:0;bottom:0;width:var(--rail);border-right:1px solid var(--rule-soft);padding:42px 28px;display:flex;flex-direction:column;background:var(--ink)}
-.mark{font-family:var(--display);font-size:22px;color:var(--paper)}.mark em{font-style:italic;color:var(--brass)}
-.mark-sub{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:4px 0 40px}
-.nav a{display:block;padding:7px 0;color:var(--muted);text-decoration:none;font-size:13.5px;border-bottom:0}
-.nav a:hover{color:var(--paper)}.nav .n{font-family:var(--mono);font-size:10px;color:var(--brass-dim);margin-right:12px}
-.rail-foot{margin-top:auto;font-family:var(--mono);font-size:10.5px;color:var(--muted);line-height:1.8}
+body{margin:0;background:var(--fs-bg);color:var(--fs-text2);font-family:var(--font-sans);font-weight:400;font-size:15.5px;line-height:1.62;-webkit-font-smoothing:antialiased;letter-spacing:.005em}
+::selection{background:var(--fs-accent-line);color:var(--fs-text)}
+.rail{position:fixed;left:0;top:0;bottom:0;width:var(--rail);border-right:1px solid var(--fs-border);padding:42px 28px;display:flex;flex-direction:column;background:var(--fs-bg)}
+.mark{font-family:var(--font-display);font-size:22px;color:var(--fs-text)}.mark em{font-style:italic;color:var(--fs-accent)}
+.mark-sub{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--fs-text3);margin:4px 0 40px}
+.nav a{display:block;padding:7px 0;color:var(--fs-text3);text-decoration:none;font-size:13.5px;border-bottom:0}
+.nav a:hover{color:var(--fs-text)}.nav .n{font-family:var(--font-mono);font-size:10px;color:var(--fs-warn);margin-right:12px}
+.rail-foot{margin-top:auto;font-family:var(--font-mono);font-size:10.5px;color:var(--fs-text3);line-height:1.8}
 .main{margin-left:var(--rail);max-width:1180px;padding:0 var(--pad) 120px}
-.hero{padding:clamp(48px,8vw,96px) 0 clamp(36px,5vw,56px);border-bottom:1px solid var(--rule)}
-.eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:26px}.eyebrow span{color:var(--brass)}
-h1{font-family:var(--display);font-weight:300;font-size:clamp(36px,5.6vw,62px);line-height:1.04;letter-spacing:-.02em;color:var(--paper);margin:0 0 24px;max-width:20ch}h1 em{font-style:italic;color:var(--brass)}
+.hero{padding:clamp(48px,8vw,96px) 0 clamp(36px,5vw,56px);border-bottom:1px solid var(--fs-line)}
+.eyebrow{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--fs-text3);margin-bottom:26px}.eyebrow span{color:var(--fs-accent)}
+h1{font-family:var(--font-display);font-weight:300;font-size:clamp(36px,5.6vw,62px);line-height:1.04;letter-spacing:-.02em;color:var(--fs-text);margin:0 0 24px;max-width:20ch}h1 em{font-style:italic;color:var(--fs-accent)}
 .lede{max-width:66ch;font-size:17.5px;line-height:1.66;margin:0 0 30px}
-.pills{display:flex;flex-wrap:wrap;gap:8px}.pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--rule);border-radius:100px;color:var(--muted)}
-.sec{padding:clamp(40px,5vw,64px) 0;border-bottom:1px solid var(--rule-soft)}
+.pills{display:flex;flex-wrap:wrap;gap:8px}.pill{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;padding:6px 12px;border:1px solid var(--fs-line);border-radius:100px;color:var(--fs-text3)}
+.sec{padding:clamp(40px,5vw,64px) 0;border-bottom:1px solid var(--fs-border)}
 .sec-head{display:grid;grid-template-columns:72px 1fr;gap:0 24px;margin-bottom:26px}
-.sec-num{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--brass);padding-top:10px}
-.sec-h{font-family:var(--display);font-weight:300;font-size:clamp(26px,3.4vw,38px);line-height:1.14;letter-spacing:-.014em;color:var(--paper);margin:0}.sec-h em{font-style:italic;color:var(--brass)}
-.sec-sub{font-family:var(--mono);font-size:11.5px;color:var(--muted);margin-top:10px}
+.sec-num{font-family:var(--font-mono);font-size:11px;letter-spacing:.1em;color:var(--fs-accent);padding-top:10px}
+.sec-h{font-family:var(--font-display);font-weight:300;font-size:clamp(26px,3.4vw,38px);line-height:1.14;letter-spacing:-.014em;color:var(--fs-text);margin:0}.sec-h em{font-style:italic;color:var(--fs-accent)}
+.sec-sub{font-family:var(--font-mono);font-size:11.5px;color:var(--fs-text3);margin-top:10px}
 .body{margin-left:96px}@media(max-width:900px){.rail{display:none}.main{margin-left:0}.sec-head{grid-template-columns:1fr}.body{margin-left:0}}
-p{margin:0 0 16px;max-width:70ch}strong{font-weight:500;color:var(--paper)}
-code{font-family:var(--mono);font-size:.88em;background:var(--ink-3);border:1px solid var(--rule-soft);padding:1px 6px;border-radius:3px;color:var(--ice)}
-pre{background:var(--ink-2);border:1px solid var(--rule);border-radius:6px;padding:16px 20px;overflow-x:auto;font-family:var(--mono);font-size:13px;line-height:1.7;color:var(--paper-2);margin:0 0 22px}pre code{background:none;border:0;padding:0;color:inherit}
-.note{margin:22px 0;padding:16px 20px;border-left:2px solid var(--brass-dim);background:var(--ink-2);border-radius:0 4px 4px 0;max-width:78ch}
-.note-t{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:8px}
-.note.bad{border-left-color:var(--rose)}.note.bad .note-t{color:var(--rose)}.note.ok{border-left-color:var(--sage)}.note.ok .note-t{color:var(--sage)}
+p{margin:0 0 16px;max-width:70ch}strong{font-weight:500;color:var(--fs-text)}
+code{font-family:var(--font-mono);font-size:.88em;background:var(--fs-surface);border:1px solid var(--fs-border);padding:1px 6px;border-radius:3px;color:var(--fs-accent-h)}
+pre{background:var(--fs-panel);border:1px solid var(--fs-line);border-radius:var(--r-sm);padding:16px 20px;overflow-x:auto;font-family:var(--font-mono);font-size:13px;line-height:1.7;color:var(--fs-text2);margin:0 0 22px}pre code{background:none;border:0;padding:0;color:inherit}
+.note{margin:22px 0;padding:16px 20px;border-left:2px solid var(--fs-accent-line);background:var(--fs-panel);border-radius:0 var(--r-sm) var(--r-sm) 0;max-width:78ch}
+.note-t{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--fs-accent);margin-bottom:8px}
+.note.bad{border-left-color:var(--fs-neg)}.note.bad .note-t{color:var(--fs-neg)}.note.ok{border-left-color:var(--fs-pos)}.note.ok .note-t{color:var(--fs-pos)}
 .note p{margin:0;font-size:14.5px}
-.run{border:1px solid var(--rule);border-radius:6px;overflow:hidden;margin:22px 0}
-.run .row{display:grid;grid-template-columns:44px 1fr;gap:0 18px;padding:16px 22px;border-bottom:1px solid var(--rule-soft);background:var(--ink-2)}
-.run .row:last-child{border-bottom:0}.run .k{font-family:var(--mono);font-size:11px;color:var(--brass);padding-top:4px}
-.run .t{font-weight:500;color:var(--paper);margin-bottom:4px}.run .d{font-size:14px;color:var(--paper-2)}
+.run{border:1px solid var(--fs-line);border-radius:var(--r-sm);overflow:hidden;margin:22px 0}
+.run .row{display:grid;grid-template-columns:44px 1fr;gap:0 18px;padding:16px 22px;border-bottom:1px solid var(--fs-border);background:var(--fs-panel)}
+.run .row:last-child{border-bottom:0}.run .k{font-family:var(--font-mono);font-size:11px;color:var(--fs-accent);padding-top:4px}
+.run .t{font-weight:500;color:var(--fs-text);margin-bottom:4px}.run .d{font-size:14px;color:var(--fs-text2)}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:22px 0}
-.cell{border:1px solid var(--rule);border-radius:6px;padding:16px 18px;background:var(--ink-2)}
-.cell .k{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--brass);margin-bottom:8px}
-.cell .v{font-size:14px;color:var(--paper-2)}.cell .v code{font-size:12px}
+.cell{border:1px solid var(--fs-line);border-radius:var(--r-sm);padding:16px 18px;background:var(--fs-panel)}
+.cell .k{font-family:var(--font-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--fs-accent);margin-bottom:8px}
+.cell .v{font-size:14px;color:var(--fs-text2)}.cell .v code{font-size:12px}
 table{border-collapse:collapse;width:100%;margin:18px 0 26px;font-size:14px}
-th{text-align:left;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:400;padding:0 16px 10px 0;border-bottom:1px solid var(--rule)}
-td{padding:10px 16px 10px 0;border-bottom:1px solid var(--rule-soft);vertical-align:top;line-height:1.55}td:first-child{color:var(--paper);font-weight:400;white-space:nowrap}
+th{text-align:left;font-family:var(--font-mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--fs-text3);font-weight:400;padding:0 16px 10px 0;border-bottom:1px solid var(--fs-line)}
+td{padding:10px 16px 10px 0;border-bottom:1px solid var(--fs-border);vertical-align:top;line-height:1.55}td:first-child{color:var(--fs-text);font-weight:400;white-space:nowrap}
 ul{padding-left:20px;margin:0 0 18px;max-width:72ch}li{margin-bottom:6px}
-.steps{font-family:var(--mono);font-size:12.5px;color:var(--paper-2);line-height:2}.steps .n{color:var(--brass-dim);margin-right:8px}.steps .a{color:var(--muted);margin:0 8px}
-.tree{font-family:var(--mono);font-size:13px;line-height:1.9;color:var(--paper-2)}.tree b{color:var(--paper);font-weight:500}.tree i{color:var(--muted);font-style:normal}
+.steps{font-family:var(--font-mono);font-size:12.5px;color:var(--fs-text2);line-height:2}.steps .n{color:var(--fs-warn);margin-right:8px}.steps .a{color:var(--fs-text3);margin:0 8px}
+.tree{font-family:var(--font-mono);font-size:13px;line-height:1.9;color:var(--fs-text2)}.tree b{color:var(--fs-text);font-weight:500}.tree i{color:var(--fs-text3);font-style:normal}
 </style>
 </head>
 <body>
@@ -89,7 +89,7 @@ pip install desbordante        # optional - exact key discovery (HyUCC / PyroUCC
 
 python compare_app.py          # starts the app with its own settings: theme, 4 GB uploads
 streamlit run compare_app.py   # also works</code></pre>
-    <p>Keep <code>compare_app.py</code>, <code>csvdiff.py</code> (the comparison engine) and the <code>tablecmp/</code> folder together. Every setting, colour and font lives in <code>tablecmp/theme.py</code>; the app applies its theme itself when it starts. <strong>The name</strong> is set there too, as <code>APP_NAME</code>, and can be overridden per deployment without touching the code: <code>set COMPARE_APP_NAME=Acme Table Check</code> before starting the app (and <code>COMPARE_APP_TAGLINE</code> for the line under it). It appears in the browser tab, the sidebar mark, the page header and the report.</p>
+    <p>Keep <code>compare_app.py</code>, <code>csvdiff.py</code> (the comparison engine) and the <code>tablecmp/</code> folder together. Every setting, colour and font lives in <code>tablecmp/theme.py</code>; the app applies its theme itself when it starts. <strong>The name</strong> is set there too, as <code>APP_NAME</code>, and can be overridden per deployment without touching the code: <code>set COMPARE_APP_NAME=Acme Table Check</code> before starting the app (and <code>COMPARE_APP_TAGLINE</code> for the line under it). It appears in the browser tab, the sidebar mark, the page header and the report. The look is the Crosshire apps theme - Aurora by default; <code>set COMPARE_THEME=violet</code> before starting the app picks the violet variant.</p>
     <div class="run">
       <div class="row"><div class="k">01</div><div><div class="t">Load A and B in the sidebar</div><div class="d">Upload or give a path. For a big file open <em>Rows to read</em> first and cut it down. Both files get a 10-row preview and nothing else runs.</div></div></div>
       <div class="row"><div class="k">02</div><div><div class="t">Check the column table, press Confirm</div><div class="d">Pairs by name are already made. Fix the rest with the dropdowns, set Type, tick Key and Compare. Confirm folds the table away and shows the setup card: the key, what is compared, what is missing on each side.</div></div></div>
@@ -103,7 +103,7 @@ streamlit run compare_app.py   # also works</code></pre>
 <section class="sec" id="files">
   <div class="sec-head"><div class="sec-num">01</div><div><h2 class="sec-h">Files.</h2><div class="sec-sub">the sidebar - loading only</div></div></div>
   <div class="body">
-    <p>Each side takes a <strong>CSV</strong> (any delimiter) or a <strong>JSON</strong> file - an array of objects, or one object per line (.jsonl / .ndjson) - by upload or by path; a JSON value that is itself an object or list arrives as its JSON text. Each side has a name (shown everywhere), for CSV a delimiter and a header tick, and <strong>Rows to read</strong>: a WHERE filter on the file's own column names, an order, a top N. All three are applied by DuckDB as the file is read - this is how a 20 GB file becomes the 100,000 rows you actually want. The column / condition / value pickers build the filter for you.</p>
+    <p>Each side takes a <strong>CSV</strong> (any delimiter) or a <strong>JSON</strong> file - an array of objects, or one object per line (.jsonl / .ndjson) - by upload or by path; a JSON value that is itself an object or list arrives as text, in DuckDB's own spelling of the object or list rather than as JSON. Each side has a name (shown everywhere), for CSV a delimiter and a header tick, and <strong>Rows to read</strong>: a WHERE filter on the file's own column names, an order, a top N. All three are applied by DuckDB as the file is read - this is how a 20 GB file becomes the 100,000 rows you actually want. The column / condition / value pickers build the filter for you.</p>
     <p><strong>Snapshot to Parquet</strong> (on by default) reads the file once with its cut and keeps the rows as a compact Parquet file in the temp folder. Everything after - previews, key search, comparison - reads that instead of re-parsing the file. Untick it only for small files you are re-loading constantly.</p>
     <p>Under <strong>Advanced</strong>, a comma-separated list of column names overrides a header row that is missing or short. The app warns when the header looks like a data row, or names fewer columns than the data has.</p>
   </div>
@@ -119,9 +119,9 @@ streamlit run compare_app.py   # also works</code></pre>
       <tr><td>Type · both sides</td><td>What both sides are converted to before comparing. <code>number</code>: 100.00 = 100 = 1e2. <code>date</code>: 27/08/2026 = 2026-08-27. <code>timestamp</code> keeps the time of day. <code>boolean</code>: 1 = yes = true. A value that will not convert keeps its text, so it shows as a difference rather than vanishing. Both sides - the type is a property of the pair.</td></tr>
       <tr><td>Key</td><td>Part of the row key. Several ticks make a compound key.</td></tr>
       <tr><td>Compare</td><td>Compare this column. Ignored on key columns.</td></tr>
-      <tr><td>Matched by · detected</td><td>Information: how the pair was made (name, similar name, guess, data, you, file) and the type DuckDB sniffed in each file.</td></tr>
+      <tr><td>Matched by · detected</td><td>Information: how the pair was made (<code>name</code>, <code>similar name</code>, <code>guess - check</code>, <code>data</code>, <code>you</code>, <code>file</code>) and the type DuckDB sniffed in each file.</td></tr>
     </table>
-    <p><strong>Match by data</strong> reads a sample of both files and pairs the unpaired columns that hold the same values, whatever they are called - <code>Ccy</code> with <code>currency_code</code>. <strong>Save / Load mapping</strong> keeps the whole table, transform steps included, as JSON for the next run of the same two feeds.</p>
+    <p><strong>Match by data</strong> reads a sample of both files and pairs the unpaired columns that hold the same values, whatever they are called - <code>Ccy</code> with <code>currency_code</code>. <strong>Save mapping</strong> writes the paired rows - common names, types, key and compare ticks, transform steps - as JSON; the upload box under it loads one back for the next run of the same two feeds, and rebuilds the unpaired rows from the files.</p>
     <p><strong>Confirm columns</strong> folds the table away. The <strong>setup card</strong> under it always shows what the table amounts to: how many pairs, the key, the compare list, how every typed or transformed column is read, and the columns that exist on one side only - those are null on the other side and are not compared.</p>
   </div>
 </section>
@@ -191,7 +191,7 @@ streamlit run compare_app.py   # also works</code></pre>
       <tr><td>Every column</td><td>The same sheet as the Summary tab: every column from either file with its name on each side, role, how it was read, and matched / mismatched / match % for the compared ones, worst first. Columns present on one side only are listed in a note above the table so a missing or extra column is never silent. In hash mode the match figures become the number of distinct values present on one side only.</td></tr>
       <tr><td>Differences by key value</td><td>For rows that paired on the key but disagree: each key column's values with how many rows differ under each value and in which columns. Tells you <em>where</em> the differences cluster - one account, one date - before you look at what they are. If the key is not unique the section says so up front: rows sharing a key are paired in file order (first with first, second with second), and a difference under a repeated key may be two rows swapped rather than a changed value. Below it, every column across the differing rows: top values counted on each side.</td></tr><tr><td>Where they sit</td><td>Each one-sided section opens with the same profile - top values per column, key columns first - because the key values are the reason those rows found no partner. In the app the Summary tab has this as <strong>Profile by bucket</strong>: pick <em>keys matched</em>, <em>matched but different</em>, <em>only in A</em> or <em>only in B</em> and every column's top values for those rows appear, key columns first, counted on both sides for paired rows; the matched-but-different bucket opens with the differences by key value.</td></tr>
       <tr><td>Rows that differ</td><td>The paired rows, Left above Right, key columns first. <strong>Left rows are black with cream text, Right rows are cream with black text</strong>, and the cells that differ are picked out in the trouble colour on both. A legend sits above the table. Capped at the <em>Rows to display</em> setting; the CSVs hold everything.</td></tr>
-      <tr><td>Only in Left / Only in Right</td><td>The one-sided rows on the same black and cream, key columns first, capped the same way.</td></tr>
+      <tr><td>Only in Left / Only in Right</td><td>The one-sided rows on the same black and cream - the paired columns under their common names, key columns included; a column present on one side only is not in them (the top values above them are key columns first), capped the same way.</td></tr>
     </table>
     <p><strong>Download engine report</strong> is the second button: the comparison engine's own side-by-side HTML (<code>&lt;pair&gt;__diff.html</code>) with its tabs, row search and <em>only columns with differences</em> toggle. Same numbers, different presentation; keep whichever the reader prefers.</p>
   </div>
@@ -215,10 +215,10 @@ streamlit run compare_app.py   # also works</code></pre>
   <div class="body">
     <ul>
       <li>Loading sniffs the schema from a sample and takes one pass to snapshot and count. The 10-row preview stops after 10 rows.</li>
-      <li>A plain rerun - editing the table, opening an expander - runs no query except the five-row transform preview.</li>
+      <li>A plain rerun - editing the table, opening an expander - runs nothing beyond the two 10-row previews and the five-row transform preview.</li>
       <li>Key suggestion, key check, profile, type check and the comparison run only on their buttons. Auto runs them all, once, on purpose.</li>
       <li>The comparison and the key search materialise each side as a DuckDB table under the common names, so the engine reads each file once. Numbers go through a fast 8-decimal decimal first and the wide one only when needed.</li>
-      <li>Measured on 500,000 rows × 6 columns with the real engine: load 1.2 s a side, the comparison itself 7 s (both sides materialised, keyed join, cell differences written), the whole Auto run 16 s including Desbordante and the report.</li>
+      <li>A one-off measurement, 500,000 rows × 6 columns with the real engine: load 1.2 s a side, the comparison itself 7 s (both sides materialised, keyed join, cell differences written), the whole Auto run 16 s including Desbordante and the report. Treat it as an order of magnitude; there is no benchmark script in the repo.</li>
       <li>For a very big file, cut it in <em>Rows to read</em> first - a date filter or a top N - and keep the Parquet snapshot on.</li>
     </ul>
   </div>
@@ -243,17 +243,17 @@ streamlit run compare_app.py   # also works</code></pre>
    state.py      <i>· session defaults</i>
    ui_sidebar.py · ui_columns.py · ui_transform.py · ui_keys.py · ui_results.py  <i>· the screens</i></div>
     <p style="margin-top:22px">The engine is a black box to the app: it receives two DuckDB tables named <code>src_a</code> and <code>src_b</code> with the common column names and canonical values already applied, and the app reads back its counts and its CSV outputs.</p>
-    <h3 style="font-family:var(--display);font-weight:400;font-size:1.3rem;color:var(--paper);margin:28px 0 8px">What comes out</h3>
+    <h3 style="font-family:var(--font-display);font-weight:400;font-size:1.3rem;color:var(--fs-text);margin:28px 0 8px">What comes out</h3>
     <p>Every run gets a pair name from file A - <code>orders.csv</code> against anything gives the pair <code>orders</code> - and writes into a temp folder that the app cleans up on the next run. The Downloads tab hands each file out; the names are always:</p>
 <div class="tree"><b>orders__report.html</b>      <i>· the house-style report (Download report)</i>
 <b>orders__diff.html</b>        <i>· the engine's own side-by-side report (Engine report)</i>
-<b>orders__cell_diffs.csv</b>   <i>· one line per differing cell: key columns, column_name, left_value, right_value</i>
-<b>orders__left_only.csv</b>    <i>· full rows found only in Left (only written when there are any)</i>
-<b>orders__right_only.csv</b>   <i>· full rows found only in Right</i>
-<b>orders__paired.csv</b>       <i>· the differing rows side by side, one row per pair (paired export)</i>
+<b>orders__cell_diffs.csv</b>   <i>· one line per differing cell: the key columns (the row number in position mode; an extra occurrence column when a key value repeats), column_name, left_value, right_value</i>
+<b>orders__left_only.csv</b>    <i>· rows found only in Left: the paired columns under their common names, key columns included; one-sided columns are not in these files</i>
+<b>orders__right_only.csv</b>   <i>· rows found only in Right, the same way</i>
+<b>orders__paired.csv</b>       <i>· every paired row, Left above Right - built on demand from Export the side-by-side view, capped by its Max rows box; not written to the folder</i>
 <b>orders__summary.csv</b>      <i>· the counts as one row</i>
 <b>orders__summary.json</b>     <i>· the counts plus every setting the run used - key, pairs, steps, filters</i></div>
-    <p>In hash mode there is no <code>cell_diffs</code> file and no engine report - rows either match whole or land in <code>left_only</code> / <code>right_only</code>. The CSVs are complete; only the tables on screen and in the report are capped by <em>Rows to display</em>.</p>
+    <p>In key and position mode the engine writes <code>left_only</code> / <code>right_only</code> only when there are such rows; hash mode always writes both. In hash mode there is no <code>cell_diffs</code> file and no engine report - rows either match whole or land in <code>left_only</code> / <code>right_only</code>. The engine's CSVs are complete; only the tables on screen and in the report are capped by <em>Rows to display</em>.</p>
   </div>
 </section>
 

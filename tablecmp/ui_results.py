@@ -35,7 +35,7 @@ def verdict(run: dict, NA: str, NB: str, stale: bool) -> tuple[str, str]:
                if res.diff_rows else ("<b>no differences</b> on the matched rows" if run["mode"] != "hash"
                                       else "identical rows are identical by construction"))
             + f" · <b>{res.only_left:,}</b> only in {esc(NA)} · <b>{res.only_right:,}</b> only in {esc(NB)}"
-            + f'<span style="color:{THEME["muted"]}"> · {run["seconds"]:.1f}s at {run["at"]}</span></div>')
+            + f'<span style="color:{THEME["text3"]}"> · {run["seconds"]:.1f}s at {run["at"]}</span></div>')
     return tone, html
 
 

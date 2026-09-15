@@ -1,5 +1,5 @@
 """
-compare_app.py - compare two tables (CSV, Parquet, JSON, Snowflake, SQL Server), row by row, on a key you choose.
+compare_app.py - compare two tables (a CSV or JSON file on each side), row by row, on a key you choose.
 
     pip install streamlit duckdb
     pip install desbordante        # optional: exact key discovery
@@ -52,7 +52,7 @@ import pandas as pd                               # noqa: E402
 import streamlit as st                            # noqa: E402
 from streamlit import config as _cfg              # noqa: E402
 
-if _cfg.get_option("theme.primaryColor") != THEME["brass"]:     # under `streamlit run`
+if _cfg.get_option("theme.primaryColor") != THEME["accent"]:    # under `streamlit run`
     for _k, _v in STREAMLIT_THEME.items():
         try:
             _cfg.set_option(_k, _v)
@@ -112,9 +112,8 @@ B: Side = st.session_state.B
 if not (A.loaded and B.loaded):
     n = sum(1 for s in (A, B) if s.loaded)
     status_strip(strip, f"{n} of 2 loaded", "-", "-", "-", "-", {"Files": "warn"})
-    st.info("Load **A** and **B** in the sidebar - a CSV, Parquet or JSON file, or a table, query or "
-            "stored procedure on Snowflake or SQL Server. For a big source, open **Rows to read** "
-            "there first and cut it down before pressing Load.")
+    st.info("Load **A** and **B** in the sidebar - a CSV or JSON file on each side. For a big file, "
+            "open **Rows to read** there first and cut it down before pressing Load.")
     st.stop()
 
 NA = (st.session_state.get("nick_A") or A.name or "Left").strip()

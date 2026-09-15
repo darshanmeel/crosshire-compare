@@ -1,0 +1,5 @@
+streamlit>=1.49
+duckdb>=1.1
+pandas
+pyarrow
+# desbordante        # optional: exact key discovery (HyUCC / PyroUCC); without it a DuckDB greedy search runs

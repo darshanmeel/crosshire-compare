@@ -25,16 +25,19 @@ import pandas as pd
 from .profile import label
 from .sources import Side
 from .sql import ident, lit, scratch
+from .theme import THEME
 from .values import ColSpec, ReadOptions, register
 
 OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "not in", "between", "like", "is null", "is not null"]
 OP_MAP = {"=": "eq", "!=": "ne", ">": "gt", ">=": "ge", "<": "lt", "<=": "le",
           "in": "in", "not in": "not_in", "between": "between", "like": "like",
           "is null": "is_null", "is not null": "not_null"}
-# A rows sit on ink, B rows on paper - the two sides read as black and cream.
-LEFT_BG, RIGHT_BG = "#0e0d0b", "#f2efe9"
-LEFT_FG, RIGHT_FG = "#f2efe9", "#0e0d0b"
-LEFT_DIFF, RIGHT_DIFF = "background-color:#4a1f22;color:#f2c9c0", "background-color:#e9c4bb;color:#4a1f22"
+# A rows sit on the page's bg with its text colour, B rows the other way round - the two sides
+# read as black and cream. The differing cells use the theme's four diff tokens.
+LEFT_BG, RIGHT_BG = THEME["bg"], THEME["text"]
+LEFT_FG, RIGHT_FG = THEME["text"], THEME["bg"]
+LEFT_DIFF = f"background-color:{THEME['diff_left_bg']};color:{THEME['diff_left_fg']}"
+RIGHT_DIFF = f"background-color:{THEME['diff_right_bg']};color:{THEME['diff_right_fg']}"
 
 
 @dataclass

@@ -44,7 +44,7 @@ def source_panel(tag: str) -> None:
             path, label = staged_upload(tag, up), up.name
     else:
         p = st.text_input("Path to CSV or JSON", key=f"pt_{tag}",
-                          placeholder=r"C:\data\snowflake\index_component.csv").strip()
+                          placeholder=r"C:\data\exports\orders_2026-09.csv").strip()
         if p:
             if Path(p).is_file():
                 path, label = p, Path(p).name
