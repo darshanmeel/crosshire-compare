@@ -13,7 +13,9 @@ from .values import ColSpec, ReadOptions, register
 
 DATE_TYPES = ("DATE", "TIMESTAMP", "DATETIME")
 ID_WORDS = re.compile(r"(^|_)(id|key|code|ref|no|num|nbr|isin|sedol|cusip|symbol|sym|ticker|"
-                      r"date|day|time|name|type|line|seq|idx|index|row|account|acct)($|_)", re.I)
+                      r"type|line|seq|idx|index|row|account|acct)($|_)", re.I)
+# names and dates often take part in a key, so they rank like an identifier - but are not one
+KEY_WORDS = re.compile(r"(^|_)(name|date|day|time)($|_)", re.I)
 MEASURE_WORDS = re.compile(r"(^|_)(qty|quantity|amount|amt|price|px|value|val|total|sum|count|"
                            r"cnt|rate|pct|percent|weight|volume|vol|balance|bal|cost|fee|"
                            r"nav|return|ret|yield)($|_)", re.I)
@@ -48,7 +50,7 @@ def key_uniqueness(A: Side, B: Side, specs: list[ColSpec], keys: list[str],
 def key_affinity(col: str, type_a: str, type_b: str) -> int:
     """How much a column looks like part of a business key rather than a measure."""
     score = 0
-    if ID_WORDS.search(col):
+    if ID_WORDS.search(col) or KEY_WORDS.search(col):
         score += 3
     if MEASURE_WORDS.search(col):
         score -= 3
@@ -96,8 +98,10 @@ HOW_PYRO = "found with Desbordante PyroUCC as almost unique"
 
 def key_reasons(cols: list[str], d: dict[str, int], totals: dict[str, int], affinity: dict[str, int],
                 nulls: dict[str, int], overlap: float, unique_sets: list[frozenset], how: str,
-                name_a: str, name_b: str) -> str:
-    """Why a candidate ranks where it does, as one line of plain reasons."""
+                name_a: str, name_b: str, single_ov: dict[str, float] | None = None) -> str:
+    """Why a candidate ranks where it does, as one line of plain reasons. `single_ov` is the
+    overlap of each column on its own - read only when the combination shares nothing, to
+    name the column that is the reason."""
     bits = []
     idish = [c for c in cols if ID_WORDS.search(c)]
     measures = [c for c in cols if MEASURE_WORDS.search(c) or affinity[c] <= -4]
@@ -110,6 +114,7 @@ def key_reasons(cols: list[str], d: dict[str, int], totals: dict[str, int], affi
                     else f"{', '.join(idish)} say identifier")
     else:
         bits.append("a name, not an identifier" if any(re.search(r"name", c, re.I) for c in cols)
+                    else "a date, not an identifier" if any(KEY_WORDS.search(c) for c in cols)
                     else "no identifier in the name")
     n_null = sum(nulls.get(c, 0) for c in cols)
     bits.append("no nulls" if not n_null else f"{n_null:,} nulls")
@@ -119,8 +124,15 @@ def key_reasons(cols: list[str], d: dict[str, int], totals: dict[str, int], affi
     if dup_a or dup_b:
         bits.append(" and ".join(f"{n:,} rows in {nm} share it"
                                  for n, nm in ((dup_a, name_a), (dup_b, name_b)) if n))
-    bits.append("no values in common - the two sides number their rows differently" if overlap == 0
-                else f"{overlap:.1f}% of {name_a}'s values found in {name_b}")
+    if overlap:
+        bits.append(f"{overlap:.1f}% of {name_a}'s values found in {name_b}")
+    else:
+        alone = {c: (single_ov or {}).get(c) for c in cols} if len(cols) > 1 else {}
+        dead = [c for c, o in alone.items() if o == 0]
+        bits.append("no values in common"
+                    + (f" - none of {name_a}'s {' or '.join(dead)} values found in {name_b}" if dead
+                       else ", though every column alone shares some" if alone and all(alone.values())
+                       else ""))
     for u in unique_sets:
         if u < set(cols):
             bits.append(f"adds nothing - {' + '.join(sorted(u))} is already unique")
@@ -259,6 +271,9 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
     found.sort(key=lambda f: (not unique(f[1]), redundant(f[0]), -sum(affinity[c] for c in f[0]),
                               -round(ov[tuple(f[0])]), len(f[0]), -selectivity(f[1])))
     found = found[:want]
+    # a combination that shares nothing: which of its columns is the reason
+    single_ov = {c: overlap([c]) for cols, _, _ in found if len(cols) > 1 and ov[tuple(cols)] == 0
+                 for c in cols}
     table = pd.DataFrame([{
         "Key columns": " + ".join(cols),
         f"Distinct in {name_a}": d["probe_a"],
@@ -268,6 +283,6 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
         "Overlap %": round(ov[tuple(cols)], 1),
         "Looks like a key": "yes" if all(affinity[c] >= 0 for c in cols) else "measure columns",
         "Why": key_reasons(cols, d, totals, affinity, nulls, ov[tuple(cols)], unique_sets, how,
-                           name_a, name_b),
+                           name_a, name_b, single_ov),
     } for cols, d, how in found])
     return table, [cols for cols, _, _ in found], note

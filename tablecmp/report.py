@@ -194,7 +194,8 @@ def _source_row(nm: str, s: Side, n: int, path: str) -> str:
 
 
 def _key_row(res: Outcome, keys: list[str], name_a: str, name_b: str, notes: list[str]) -> str:
-    """The Key row: the columns, whether they are unique, the match rate, why Auto chose them."""
+    """The Key row: the columns, whether they are unique, the match rate, and why Auto chose them -
+    only when the key that ran is the one Auto chose; a key picked by hand carries no reason."""
     text = esc(" + ".join(keys))
     if res.duplicate_keys_left or res.duplicate_keys_right:
         text += (f" - {res.duplicate_keys_left:,} rows in {esc(name_a)} and {res.duplicate_keys_right:,} in "
@@ -205,8 +206,9 @@ def _key_row(res: Outcome, keys: list[str], name_a: str, name_b: str, notes: lis
     rate = res.matched_rows / floor * 100 if floor else 0.0
     text += f" · {res.matched_rows:,} of {floor:,} matched ({rate:.1f}%)"
     why = next((n for n in notes if n.startswith("key:")), "")
-    if " - " in why:
-        text += " · " + esc(why.split(" - ", 1)[1])
+    named, _, reason = why[len("key:"):].partition(" - ")     # "key: a + b - <reason>"
+    if reason and set(named.strip().split(" + ")) == set(keys):
+        text += " · " + esc(reason)
     if notes:
         text += (f"<details><summary>How this was worked out - {len(notes)} "
                  f"{'decision' if len(notes) == 1 else 'decisions'}</summary><pre>"

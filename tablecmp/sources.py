@@ -102,14 +102,25 @@ def raw_expr(path: str, kind: str, delimiter: str = ",", header: bool = True,
     return read_csv_expr(path, delimiter, header, all_varchar)
 
 
+def text_expr(col: str, typ: str) -> str:
+    """One column as text. A BLOB reads as hex. A column DuckDB types JSON (a JSON file
+    mixing numbers and strings in one field) reads as the bare value - "hello" becomes
+    hello like the CSV field, not the quoted JSON spelling a plain cast keeps."""
+    t = str(typ).upper()
+    if "BLOB" in t:
+        return f"hex({ident(col)}) AS {ident(col)}"
+    if t == "JSON":
+        return f"json_extract_string({ident(col)}, '$') AS {ident(col)}"
+    return f"{ident(col)}::VARCHAR AS {ident(col)}"
+
+
 def read_expr(path: str, kind: str, delimiter: str = ",", header: bool = True) -> str:
     """The same file with every column as text - the one form the rest of the app reads,
     so a Parquet DATE, a JSON number and a CSV field all go through the same typing."""
     if kind == "csv":
         return read_csv_expr(path, delimiter, header, all_varchar=True)
     cols = source_schema(path, kind, delimiter, header, file_stamp(path))
-    sel = ", ".join((f"hex({ident(c)}) AS {ident(c)}" if "BLOB" in str(t).upper()
-                     else f"{ident(c)}::VARCHAR AS {ident(c)}") for c, t in cols.items()) or "*"
+    sel = ", ".join(text_expr(c, t) for c, t in cols.items()) or "*"
     return f"(SELECT {sel} FROM {raw_expr(path, kind, delimiter, header)})"
 
 

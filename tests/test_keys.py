@@ -61,6 +61,30 @@ def test_superset_of_a_unique_key_ranks_below_it():
     assert combos[0] == ["emp_id"]
     sup = table[table["Key columns"].str.contains("hire_date") & table["Key columns"].str.contains("emp_id")]
     assert len(sup) and "adds nothing - emp_id is already unique" in sup.iloc[0]["Why"]
+    assert "emp_id says identifier" in sup.iloc[0]["Why"]       # a hire date is not an identifier
+    assert "say identifier" not in sup.iloc[0]["Why"]
+
+
+def test_names_and_dates_are_not_called_identifiers():
+    """name / date words rank a column like an identifier, but the Why must not call it one."""
+    from tablecmp.keys import key_affinity, key_reasons
+    d = {"probe_a": 10, "probe_b": 10}
+    tot = {"probe_a": 10, "probe_b": 10}
+    aff = {"emp_id": 3, "first_name": 3, "hire_date": 5, "surname": 0, "dept": 0}
+
+    def why(cols): return key_reasons(cols, d, tot, aff, {}, 100.0, [], "how", "a", "b")
+    assert why(["emp_id"]).startswith("name says identifier")
+    assert why(["first_name", "emp_id"]).startswith("emp_id says identifier")
+    assert why(["hire_date", "emp_id"]).startswith("emp_id says identifier")
+    assert why(["first_name"]).startswith("a name, not an identifier")
+    assert why(["surname"]).startswith("a name, not an identifier")
+    assert why(["hire_date"]).startswith("a date, not an identifier")
+    assert why(["hire_date", "first_name"]).startswith("a name, not an identifier")
+    assert why(["dept"]).startswith("no identifier in the name")
+    # the ranking is unchanged: a name or a date still scores like an identifier
+    assert key_affinity("first_name", "VARCHAR", "VARCHAR") == 3
+    assert key_affinity("hire_date", "DATE", "VARCHAR") == 5
+    assert key_affinity("surname", "VARCHAR", "VARCHAR") == 0
 
 
 def test_disjoint_ids_rank_below_shared(tmp_path):
@@ -72,6 +96,38 @@ def test_disjoint_ids_rank_below_shared(tmp_path):
     row = table[table["Key columns"] == "row_id"].iloc[0]
     assert row["Overlap %"] == 0 and "no values in common" in row["Why"]
     assert row["Unique on both"] == "yes"
+    assert "number their rows" not in row["Why"]           # a guess the figures cannot back
+
+
+def test_zero_overlap_names_the_column_to_blame(tmp_path):
+    """id is shared 100% and name is spelt differently on each side: the combination
+    name + id shares nothing, and the Why says name is the reason - not the ids."""
+    rows_a = [[i, f"N{i % 50}", i % 7] for i in range(200)]
+    rows_b = [[i, f"M{i % 50}", i % 7] for i in range(200)]
+    A, B = _csv_sides(tmp_path, ["id", "name", "v"], rows_a, rows_b)
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("id", "name", "v")]
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos[0] == ["id"] and table.iloc[0]["Overlap %"] == 100
+    row = table[table["Key columns"] == "name + id"].iloc[0]
+    assert row["Overlap %"] == 0
+    assert "no values in common - none of a's name values found in b" in row["Why"]
+    assert "number their rows" not in row["Why"]
+    assert "adds nothing - id is already unique" in row["Why"]
+    with_v = table[table["Key columns"] == "v + id"].iloc[0]
+    assert with_v["Overlap %"] == 100 and "100.0% of a's values found in b" in with_v["Why"]
+
+
+def test_zero_overlap_of_shared_columns_blames_the_combination(tmp_path):
+    """Every column alone is shared, only the pairing differs - no column is named."""
+    rows_a = [[i % 20, f"C{i}"] for i in range(200)]
+    rows_b = [[(i + 1) % 20, f"C{i}"] for i in range(200)]
+    A, B = _csv_sides(tmp_path, ["id", "code"], rows_a, rows_b)
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("id", "code")]
+    table, _, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    row = table[table["Key columns"] == "id + code"].iloc[0]
+    assert row["Overlap %"] == 0
+    assert "no values in common, though every column alone shares some" in row["Why"]
+    assert "none of" not in row["Why"] and "number their rows" not in row["Why"]
 
 
 def test_non_unique_key_says_how_many_share_it(tmp_path):

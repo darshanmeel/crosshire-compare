@@ -7,12 +7,20 @@ payroll_employees.csv  payroll: renames every column, joins the two names, spell
                        dates as dd/mm/yyyy, active as Y/N, adds a column HR does not have
                        (CostCenter), drops the last 40 employees and adds 25 of its own, and
                        changes a few salaries and a few active flags
+directory_employees.json  the staff directory, written the way a JSON export comes out: an
+                       array of objects with numbers and booleans as JSON types. id (3% typed in
+                       lower case), name (first and last joined), dept (10% spelt the directory's
+                       way, 5% with stray spaces), salary (8% changed, 5% with float noise inside
+                       a 0.01 tolerance), hire_date as dd-Mon-yyyy, active as true/false,
+                       manager_id (a column HR does not have, null for 10%); drops the first 30
+                       HR employees, adds 20 of its own and flips 1% of the active flags
 sample.duckdb          the same two tables as hr.employees and payroll.employees, so the
                        database path can be tried with no server
 
 Deterministic (seed 7):    python examples/make_sample.py
 """
 import csv
+import json
 import random
 from pathlib import Path
 
@@ -63,6 +71,38 @@ with open(here / "payroll_employees.csv", "w", newline="\n", encoding="utf-8") a
     w.writeheader()
     w.writerows(payroll)
 
+# The directory export uses its own generator so the two CSVs above stay byte-identical.
+rng = random.Random(11)
+MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+DIR_NAMES = {"People": "People & Culture", "Support": "Customer Support", "Legal": "Legal Affairs"}
+managers = [r["emp_id"] for r in rows[:60]]
+directory = []
+for r in rows[30:]:
+    dept = r["department"]
+    if rng.random() < 0.10:
+        dept = DIR_NAMES.get(dept, dept)
+    if rng.random() < 0.05:
+        dept = f"  {dept} "
+    sal = r["salary"]
+    u = rng.random()
+    if u < 0.08:
+        sal = round(sal + rng.uniform(-200, 200), 2)
+    elif u < 0.13:
+        sal = sal + 0.000001 * rng.choice([1, -1])      # float noise: inside a 0.01 tolerance
+    y, m, d = r["hire_date"].split("-")
+    directory.append({"id": r["emp_id"].lower() if rng.random() < 0.03 else r["emp_id"],
+                      "name": f"{r['first_name']} {r['last_name']}", "dept": dept, "salary": sal,
+                      "hire_date": f"{int(d):02d}-{MON[int(m) - 1]}-{y}",
+                      "active": r["active"] if rng.random() > 0.01 else (not r["active"]),
+                      "manager_id": None if rng.random() < 0.10 else rng.choice(managers)})
+for i in range(n + 1, n + 21):
+    directory.append({"id": f"E{10000 + i}", "name": "Directory Only", "dept": "Operations",
+                      "salary": 4100.0, "hire_date": "01-Sep-2026", "active": True,
+                      "manager_id": managers[0]})
+with open(here / "directory_employees.json", "w", newline="\n", encoding="utf-8") as f:
+    json.dump(directory, f, indent=1)
+    f.write("\n")
+
 db = here / "sample.duckdb"
 db.unlink(missing_ok=True)
 con = duckdb.connect(str(db))
@@ -70,4 +110,4 @@ con.execute("CREATE SCHEMA hr; CREATE SCHEMA payroll")
 con.execute(f"CREATE TABLE hr.employees AS SELECT * FROM read_csv('{(here / 'hr_employees.csv').as_posix()}', all_varchar=true)")
 con.execute(f"CREATE TABLE payroll.employees AS SELECT * FROM read_csv('{(here / 'payroll_employees.csv').as_posix()}', all_varchar=true)")
 con.close()
-print("hr", n, "payroll", len(payroll), "duckdb", db.name)
+print("hr", n, "payroll", len(payroll), "directory", len(directory), "duckdb", db.name)

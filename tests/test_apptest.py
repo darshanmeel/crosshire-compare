@@ -75,3 +75,34 @@ def test_database_flow(monkeypatch, tmp_path):
     assert res["pair"] == "SAMPLE_compare_SAMPLE"
     js = json.loads((Path(res["folder"]) / f"{res['pair']}__summary.json").read_text(encoding="utf-8"))
     assert js["sources"]["A"]["connection"] == "SAMPLE" and js["sources"]["A"]["sql"].startswith("SELECT")
+
+
+def _load_path(at, tag, path):
+    at.radio(key=f"how_{tag}").set_value("Path on disk").run()
+    at.text_input(key=f"pt_{tag}").input(str(path)).run()
+    return _ok(at.button(key=f"load_{tag}").click().run())
+
+
+def test_empty_file_loads_with_no_rows_and_no_filter_blame(monkeypatch, tmp_path):
+    """An empty file loads with 0 rows: the sidebar says the file has none, not that a
+    filter cut them, and does not ask for column names DuckDB's fallback column never had."""
+    files = {"empty.json": "", "empty_array.json": "[]", "empty.csv": "", "header_only.csv": "emp_id,first_name\n"}
+    for name, text in files.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+        at = _load_path(_boot(monkeypatch, tmp_path), "A", tmp_path / name)
+        side = at.session_state["A"]
+        assert side.loaded and side.rows == 0 and side.cut == "", name
+        warnings = [w.value for w in at.sidebar.warning]
+        assert warnings == ["The file has no rows."], (name, warnings)
+        assert not [e.value for e in at.sidebar.error], name
+
+
+def test_filter_leaving_no_rows_still_blames_the_filter(monkeypatch, tmp_path):
+    at = _boot(monkeypatch, tmp_path)
+    at.radio(key="how_A").set_value("Path on disk").run()
+    at.text_input(key="pt_A").input(str(EX / "hr_employees.csv")).run()
+    at.text_area(key="cw_A_0").input("department = 'Nowhere'").run()
+    _ok(at.button(key="load_A").click().run())
+    side = at.session_state["A"]
+    assert side.rows == 0 and side.cut == "WHERE department = 'Nowhere'"
+    assert [w.value for w in at.sidebar.warning] == ["The filter left no rows."]

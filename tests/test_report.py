@@ -1,6 +1,6 @@
 # tests/test_report.py
 import re
-from tablecmp.report import build_report
+from tablecmp.report import _key_row, build_report
 from tests.test_outputs import _run          # the sample run helper
 
 
@@ -36,3 +36,26 @@ def test_report_hash_mode_and_filters(tmp_path, monkeypatch):
     assert "active = true · hr" in html and "salary is not null · payroll" in html
     assert "<b>case ignored</b>" in html and "<b>tolerance 0.5</b>" in html
     assert "unique on both sides" in html and "How this was worked out" not in html
+
+
+def test_report_key_row_quotes_auto_reason_only_for_the_key_that_ran(tmp_path, monkeypatch):
+    run, A, B = _run(tmp_path, monkeypatch)                 # the key that ran is emp_id
+    key_row = lambda html: re.search(r'<div class="k">Key</div><div class="v">(.*?)</div>', html, re.S).group(1)  # noqa: E731
+
+    # Auto chose emp_id and emp_id ran: the reason follows the match rate
+    html = build_report(run, A, B, "hr", "payroll", limit=20, notes=["key: emp_id - name says identifier"])
+    assert "matched (" in key_row(html) and "· name says identifier" in key_row(html)
+
+    # the key was changed by hand after Auto: Auto's reason is for another key and must not be quoted
+    for note in ("key: department - name says identifier",
+                 "key: department + active - NOT unique on both sides; the closest found - name says identifier",
+                 "key: none found - rows will be matched by hashing the compared columns"):
+        html = build_report(run, A, B, "hr", "payroll", limit=20, notes=[note])
+        row = key_row(html)
+        assert "· name says identifier" not in row and "hashing" not in row.split("<details>")[0], note
+        assert "How this was worked out" in row and note in row      # the labelled record of Auto's decisions stays
+
+    # a multi-column key is the same key whatever order the engine reports it in
+    row = _key_row(run["result"], ["active", "emp_id"], "hr", "payroll",
+                   ["key: emp_id + active - name says identifier"])
+    assert row.startswith("active + emp_id - ") and "· name says identifier" in row.split("<details>")[0]

@@ -162,11 +162,14 @@ def source_panel(tag: str) -> None:
                    + (f"  ·  capped at {side.cap:,}" if side.capped else "")
                    + ("  ·  Parquet snapshot" if side.cache_path else ""))
         if side.rows == 0:
-            st.warning("The filter left no rows.")
+            st.warning("The filter left no rows." if side.cut else
+                       "The fetch returned no rows." if side.is_database else
+                       "The file has no rows.")
         if side.kind == "csv" and side.header and looks_headerless(side.schema):
             st.error("These column names look like a data row. Untick **First row is a "
                      "header** and load again.")
-        missing = short_header(side.schema) if side.kind == "csv" else 0
+        # an empty CSV gets one auto-named column from DuckDB - there is no data row to name
+        missing = short_header(side.schema) if side.kind == "csv" and side.rows else 0
         if missing:
             named = len(side.schema) - missing
             st.error(f"The header row names only **{named}** columns but the data has "

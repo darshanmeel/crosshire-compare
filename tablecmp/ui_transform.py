@@ -10,8 +10,8 @@ from .state import bump, forget_results
 from .theme import esc
 from .ui_columns import Setup
 from .values import (CONVERSIONS, FORMAT_PRESETS, NUMERIC_PARAMS, PARAM_LABELS, STEPS, TYPES,
-                     ReadOptions, conversion_report, describe_step, final_kind, function_catalog,
-                     has_x, steps_from_json, try_steps)
+                     ReadOptions, blank_param, conversion_report, describe_step, final_kind,
+                     function_catalog, has_x, steps_from_json, try_steps)
 
 
 def _steps_html(steps: list) -> str:
@@ -93,6 +93,8 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions) 
             if st.button("Add", key="tx_add", type="primary", width="stretch"):
                 if op == "custom expression" and not has_x(values.get("expr", "")):
                     st.error("The expression must mention `x`, the value.")
+                elif (missing := blank_param({"op": op, "params": values})):
+                    st.error(f"Type the {missing} first - one space counts.")
                 else:
                     steps.append({"op": op, "params": values})
                     _save(canon, which, steps, kind)

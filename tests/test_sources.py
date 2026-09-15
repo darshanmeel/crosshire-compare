@@ -2,8 +2,8 @@
 from pathlib import Path
 
 from tablecmp import sources as src
-from tablecmp.sql import scratch
-from tablecmp.values import STEPS, step_sql
+from tablecmp.sql import lit, scratch
+from tablecmp.values import STEPS, blank_param, describe_step, step_sql, substitute_x
 
 
 def test_stem_and_slug():
@@ -69,6 +69,32 @@ def test_length_step():
     assert "length" in STEPS and step_sql({"op": "length"}) == "length(x)"
 
 
+def test_text_step_parameters_keep_spaces():
+    # a separator, find text or pad character of one space is a real value, not blank
+    split = {"op": "part N split by S", "params": {"s": " ", "n": "1"}}
+    assert step_sql(split) == "split_part(x, ' ', 1)"
+    assert describe_step(split) == "part N split by S (separator=' ', N=1)"
+    got = scratch().execute(f"SELECT {substitute_x(step_sql(split), lit('Elena Costa'))}").fetchone()[0]
+    assert got == "Elena"
+    assert step_sql({"op": "replace text", "params": {"a": " - ", "b": "_"}}) == "replace(x, ' - ', '_')"
+    assert step_sql({"op": "pad left to N with C", "params": {"n": " 8 ", "c": " "}}) == "lpad(x, 8, ' ')"
+    # unchanged: a plain separator stays unquoted, a blank format means auto
+    assert describe_step({"op": "part N split by S", "params": {"s": "-", "n": "1"}}) == \
+        "part N split by S (separator=-, N=1)"
+    assert describe_step({"op": "to date", "params": {"fmt": " "}}) == "to date"
+
+
+def test_blank_text_parameter_is_named():
+    # nothing at all is blank and named for the screen to refuse; one space is a value
+    assert blank_param({"op": "part N split by S", "params": {"s": "", "n": "1"}}) == "separator"
+    assert blank_param({"op": "part N split by S", "params": {"s": " ", "n": "1"}}) is None
+    assert blank_param({"op": "replace text", "params": {"a": "", "b": "_"}}) == "find"
+    assert blank_param({"op": "replace text", "params": {"a": "-", "b": ""}}) is None   # deletes
+    assert blank_param({"op": "pad left to N with C", "params": {"n": "8", "c": ""}}) == "pad character"
+    assert blank_param({"op": "to date", "params": {"fmt": ""}}) is None
+    assert blank_param({"op": "trim"}) is None
+
+
 def test_blob_reads_as_hex(tmp_path):
     pq = tmp_path / "b.parquet"
     scratch().execute(
@@ -77,3 +103,16 @@ def test_blob_reads_as_hex(tmp_path):
     assert 'hex("raw")' in expr
     rows = scratch().execute(f"SELECT * FROM {expr}").fetchall()
     assert rows == [("1", "6162")]
+
+
+def test_mixed_json_column_reads_bare_text(tmp_path):
+    """A field mixing numbers and strings is typed JSON by DuckDB; its strings must come
+    back without the JSON quotes, so "hello" equals the CSV field hello and n/a can fold to null."""
+    js = tmp_path / "mixed.json"
+    js.write_text('[{"id": "E1", "note": 10}, {"id": "E2", "note": "n/a"}, {"id": "E3", "note": null},'
+                  ' {"id": "E4", "note": "hello"}, {"id": "E5", "note": {"a": [1, "x"]}}]', encoding="utf-8")
+    assert src.source_schema(str(js), "json", ",", True, src.file_stamp(str(js)))["note"] == "JSON"
+    expr = src.read_expr(str(js), "json")
+    assert 'json_extract_string("note"' in expr and '"id"::VARCHAR' in expr
+    rows = scratch(ordered=True).execute(f"SELECT * FROM {expr}").fetchall()
+    assert rows == [("E1", "10"), ("E2", "n/a"), ("E3", None), ("E4", "hello"), ("E5", '{"a":[1,"x"]}')]

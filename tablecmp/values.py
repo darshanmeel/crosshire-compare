@@ -70,6 +70,8 @@ PARAM_LABELS = {"n": "N", "m": "M", "a": "find", "b": "replace with", "c": "pad 
                 "s": "separator", "fmt": "format - blank tries the usual spellings",
                 "expr": "expression, x = the value"}
 NUMERIC_PARAMS = {"n", "m"}
+TEXT_PARAMS = {"a", "b", "c", "s"}      # quoted into the SQL as typed, spaces included
+NEEDED_TEXT = {"a", "c", "s"}           # blank: find does nothing, pad fails, split gives one character
 CONVERSIONS = {"to number": "number", "to timestamp": "timestamp", "to date": "date",
                "to boolean": "boolean"}
 
@@ -151,14 +153,15 @@ def step_sql(step: dict) -> str:
         return str(p.get("expr", "x")).strip() or "x"
     out = tpl
     for name in params:
-        v = str(p.get(name, "")).strip()
+        v = str(p.get(name, ""))
         if name in NUMERIC_PARAMS:
             try:
-                v = str(int(float(v or 0)))
+                v = str(int(float(v.strip() or 0)))
             except ValueError:
                 v = "0"
             out = out.replace("{" + name + "}", v)
         else:
+            # as typed: a separator or find text of one space is a real value
             out = out.replace("{" + name + "}", lit(v))
     return out
 
@@ -176,9 +179,29 @@ def describe_step(step: dict) -> str:
     _, params = STEPS[op]
     if not params:
         return op
-    shown = ", ".join(f"{PARAM_LABELS[k].split(' -')[0].split(',')[0]}={p.get(k, '')}"
-                      for k in params if str(p.get(k, "")).strip())
+    shown = ", ".join(f"{PARAM_LABELS[k].split(' -')[0].split(',')[0]}={v}"
+                      for k in params if (v := shown_param(k, p.get(k, ""))))
     return f"{op} ({shown})" if shown else op
+
+
+def shown_param(name: str, value) -> str:
+    """A parameter as the caption shows it: text as typed, quoted when a space at
+    either end would hide it; a blank format or expression is not shown."""
+    v = str(value)
+    if name in TEXT_PARAMS:
+        return v if v == v.strip() else lit(v)
+    return v.strip()
+
+
+def blank_param(step: dict) -> str | None:
+    """The label of a text parameter that must not be empty but is, else None.
+    One space is a value; only nothing at all is blank."""
+    _, params = STEPS[step["op"]]
+    p = step.get("params", {})
+    for name in params:
+        if name in NEEDED_TEXT and str(p.get(name, "")) == "":
+            return PARAM_LABELS[name]
+    return None
 
 
 def describe_steps(steps: list) -> str:
