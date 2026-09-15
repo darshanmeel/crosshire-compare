@@ -1,7 +1,9 @@
 """One CSV file, and which of its rows to read. DuckDB streams it from disk."""
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -28,10 +30,25 @@ class Side:
     schema: dict[str, str] = field(default_factory=dict)      # column -> detected type
     source_columns: list[str] = field(default_factory=list)  # names as the file has them
     rows: int | None = None
+    conn: str = ""          # connection name for a database side - never a URI or password
+    database: str = ""      # its kind: snowflake | databricks | mssql | oracle | postgresql | duckdb
+    query: str = ""         # the SQL that was fetched
+    fetched_at: str = ""    # HH:MM:SS of the fetch
+    cap: int = 0            # "fetch at most" that was applied (0 = all)
+    capped: bool = False    # the fetch hit the cap
 
     @property
     def loaded(self) -> bool:
         return bool(self.schema)
+
+    @property
+    def is_database(self) -> bool:
+        return bool(self.conn)
+
+    @property
+    def stem(self) -> str:
+        """What names this side in output files: the connection for a database, the file's stem."""
+        return slug(self.conn if self.is_database else Path(self.label).stem if self.label else "")
 
     @property
     def columns(self) -> list[str]:
@@ -46,7 +63,7 @@ class Side:
     def read_key(self) -> list:
         """Everything that decides which rows come out of this file."""
         return [self.csv_path, self.kind, self.cache_path, self.delimiter, self.header, self.where,
-                self.order_by, self.desc, self.limit]
+                self.order_by, self.desc, self.limit, self.conn, self.query, self.cap, self.fetched_at]
 
     @property
     def cut(self) -> str:
@@ -91,7 +108,8 @@ def read_expr(path: str, kind: str, delimiter: str = ",", header: bool = True) -
     if kind == "csv":
         return read_csv_expr(path, delimiter, header, all_varchar=True)
     cols = source_schema(path, kind, delimiter, header, file_stamp(path))
-    sel = ", ".join(f"{ident(c)}::VARCHAR AS {ident(c)}" for c in cols) or "*"
+    sel = ", ".join((f"hex({ident(c)}) AS {ident(c)}" if "BLOB" in str(t).upper()
+                     else f"{ident(c)}::VARCHAR AS {ident(c)}") for c, t in cols.items()) or "*"
     return f"(SELECT {sel} FROM {raw_expr(path, kind, delimiter, header)})"
 
 
@@ -208,3 +226,40 @@ def looks_headerless(schema: dict[str, str]) -> bool:
             return True
         return bool(re.fullmatch(r".*_\d+", n)) and n[0].isdigit()
     return sum(datalike(n) for n in names) >= max(2, len(names) // 4)
+
+
+def slug(text: str) -> str:
+    """Letters, digits and underscores; runs of anything else become one underscore."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(text)).strip("_")
+
+
+def work_dir() -> Path:
+    """Where fetches, snapshots and run folders go: COMPARE_WORK_DIR or the temp folder."""
+    given = os.environ.get("COMPARE_WORK_DIR", "").strip()
+    p = Path(given).expanduser() if given else Path(tempfile.gettempdir()) / "crosshire-compare"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def out_dir() -> Path | None:
+    """The root every save must land under, when COMPARE_OUT_DIR is set."""
+    given = os.environ.get("COMPARE_OUT_DIR", "").strip()
+    return Path(given).expanduser() if given else None
+
+
+def data_roots() -> list[Path]:
+    """The folders a 'Path on disk' may come from: COMPARE_DATA_DIR split on os.pathsep, or none."""
+    given = os.environ.get("COMPARE_DATA_DIR", "").strip()
+    return [Path(p).expanduser().resolve() for p in given.split(os.pathsep) if p.strip()] if given else []
+
+
+def path_allowed(path: str) -> bool:
+    """A 'Path on disk' is fine unless COMPARE_DATA_DIR is set and it lies outside every root."""
+    roots = data_roots()
+    if not roots:
+        return True
+    try:
+        p = Path(path).resolve(strict=True)
+    except OSError:
+        return False
+    return any(p == r or r in p.parents for r in roots)

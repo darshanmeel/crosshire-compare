@@ -48,6 +48,7 @@ STEPS = {
     "lower": ("lower(x)", ()),
     "left N characters": ("left(x, {n})", ("n",)),
     "right N characters": ("right(x, {n})", ("n",)),
+    "length": ("length(x)", ()),
     "characters from N, M long": ("substr(x, {n}, {m})", ("n", "m")),
     "replace text": ("replace(x, {a}, {b})", ("a", "b")),
     "regex replace": ("regexp_replace(x, {a}, {b}, 'g')", ("a", "b")),

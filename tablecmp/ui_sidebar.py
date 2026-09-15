@@ -2,7 +2,6 @@
 Nothing else lives here."""
 from __future__ import annotations
 
-import tempfile
 import time
 from pathlib import Path
 
@@ -10,7 +9,7 @@ import duckdb
 import streamlit as st
 
 from .sources import (Side, apply_names, file_stamp, kind_of, looks_headerless, quick_clause,
-                      row_count, short_header, snapshot, source_schema)
+                      row_count, short_header, snapshot, source_schema, work_dir)
 from .state import drop_result
 
 DEFAULT_NAMES = {"A": "Left", "B": "Right"}
@@ -24,7 +23,7 @@ def staged_upload(tag: str, up) -> str:
     held = st.session_state.get(f"staged_{tag}")
     if held and held[0] == fid and Path(held[1]).exists():
         return held[1]
-    tmp = Path(tempfile.gettempdir()) / f"cmp_{tag}_{int(time.time())}_{up.name}"
+    tmp = work_dir() / f"cmp_{tag}_{int(time.time())}_{up.name}"
     tmp.write_bytes(up.getvalue())
     st.session_state[f"staged_{tag}"] = (fid, str(tmp))
     return str(tmp)
@@ -123,7 +122,7 @@ def source_panel(tag: str) -> None:
         try:
             with st.spinner("Reading the rows…"):
                 if snap:
-                    pq = Path(tempfile.gettempdir()) / f"cmp_{tag}_{int(time.time())}.parquet"
+                    pq = work_dir() / f"cmp_{tag}_{int(time.time())}.parquet"
                     snapshot(side, str(pq))
                 side.rows = row_count(side)
         except duckdb.Error as exc:

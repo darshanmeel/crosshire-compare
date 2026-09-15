@@ -23,7 +23,7 @@ from typing import Any
 import pandas as pd
 
 from .profile import label
-from .sources import Side
+from .sources import Side, work_dir
 from .sql import ident, lit, scratch
 from .theme import THEME
 from .values import ColSpec, ReadOptions, register
@@ -158,7 +158,7 @@ def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = ""
     specs = [ColSpec(**d) for d in cfg["specs"]]
     keys = list(cfg["keys"]) if mode == "key" else []
     con = scratch(ordered=True)   # file order is what pairs duplicate keys (1st with 1st) - keep it
-    out = Path(tempfile.mkdtemp(prefix="cmp_"))
+    out = Path(tempfile.mkdtemp(prefix="cmp_", dir=str(work_dir())))
     folder = out / cfg["name"]
     folder.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()

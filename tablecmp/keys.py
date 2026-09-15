@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import re
-import tempfile
 import time
-from pathlib import Path
 
 import pandas as pd
 
-from .sources import Side
+from .sources import Side, work_dir
 from .sql import ident, lit, scratch
 from .values import ColSpec, ReadOptions, register
 
@@ -72,7 +70,7 @@ def ucc_candidates(con, view: str, columns: list[str], error: float = 0.0,
                    max_lhs: int = 4, sample: int = UCC_SAMPLE) -> list[list[str]]:
     """Unique column combinations found by Desbordante on the first `sample` rows."""
     import desbordante
-    path = Path(tempfile.gettempdir()) / f"ucc_{view}_{int(time.time() * 1000)}.csv"
+    path = work_dir() / f"ucc_{view}_{int(time.time() * 1000)}.csv"
     picks = ", ".join(ident(c) for c in columns)
     con.execute(f"COPY (SELECT {picks} FROM {view} LIMIT {int(sample)}) "
                 f"TO {lit(str(path))} (HEADER, DELIMITER ',')")
