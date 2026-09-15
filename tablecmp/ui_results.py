@@ -1,15 +1,15 @@
 """The results: verdict, summary, columns and values, report, downloads."""
 from __future__ import annotations
 
-import io
+import shutil
 from pathlib import Path
 
 import duckdb
-import pandas as pd
 import streamlit as st
 
-from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows, diffs_by_key_value, load_csv, matched_values,
-                      near_match, paired_frame, style_pairs, top_values)
+from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows, diffs_by_key_value, matched_values,
+                      near_match, style_pairs, top_values, value_pairs)
+from .outputs import default_save_folder, save_target, table_formats, verdict_of, write_parquet_copies, zip_run
 from .report import build_report
 from .sources import Side
 from .theme import THEME, esc
@@ -17,12 +17,12 @@ from .values import ColSpec
 
 
 def verdict(run: dict, NA: str, NB: str, stale: bool) -> tuple[str, str]:
-    """(tone, html) for the banner above the tabs."""
+    """(tone, html) for the banner above the tabs - the verdict is the run's own."""
     res: Outcome = run["result"]
     keys = list(res.keys or run["cfg"]["keys"]) if run["mode"] == "key" else []
     pct = round(res.diff_rows / res.matched_rows * 100, 2) if res.matched_rows else 0.0
-    orphans = res.only_left + res.only_right
-    tone = "ok" if not res.diff_rows and not orphans else "warn" if pct < 5 and orphans <= res.matched_rows else "bad"
+    v = run.get("verdict") or verdict_of(res, run["mode"])
+    tone = v.tone
     if run["mode"] == "hash":
         how = f"<b>{res.matched_rows:,}</b> identical rows found by hashing {len(res.columns_compared)} columns"
     elif keys:
@@ -30,7 +30,7 @@ def verdict(run: dict, NA: str, NB: str, stale: bool) -> tuple[str, str]:
     else:
         how = f"<b>{res.matched_rows:,}</b> rows paired by position"
     html = (f'<div class="verdict {tone}"><span class="t">Result{" · stale - settings changed since" if stale else ""}</span>'
-            + how + f" · <b>{len(res.columns_compared)}</b> columns compared · "
+            + f"<b>{esc(v.word)}</b> · " + how + f" · <b>{len(res.columns_compared)}</b> columns compared · "
             + (f"<b>{res.diff_rows:,}</b> rows ({pct}%) differ in <b>{res.cell_diffs:,}</b> cells"
                if res.diff_rows else ("<b>no differences</b> on the matched rows" if run["mode"] != "hash"
                                       else "identical rows are identical by construction"))
@@ -67,7 +67,10 @@ def render(run: dict, A: Side, B: Side, NA: str, NB: str, stale: bool) -> None:
         except (duckdb.Error, KeyError, ValueError) as exc:
             st.error(f"Could not build the report: {exc}")
     with view[3]:
-        downloads_tab(run, res, NA, NB, keys, cols, mode)
+        try:
+            downloads_tab(run, A, B, NA, NB, limit)
+        except (duckdb.Error, KeyError, ValueError, OSError) as exc:
+            st.error(f"Could not prepare the downloads: {exc}")
 
 
 def summary_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode) -> None:
@@ -137,9 +140,8 @@ def columns_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode, limit) -> No
         st.caption("With hashing there are no matched-but-different rows: a row is either "
                    "identical on the other side or one-sided. The one-sided rows are below.")
         return
-    cells_path = run["files"].get(f"{run['cfg']['name']}__cell_diffs.csv")
-    cells = load_csv(str(cells_path)) if cells_path else pd.DataFrame(
-        columns=["column_name", "left_value", "right_value"])
+    cells_path = run["files"].get(f"{run['pair']}__cell_diffs.csv")
+    pairs = value_pairs(run, 10)                 # one DuckDB pass over cd, every column at once
     sample = matched_values(run, cols)
     differing = sorted([c for c in cols if res.diffs_by_column.get(c, 0)],
                        key=lambda c: (-res.diffs_by_column.get(c, 0), c))
@@ -169,14 +171,14 @@ def columns_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode, limit) -> No
                 st.warning("Every matched row differs on this column - usually two different "
                            "fields paired by mistake, or a value that converts on one side "
                            "only. Check the column in the transform section.")
-            sub = cells[cells["column_name"] == col] if n else cells.iloc[0:0]
-            if n:
-                pair = (sub.groupby([sub["left_value"].fillna("∅ null"), sub["right_value"].fillna("∅ null")])
-                        .size().reset_index(name="Count").sort_values("Count", ascending=False).head(10))
-                pair.columns = [f"{NA} · {col}", f"{NB} · {col}", "Count"]
-                pair["%"] = (pair["Count"] / max(n, 1) * 100).round(2)
+            pair = pairs.get(col) if n else None
+            if pair is not None and len(pair):
+                pair = pair[["a", "b", "n", "pct"]].copy()
+                pair.columns = [f"{NA} · {col}", f"{NB} · {col}", "Count", "%"]
+                pair["%"] = pair["%"].astype(float).round(2)
                 st.markdown("**Where they differ** - the value pairs behind the count")
-                st.dataframe(pair, width="stretch", hide_index=True)
+                st.dataframe(pair, width="stretch", hide_index=True,
+                             column_config={"Count": st.column_config.NumberColumn("Count", format="localized")})
             if f"a_{col}" in sample.columns:
                 st.markdown("**Distribution across the matched rows**")
                 m1, m2 = st.columns(2)
@@ -252,53 +254,87 @@ def default_save_dir() -> str:
     return str(downloads if downloads.exists() else Path.home())
 
 
-def save_row(files: dict[str, bytes], label: str, key: str) -> None:
+def save_row(files: dict[str, bytes | Path], label: str, key: str, run: dict) -> None:
     """A folder box and a button that writes the given files there - no browser involved,
-    which is the reliable route for big results."""
+    which is the reliable route for big results. The default is a folder per run,
+    <base>/<pair>__<run_id>, where <base> is COMPARE_OUT_DIR when it is set, else the folder
+    of the last save, else next to file A or Downloads. Under COMPARE_OUT_DIR every save must
+    stay inside it."""
+    per_run = f"{run['pair']}__{run['run_id']}"
+    base = Path(st.session_state.get("save_dir") or default_save_dir())
+    box = f"{key}_dir"
+    # a keyed text box keeps whatever it holds, whatever `value` says - so when a new run arrives
+    # the box is set through session state, once, and then left to the user
+    if st.session_state.get(f"{box}_for") != run["run_id"]:
+        st.session_state[box] = str(default_save_folder(run, base))
+        st.session_state[f"{box}_for"] = run["run_id"]
     c1, c2 = st.columns([3, 1])
     with c1:
-        folder = st.text_input("Save to folder", value=st.session_state.get("save_dir")
-                               or default_save_dir(), key=f"{key}_dir",
-                               label_visibility="collapsed",
-                               placeholder=r"C:\\data\\compare_out")
+        folder = st.text_input("Save to folder", key=box, label_visibility="collapsed",
+                               placeholder=r"C:\data\compare_out")
     with c2:
         go = st.button(label, key=key, width="stretch")
     if go:
+        if not (folder or "").strip():
+            st.error("Type a folder to save into.")
+            return
         try:
-            target = Path(folder).expanduser()
+            target = save_target(folder, run)
             target.mkdir(parents=True, exist_ok=True)
             written = []
             for fname, data in files.items():
-                (target / fname).write_bytes(data)
+                if isinstance(data, Path):
+                    shutil.copyfile(data, target / fname)
+                else:
+                    (target / fname).write_bytes(data)
                 written.append(fname)
-            st.session_state["save_dir"] = str(target)
+            # remember the base, so the next run's default is its own folder beside this one
+            st.session_state["save_dir"] = str(target.parent if target.name == per_run else target)
             st.success(f"Saved {len(written)} file{'s' if len(written) != 1 else ''} to "
                        f"`{target}`: " + ", ".join(written))
+        except ValueError as exc:
+            st.error(str(exc))
         except OSError as exc:
             st.error(f"Could not write to `{folder}`: {exc}")
 
 
-def report_tab(run, A, B, NA, NB, limit) -> None:
+def ensure_report(run: dict, A: Side, B: Side, NA: str, NB: str, limit: int) -> str:
+    """The report HTML for this run. compare_app builds it as the run finishes and leaves it in
+    run["_report"]; that copy is reused unless the row limit it was built with differs. Whatever
+    the route, <pair>__report.html sits in the run folder and is listed in run["files"]."""
     key = ("report", run["at"], limit)
-    if run.get("_report_key") != key:
+    path = Path(run["folder"]) / f"{run['pair']}__report.html"
+    if not run.get("_report") or run.get("_report_key") != key:
         with st.spinner("Building the report…"):
-            run["_report"] = build_report(run, A, B, NA, NB, limit=min(limit, 2000))
+            prof = st.session_state.get("profile")
+            run["_report"] = build_report(run, A, B, NA, NB, limit=min(limit, 2000),
+                                          notes=run["cfg"].get("notes") or [],
+                                          profile=prof[1] if prof else None)
             run["_report_key"] = key
-    html = run["_report"]
+        path.write_text(run["_report"], encoding="utf-8", newline="\n")
+    elif not path.exists():
+        path.write_text(run["_report"], encoding="utf-8", newline="\n")
+    run["files"][path.name] = path
+    return run["_report"]
+
+
+def report_tab(run, A, B, NA, NB, limit) -> None:
+    html = ensure_report(run, A, B, NA, NB, limit)
+    report_name = f"{run['pair']}__report.html"
     h1, h2 = st.columns([4, 1])
     with h1:
         st.markdown("#### Report")
-        st.caption("One self-contained HTML file in the house style - setup, counts, column "
-                   "by column, differences by key value, the rows that differ with the cells "
-                   "marked, the one-sided rows. Open it anywhere, attach it to a ticket.")
-    report_name = f"{run['cfg']['name']}__report.html"
+        st.caption("One self-contained HTML file in the house style - sources, setup, counts, column "
+                   "by column with the value pairs behind each count, differences by key value, the "
+                   "rows that differ with the cells marked, the one-sided rows. Open it anywhere, "
+                   "attach it to a ticket.")
     with h2:
         # on_click="ignore": the click must not rerun the page, or the browser's fetch of the
         # file can race the rerun and the button is left stuck in its disabled "downloading" state
         st.download_button("Download report", html.encode("utf-8"), file_name=report_name,
                            mime="text/html", type="primary", width="stretch",
                            key=f"dl_report_{run['at']}", on_click="ignore")
-        engine = run["files"].get(f"{run['cfg']['name']}__diff.html")
+        engine = run["files"].get(f"{run['pair']}__diff.html")
         if engine and not engine.exists():
             engine = None
             st.caption("the engine's report file is no longer on disk - run Compare again")
@@ -307,11 +343,10 @@ def report_tab(run, A, B, NA, NB, limit) -> None:
                                mime="text/html", width="stretch",
                                key=f"dl_engine_{run['at']}", on_click="ignore")
             st.caption("the engine's own HTML, as it produces it")
-    save_row({report_name: html.encode("utf-8")}, "Save report to folder", key="save_report")
+    save_row({report_name: html.encode("utf-8")}, "Save report to folder", key="save_report", run=run)
     height = st.select_slider("Viewer height", [600, 820, 1000, 1400], value=820,
                               key="rep_h", label_visibility="collapsed")
-    path = run["folder"] / f"{run['cfg']['name']}__report.html"
-    path.write_text(html, encoding="utf-8")
+    path = run["files"][report_name]
     if hasattr(st, "iframe"):
         st.iframe(path, height=height)
     else:
@@ -319,37 +354,52 @@ def report_tab(run, A, B, NA, NB, limit) -> None:
         st_html(html, height=height, scrolling=True)
 
 
-def downloads_tab(run, res: Outcome, NA, NB, keys, cols, mode) -> None:
+# what each file in the run folder is called on the Downloads tab, in the order the buttons appear
+DOWNLOAD_LABELS = [("cell_diffs.csv", "Cell differences"), ("left_only.csv", "Rows only in {NA}"),
+                   ("right_only.csv", "Rows only in {NB}"), ("paired.csv", "Paired rows"),
+                   ("columns.csv", "Columns"), ("profile.csv", "Profile"), ("summary.csv", "Summary"),
+                   ("summary.json", "Settings and result"), ("report.html", "Report"),
+                   ("diff.html", "Engine report")]
+MIME = {".csv": "text/csv", ".json": "application/json", ".html": "text/html",
+        ".parquet": "application/vnd.apache.parquet"}
+
+
+def downloads_tab(run, A, B, NA, NB, limit) -> None:
     st.markdown("#### Downloads")
     st.caption("Complete results, not just the rows displayed. Values are the canonical form "
                "both sides were compared on.")
-    name = run["cfg"]["name"]
-    labels = {f"{name}__cell_diffs.csv": "Cell differences",
-              f"{name}__left_only.csv": f"Rows only in {NA}",
-              f"{name}__right_only.csv": f"Rows only in {NB}",
-              f"{name}__summary.csv": "Summary", f"{name}__summary.json": "Settings and result"}
+    ensure_report(run, A, B, NA, NB, limit)
+    z = run.get("zip")
+    if not z or not z.exists():
+        with st.spinner("Zipping the run folder…"):
+            z = zip_run(run)
+    st.download_button("Download all as zip", z.read_bytes(), file_name=z.name, mime="application/zip",
+                       type="primary", key=f"dl_zip_{run['at']}", on_click="ignore",
+                       help="Every file of this run in one archive")
+    name = run["pair"]
+    buttons = [(f"{name}__{suffix}", label.format(NA=NA, NB=NB)) for suffix, label in DOWNLOAD_LABELS]
+    buttons += [(p.name, f"{p.name[len(name) + 2:-len('.parquet')]} (Parquet)")
+                for p in sorted(run["files"].values()) if p.suffix == ".parquet"]
+    present = [(f, label) for f, label in buttons if f in run["files"] and run["files"][f].exists()]
     grid = st.columns(5)
-    for i, (fname, label) in enumerate(labels.items()):
-        path = run["files"].get(fname)
-        if not path:
-            continue
-        if not path.exists():
-            continue
+    for i, (fname, label) in enumerate(present):
+        path = run["files"][fname]
         with grid[i % 5]:
             st.download_button(label, path.read_bytes(), file_name=fname, width="stretch",
-                               mime="application/json" if fname.endswith("json") else "text/csv",
+                               mime=MIME.get(path.suffix, "application/octet-stream"),
                                key=f"dl_{fname}_{run['at']}", on_click="ignore")
-    everything = {f: p.read_bytes() for f, p in run["files"].items() if p.exists()}
-    if run.get("_report"):
-        everything[f"{name}__report.html"] = run["_report"].encode("utf-8")
-    save_row(everything, "Save everything to folder", key="save_all")
-    if mode != "hash":
-        with st.expander("Export the side-by-side view"):
-            n = st.number_input("Max rows", 100, 1_000_000, 50_000, step=1000, key="exp_rows")
-            if st.button("Build export", key="build_exp"):
-                df = paired_frame(run, keys, cols, int(n))
-                buf = io.StringIO()
-                df.to_csv(buf, index=False)
-                st.download_button("Download paired rows CSV", buf.getvalue(),
-                                   file_name=f"{name}__paired.csv", mime="text/csv",
-                                   key=f"dl_paired_{run['at']}", on_click="ignore")
+    env = table_formats()                        # COMPARE_TABLE_FORMATS, or csv
+    start = "both" if {"csv", "parquet"} <= env else "parquet" if "parquet" in env else "csv"
+    fmt = st.radio("Tables as", ["csv", "parquet", "both"], horizontal=True, key="out_fmt",
+                   index=["csv", "parquet", "both"].index(start),
+                   format_func={"csv": "CSV", "parquet": "Parquet", "both": "both"}.get,
+                   help="Parquet: typed counts, a fraction of the size, straight into DuckDB, pandas or a "
+                        "warehouse. Applies to the next run; COMPARE_TABLE_FORMATS sets the default.")
+    if fmt in ("parquet", "both") and not any(p.suffix == ".parquet" for p in run["files"].values()):
+        if st.button("Write Parquet copies for this run", key="write_pq"):
+            with st.spinner("Writing Parquet…"):
+                write_parquet_copies(run)         # drops the zip too, so it is rebuilt with them
+            st.rerun()
+    everything = {p.name: p for p in run["files"].values() if p.exists()}
+    save_row(everything, "Save everything to folder", key="save_all", run=run)
+
