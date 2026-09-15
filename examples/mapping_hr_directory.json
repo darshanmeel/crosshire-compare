@@ -52,24 +52,6 @@
       ]
     },
     {
-      "a": "last_name",
-      "b": "name",
-      "name": "last_name",
-      "type": "text",
-      "key": false,
-      "compare": true,
-      "a_steps": [],
-      "b_steps": [
-        {
-          "op": "part N split by S",
-          "params": {
-            "s": " ",
-            "n": "2"
-          }
-        }
-      ]
-    },
-    {
       "a": "department",
       "b": "dept",
       "name": "department",

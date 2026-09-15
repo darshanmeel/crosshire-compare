@@ -336,3 +336,15 @@ def test_app_flow_with_every_item_together(monkeypatch, tmp_path):
     _ok(at.button(key="save_all").click().run())
     saved = sorted(Path(tmp_path / "out").glob(f"{pair}__*"))
     assert len(saved) == 1 and (saved[0] / f"{pair}__summary.json").exists()
+
+
+def test_apply_mapping_json_skips_an_identical_pair_listed_twice():
+    A, B = _sides()
+    text = json.dumps({"columns": [
+        {"a": "last_name", "b": "name", "b_steps": [{"op": "part N split by S", "params": {"s": " ", "n": "2"}}]},
+        {"a": "last_name", "b": "name", "b_steps": [{"op": "part N split by S", "params": {"s": " ", "n": "2"}}]},
+        {"a": "last_name", "b": "name", "b_steps": [{"op": "length", "params": {}}]},
+    ]})
+    cm = apply_mapping_json(text, A, B)
+    pairs = cm[(cm["A column"] == "last_name") & (cm["B column"] == "name")]
+    assert len(pairs) == 2 and list(pairs["Common name"]) == ["last_name", "last_name_2"]

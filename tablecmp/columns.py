@@ -269,9 +269,12 @@ def apply_mapping_json(text: str, A: Side, B: Side, looks: dict | None = None) -
     then a row of its own for each column no pair uses."""
     data = json.loads(text)
     rows = []
+    seen: set[tuple] = set()
     for r in data.get("columns", []):
         a, b = r.get("a", ""), r.get("b", "")
-        if a in A.columns and b in B.columns:
+        same = (a, b, steps_json(r.get("a_steps") or []), steps_json(r.get("b_steps") or []))
+        if a in A.columns and b in B.columns and same not in seen:     # the same pair twice adds nothing
+            seen.add(same)
             rows.append(_row(a, b, A, B, name=str(r.get("name") or ""), matched="file",
                              key=bool(r.get("key")), compare=r.get("compare", True),
                              kind=r.get("type") if r.get("type") in TYPES else None,
