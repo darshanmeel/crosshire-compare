@@ -1,7 +1,12 @@
 """The column table: every column from either file, the column it pairs with on the
-other side, the common name, the Type, the Key and Compare ticks.
+other side, the common name, the Type, the Key and Compare ticks, and Case - a text
+pair's own say on case ("ignore" or "exact"; blank follows the global switch).
 
-Transform steps ride along in two hidden JSON columns; the transform screen edits them.
+A column may take part in more than one pair; it has a row of its own only when it
+is in none. Transform steps ride along in two hidden JSON columns; the transform
+screen edits them. The two "looks like" cells hold what sniff.looks_like made of
+each side's values - shown as a suggestion, never applied; `looks` is that dict,
+{"A": {column: text}, "B": {...}}, and the caller passes it in.
 """
 from __future__ import annotations
 
@@ -13,12 +18,13 @@ import pandas as pd
 
 from .sources import Side
 from .sql import ident, scratch
-from .values import (DATE_TYPES, NUMERIC_TYPES, TYPES, ColSpec, ReadOptions, register_plain,
-                     steps_from_json, steps_json)
+from .values import (CASES, DATE_TYPES, NUMERIC_TYPES, TYPES, ColSpec, ReadOptions, final_kind,
+                     register_plain, steps_from_json, steps_json)
 
-MAP_COLS = ["A column", "B column", "Common name", "Type", "Key", "Compare",
-            "Matched by", "A detected", "B detected", "A steps", "B steps"]
-SHOWN_COLS = MAP_COLS[:9]
+MAP_COLS = ["A column", "B column", "Common name", "Type", "Key", "Compare", "Case",
+            "Matched by", "A detected", "A looks like", "B detected", "B looks like",
+            "A steps", "B steps"]
+SHOWN_COLS = MAP_COLS[:12]
 
 
 def norm_key(name: str) -> str:
@@ -66,9 +72,21 @@ def default_kind(type_a: str, type_b: str) -> str:
     return "text"
 
 
+def _look(looks: dict | None, which: str, col: str) -> str:
+    """The looks-like cell: what sniff.looks_like said about the column, if anything."""
+    return str((looks or {}).get(which, {}).get(col, "") or "") if col else ""
+
+
+def _case(value) -> str:
+    """The Case cell as one of CASES; anything else is blank."""
+    v = str(value or "").strip().lower()
+    return v if v in CASES else ""
+
+
 def _row(a: str, b: str, A: Side, B: Side, name: str = "", matched: str = "",
          key: bool = False, compare: bool | None = None, kind: str | None = None,
-         a_steps: str = "[]", b_steps: str = "[]") -> dict:
+         case: str = "", a_steps: str = "[]", b_steps: str = "[]",
+         looks: dict | None = None) -> dict:
     ta = A.schema.get(a, "") if a else ""
     tb = B.schema.get(b, "") if b else ""
     paired = bool(a and b)
@@ -77,8 +95,10 @@ def _row(a: str, b: str, A: Side, B: Side, name: str = "", matched: str = "",
             "Type": kind or default_kind(ta, tb),
             "Key": bool(key) and paired,
             "Compare": (paired if compare is None else bool(compare)) and paired,
+            "Case": _case(case) if paired else "",
             "Matched by": matched if paired else "",
-            "A detected": ta, "B detected": tb,
+            "A detected": ta, "A looks like": _look(looks, "A", a),
+            "B detected": tb, "B looks like": _look(looks, "B", b),
             "A steps": a_steps, "B steps": b_steps}
 
 
@@ -91,7 +111,7 @@ def _unique_names(rows: list[dict]) -> None:
         r["Common name"] = base if n == 1 else f"{base}_{n}"
 
 
-def build_table(A: Side, B: Side) -> pd.DataFrame:
+def build_table(A: Side, B: Side, looks: dict | None = None) -> pd.DataFrame:
     """Every A column paired by name where possible, then every B column left over."""
     b_by_norm: dict[str, str] = {}
     for c in B.columns:
@@ -110,9 +130,9 @@ def build_table(A: Side, B: Side) -> pd.DataFrame:
     for a, (b, confident) in suggest_pairs(spare_a, spare_b).items():
         pairs[a] = (b, "similar name" if confident else "guess - check")
         used.add(b)
-    rows = [_row(a, pairs[a][0], A, B, matched=pairs[a][1]) if a in pairs
-            else _row(a, "", A, B) for a in A.columns]
-    rows += [_row("", b, A, B) for b in B.columns if b not in used]
+    rows = [_row(a, pairs[a][0], A, B, matched=pairs[a][1], looks=looks) if a in pairs
+            else _row(a, "", A, B, looks=looks) for a in A.columns]
+    rows += [_row("", b, A, B, looks=looks) for b in B.columns if b not in used]
     _sort(rows, A, B)
     _unique_names(rows)
     return pd.DataFrame(rows, columns=MAP_COLS)
@@ -126,15 +146,42 @@ def _sort(rows: list[dict], A: Side, B: Side) -> None:
                              order_a.get(r["A column"], 0), order_b.get(r["B column"], 0)))
 
 
-def normalise(edited: pd.DataFrame, prev: pd.DataFrame, A: Side, B: Side) -> pd.DataFrame:
+def _complete(rows: list[dict], A: Side, B: Side, looks: dict | None = None) -> list[dict]:
+    """Pairs as they are, then one one-sided row per column that is in no pair.
+
+    A column may take part in any number of pairs - one full name split into a
+    first and a last name, say. A one-sided row for a column that a pair uses, or
+    a second one-sided row for the same column, is dropped; a column in no row at
+    all gets one. The order of what came in is kept, sorting is the caller's.
+    """
+    pairs = [r for r in rows if r["A column"] and r["B column"]]
+    paired_a = {r["A column"] for r in pairs}
+    paired_b = {r["B column"] for r in pairs}
+    out = list(pairs)
+    for r in rows:
+        if r["A column"] and r["B column"]:
+            continue
+        a, b = r["A column"], r["B column"]
+        if (a and a in paired_a) or (b and b in paired_b):
+            continue
+        out.append(r)
+        (paired_a if a else paired_b).add(a or b)
+    out += [_row(a, "", A, B, looks=looks) for a in A.columns if a not in paired_a]
+    out += [_row("", b, A, B, looks=looks) for b in B.columns if b not in paired_b]
+    return out
+
+
+def normalise(edited: pd.DataFrame, prev: pd.DataFrame, A: Side, B: Side,
+              looks: dict | None = None) -> pd.DataFrame:
     """Clean what came back from the editor and keep the table complete and consistent.
 
-    Every column of A and of B appears in exactly one row. When the same column is
-    picked in two rows, the row that just changed wins. A row that ends up with
-    nothing on either side disappears; a column that ends up in no row gets its own.
+    A column may be used in any number of pairs; it has a row of its own only when
+    it is in no pair. A row that ends up with nothing on either side disappears; a
+    column that ends up in no row gets its own. A row that just changed is marked
+    "you", gets Compare ticked and its Type worked out again.
     """
     e = edited.copy()
-    for c in ("A column", "B column", "Common name", "Type", "Matched by",
+    for c in ("A column", "B column", "Common name", "Type", "Case", "Matched by",
               "A steps", "B steps"):
         e[c] = e[c].where(e[c].notna(), "").astype(str).str.strip()
     for c in ("Key", "Compare"):
@@ -142,26 +189,15 @@ def normalise(edited: pd.DataFrame, prev: pd.DataFrame, A: Side, B: Side) -> pd.
     e["A column"] = e["A column"].where(e["A column"].isin(A.columns), "")
     e["B column"] = e["B column"].where(e["B column"].isin(B.columns), "")
     e["Type"] = e["Type"].where(e["Type"].isin(TYPES), "text")
+    e["Case"] = e["Case"].map(_case)
 
     same_shape = len(e) == len(prev)
     changed_a = {i for i in e.index if same_shape and e.at[i, "A column"] != prev.at[i, "A column"]}
     changed_b = {i for i in e.index if same_shape and e.at[i, "B column"] != prev.at[i, "B column"]}
 
-    def winners(col: str, changed: set) -> dict[str, int]:
-        out: dict[str, int] = {}
-        for i in e.index:
-            v = e.at[i, col]
-            if not v:
-                continue
-            if v not in out or (i in changed and out[v] not in changed):
-                out[v] = i
-        return out
-
-    keep_a, keep_b = winners("A column", changed_a), winners("B column", changed_b)
     rows: list[dict] = []
     for i in e.index:
-        a = e.at[i, "A column"] if keep_a.get(e.at[i, "A column"]) == i else ""
-        b = e.at[i, "B column"] if keep_b.get(e.at[i, "B column"]) == i else ""
+        a, b = e.at[i, "A column"], e.at[i, "B column"]
         if not a and not b:
             continue
         touched = i in changed_a or i in changed_b
@@ -169,12 +205,9 @@ def normalise(edited: pd.DataFrame, prev: pd.DataFrame, A: Side, B: Side) -> pd.
         kind = None if touched else e.at[i, "Type"]
         rows.append(_row(a, b, A, B, name=e.at[i, "Common name"], matched=matched,
                          key=e.at[i, "Key"], compare=e.at[i, "Compare"] or touched,
-                         kind=kind, a_steps=e.at[i, "A steps"] or "[]",
-                         b_steps=e.at[i, "B steps"] or "[]"))
-    have_a = {r["A column"] for r in rows if r["A column"]}
-    have_b = {r["B column"] for r in rows if r["B column"]}
-    rows += [_row(a, "", A, B) for a in A.columns if a not in have_a]
-    rows += [_row("", b, A, B) for b in B.columns if b not in have_b]
+                         kind=kind, case=e.at[i, "Case"], a_steps=e.at[i, "A steps"] or "[]",
+                         b_steps=e.at[i, "B steps"] or "[]", looks=looks))
+    rows = _complete(rows, A, B, looks)
     _sort(rows, A, B)
     _unique_names(rows)
     return pd.DataFrame(rows, columns=MAP_COLS)
@@ -187,7 +220,8 @@ def shape(cmap: pd.DataFrame) -> list[tuple[str, str]]:
 def specs_from(cmap: pd.DataFrame) -> list[ColSpec]:
     return [ColSpec(canon=str(r["Common name"]), a_src=str(r["A column"]),
                     b_src=str(r["B column"]), kind=str(r["Type"]),
-                    a_steps=steps_from_json(r["A steps"]), b_steps=steps_from_json(r["B steps"]))
+                    a_steps=steps_from_json(r["A steps"]), b_steps=steps_from_json(r["B steps"]),
+                    case=_case(r["Case"]))
             for _, r in cmap.iterrows() if r["A column"] and r["B column"]]
 
 
@@ -206,6 +240,17 @@ def only_in(cmap: pd.DataFrame, which: str) -> list[str]:
     return [str(r[own]) for _, r in cmap.iterrows() if r[own] and not r[other]]
 
 
+def reused(specs: list[ColSpec], name_a: str, name_b: str) -> list[str]:
+    """Each source column in more than one pair: 'name used 2 times on the Right'."""
+    out = []
+    for which, name in (("A", name_a), ("B", name_b)):
+        counts: dict[str, int] = {}
+        for s in specs:
+            counts[s.src(which)] = counts.get(s.src(which), 0) + 1
+        out += [f"{c} used {n} times on the {name}" for c, n in counts.items() if n > 1]
+    return out
+
+
 def set_steps(cmap: pd.DataFrame, canon: str, which: str, steps: list) -> None:
     cmap.loc[cmap["Common name"] == canon, f"{which} steps"] = steps_json(steps)
 
@@ -213,31 +258,53 @@ def set_steps(cmap: pd.DataFrame, canon: str, which: str, steps: list) -> None:
 def mapping_json(cmap: pd.DataFrame) -> str:
     cols = [{"a": r["A column"], "b": r["B column"], "name": r["Common name"],
              "type": r["Type"], "key": bool(r["Key"]), "compare": bool(r["Compare"]),
+             "case": _case(r["Case"]),
              "a_steps": steps_from_json(r["A steps"]), "b_steps": steps_from_json(r["B steps"])}
             for _, r in cmap.iterrows() if r["A column"] and r["B column"]]
     return json.dumps({"columns": cols}, indent=2)
 
 
-def apply_mapping_json(text: str, A: Side, B: Side) -> pd.DataFrame:
+def apply_mapping_json(text: str, A: Side, B: Side, looks: dict | None = None) -> pd.DataFrame:
+    """Every pair in the file whose columns both exist - a column may appear in several -
+    then a row of its own for each column no pair uses."""
     data = json.loads(text)
     rows = []
-    used_a: set[str] = set()
-    used_b: set[str] = set()
     for r in data.get("columns", []):
         a, b = r.get("a", ""), r.get("b", "")
-        if a in A.columns and b in B.columns and a not in used_a and b not in used_b:
-            used_a.add(a)
-            used_b.add(b)
+        if a in A.columns and b in B.columns:
             rows.append(_row(a, b, A, B, name=str(r.get("name") or ""), matched="file",
                              key=bool(r.get("key")), compare=r.get("compare", True),
                              kind=r.get("type") if r.get("type") in TYPES else None,
-                             a_steps=steps_json(r.get("a_steps") or []),
-                             b_steps=steps_json(r.get("b_steps") or [])))
-    rows += [_row(a, "", A, B) for a in A.columns if a not in used_a]
-    rows += [_row("", b, A, B) for b in B.columns if b not in used_b]
+                             case=r.get("case", ""), a_steps=steps_json(r.get("a_steps") or []),
+                             b_steps=steps_json(r.get("b_steps") or []), looks=looks))
+    rows = _complete(rows, A, B, looks)
     _sort(rows, A, B)
     _unique_names(rows)
     return pd.DataFrame(rows, columns=MAP_COLS)
+
+
+def fill_looks(cmap: pd.DataFrame, looks: dict | None) -> pd.DataFrame:
+    """The two looks-like columns from the dict - for a table built without it, Auto's say."""
+    out = cmap.copy()
+    for which in ("A", "B"):
+        out[f"{which} looks like"] = [_look(looks, which, c) for c in out[f"{which} column"]]
+    return out
+
+
+def untaken(cmap: pd.DataFrame, name_a: str, name_b: str) -> list[tuple[str, str]]:
+    """Each suggestion on a pair whose Type is something else and whose side has no
+    conversion step: (common name, 'Right looks like date (06-Nov-2019 → %d-%b-%Y) - read as text')."""
+    out = []
+    for _, r in cmap.iterrows():
+        if not (r["A column"] and r["B column"]):
+            continue
+        for which, name in (("A", name_a), ("B", name_b)):
+            kind, _, detail = str(r[f"{which} looks like"] or "").partition(" · ")
+            if not kind or kind == r["Type"] or final_kind(steps_from_json(r[f"{which} steps"])):
+                continue
+            out.append((str(r["Common name"]), f"{name} looks like {kind}"
+                        + (f" ({detail})" if detail else "") + f" - read as {r['Type']}"))
+    return out
 
 
 def _value_set(series: pd.Series, cap: int = 20000) -> set[str]:
@@ -297,7 +364,7 @@ def match_columns_by_data(A: Side, B: Side, spare_a: list[str], spare_b: list[st
 
 
 def pair_rows(cmap: pd.DataFrame, found: dict[str, str], A: Side, B: Side,
-              matched: str = "data") -> pd.DataFrame:
+              matched: str = "data", looks: dict | None = None) -> pd.DataFrame:
     """Put the pairs found by data or by Auto into the table."""
     rows = cmap.to_dict("records")
     for a, b in found.items():
@@ -310,8 +377,9 @@ def pair_rows(cmap: pd.DataFrame, found: dict[str, str], A: Side, B: Side,
         if rb["A column"]:                      # b already paired elsewhere: leave it
             continue
         rows.remove(rb)
-        ra.update(_row(a, b, A, B, name=ra["Common name"], matched=matched,
-                       key=ra["Key"], compare=True, a_steps=ra["A steps"], b_steps="[]"))
+        ra.update(_row(a, b, A, B, name=ra["Common name"], matched=matched, key=ra["Key"],
+                       compare=True, case=ra["Case"], a_steps=ra["A steps"], b_steps="[]",
+                       looks=looks))
     _sort(rows, A, B)
     _unique_names(rows)
     return pd.DataFrame(rows, columns=MAP_COLS)

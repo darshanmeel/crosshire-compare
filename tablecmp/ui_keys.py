@@ -23,11 +23,11 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
                         "*Key* in the table.")
         else:
             st.markdown("No key ticked. Rows can still be compared:")
-            mode = st.radio("Without a key", ["hash", "position"], key="nokey_mode",
-                            label_visibility="collapsed", horizontal=True,
-                            format_func=lambda m: {
-                                "hash": "match identical rows by hashing the compared columns",
-                                "position": "pair by position - line 1 against line 1"}[m])
+            st.radio("Without a key", ["hash", "position"], key="nokey_mode",
+                     label_visibility="collapsed", horizontal=True,
+                     format_func=lambda m: {
+                         "hash": "match identical rows by hashing the compared columns",
+                         "position": "pair by position - line 1 against line 1"}[m])
             st.caption("Hashing finds the rows that are identical on every compared column and "
                        "reports the rest as one-sided, with the columns whose values only exist "
                        "on one side - useful when there is no key at all. Position only works "
@@ -98,9 +98,17 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
         if (report["Unique"] == "yes").all():
             u2.success(f"**{' + '.join(keys)}** identifies a single row on both sides.")
         else:
-            dup = report[report["Unique"] == "no"]
-            u2.warning("This key is not unique on " + " and ".join(
-                f"{r['Side']} ({r['Duplicate rows']:,} duplicate rows)" for _, r in dup.iterrows())
-                + ". Rows sharing a key are paired in file order, which can produce "
-                  "differences that are really mis-pairing. Tick another column.")
+            nulls = report[report["Null keys"] > 0]
+            dup = report[report["Duplicate rows"] > 0]
+            said = []
+            if len(nulls):
+                said.append("This key is null on " + " and ".join(
+                    f"{r['Null keys']:,} rows of {r['Side']}" for _, r in nulls.iterrows())
+                    + " - those rows cannot match.")
+            if len(dup):
+                said.append("This key is not unique on " + " and ".join(
+                    f"{r['Side']} ({r['Duplicate rows']:,} duplicate rows)" for _, r in dup.iterrows())
+                    + ". Rows sharing a key are paired in file order, which can produce "
+                      "differences that are really mis-pairing. Tick another column.")
+            u2.warning(" ".join(said))
     return "key" if keys else st.session_state.get("nokey_mode", "hash")

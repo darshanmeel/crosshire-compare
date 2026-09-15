@@ -1,6 +1,7 @@
 # tests/test_apptest.py
 """The whole app, headless: files in, Auto, compare, save - and the same through a DuckDB database."""
-import json, os
+import json
+import os
 from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
@@ -47,15 +48,39 @@ def _finish(at):
     return res
 
 
+def _name_hints(at) -> list[str]:
+    return [c.value for c in at.sidebar.caption if "Name this side" in c.value]
+
+
 def test_file_flow(monkeypatch, tmp_path):
     at = _boot(monkeypatch, tmp_path)
+    assert not _name_hints(at)                     # nothing loaded, nothing to name yet
     for tag, f in (("A", "hr_employees.csv"), ("B", "payroll_employees.csv")):
         at.radio(key=f"how_{tag}").set_value("Path on disk").run()
         at.text_input(key=f"pt_{tag}").input(str(EX / f)).run()
         _ok(at.button(key=f"load_{tag}").click().run())
         assert at.session_state[tag].loaded, tag
+    assert len(_name_hints(at)) == 2               # both file sides still called Left / Right
     res = _finish(at)
-    assert res["pair"] == "hr_employees_compare_payroll_employees"
+    assert res["pair"] == "Left_compare_Right"     # the defaults, not the file stems
+
+
+def test_side_names_name_the_files(monkeypatch, tmp_path):
+    """The Name boxes decide the pair: HR and Directory give HR_compare_Directory, every file follows."""
+    at = _boot(monkeypatch, tmp_path)
+    at.text_input(key="nick_A").input("HR").run()
+    at.text_input(key="nick_B").input("Directory").run()
+    for tag, f in (("A", "hr_employees.csv"), ("B", "payroll_employees.csv")):
+        _load_path(at, tag, EX / f)
+        assert at.session_state[tag].loaded, tag
+    assert not _name_hints(at)                     # named sides get no reminder
+    res = _finish(at)
+    assert res["pair"] == "HR_compare_Directory"
+    names = {p.name for p in Path(res["folder"]).iterdir()}
+    assert names and all(n.startswith("HR_compare_Directory__") for n in names), names
+    js = json.loads((Path(res["folder"]) / "HR_compare_Directory__summary.json").read_text(encoding="utf-8"))
+    assert js["pair"] == "HR_compare_Directory"
+    assert js["sources"]["A"]["name"] == "HR" and js["sources"]["B"]["name"] == "Directory"
 
 
 def test_database_flow(monkeypatch, tmp_path):
@@ -71,6 +96,7 @@ def test_database_flow(monkeypatch, tmp_path):
         _ok(at.button(key=f"load_{tag}").click().run())
         side = at.session_state[tag]
         assert side.loaded and side.is_database and side.kind == "parquet", tag
+    assert not _name_hints(at)                     # a database side is called after its connection
     res = _finish(at)
     assert res["pair"] == "SAMPLE_compare_SAMPLE"
     js = json.loads((Path(res["folder"]) / f"{res['pair']}__summary.json").read_text(encoding="utf-8"))

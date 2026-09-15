@@ -26,12 +26,18 @@ from .profile import label
 from .sources import Side, work_dir
 from .sql import ident, lit, scratch
 from .theme import THEME
-from .values import ColSpec, ReadOptions, register
+from .values import FALLBACK_FORMATS, ColSpec, ReadOptions, register
 
 OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "not in", "between", "like", "is null", "is not null"]
 OP_MAP = {"=": "eq", "!=": "ne", ">": "gt", ">=": "ge", "<": "lt", "<=": "le",
           "in": "in", "not in": "not_in", "between": "between", "like": "like",
           "is null": "is_null", "is not null": "not_null"}
+# how a boolean column spells the value a filter may be typed with
+BOOL_WORDS = {"true": "true", "t": "true", "yes": "true", "y": "true", "1": "true",
+              "false": "false", "f": "false", "no": "false", "n": "false", "0": "false"}
+# settings that change what is shown, not what the answer is
+DISPLAY_KEYS = ("name", "notes", "table_formats", "display_rows", "matched_by")
+ENGINE_HTML_ROWS = 2000                 # rows per tab in the engine's own diff.html
 # A rows sit on the page's bg with its text colour, B rows the other way round - the two sides
 # read as black and cream. The differing cells use the theme's four diff tokens.
 LEFT_BG, RIGHT_BG = THEME["bg"], THEME["text"]
@@ -79,7 +85,38 @@ class Outcome:
 
 
 # ---- filters -----------------------------------------------------------------
-def build_filters(rows: pd.DataFrame, name_a: str, name_b: str) -> tuple[dict, dict, dict]:
+def date_texts(col: str, values: list[str], full: bool) -> list[str]:
+    """Each typed value as the ISO text a date column holds - read the way the column is,
+    any of the usual spellings - so the engine compares like with like and never sees a
+    ConversionException. `full` keeps the time of day (a timestamp column); otherwise a
+    value at midnight is a plain date. A value that is not a date raises ValueError."""
+    if not values:
+        return []
+    fl = "[" + ", ".join(lit(f) for f in FALLBACK_FORMATS) + "]"
+    ts = f"coalesce(try_cast(v AS TIMESTAMP), try_strptime(v, {fl}))"
+    day = f"CAST({ts} AS DATE)"
+    text = (f"CAST({ts} AS VARCHAR)" if full
+            else f"CASE WHEN {ts} = CAST({day} AS TIMESTAMP) THEN CAST({day} AS VARCHAR) "
+                 f"ELSE CAST({ts} AS VARCHAR) END")
+    con = scratch()
+    got = con.execute(f"SELECT v, {text} FROM (SELECT unnest([{', '.join(lit(v) for v in values)}]) AS v)"
+                      ).fetchall()
+    con.close()
+    out = []
+    for v, t in got:
+        if t is None:
+            raise ValueError(f"filter on {col!r}: {v!r} is not a date")
+        out.append(str(t))
+    return out
+
+
+def build_filters(rows: pd.DataFrame, name_a: str, name_b: str,
+                  specs: list[ColSpec] | None = None) -> tuple[dict, dict, dict]:
+    """The Rows filters as the engine's dicts: (both, left, right). With the column specs a
+    value is spelled the way its column is: True / yes / 1 on a boolean column is "true",
+    a date in any of the usual spellings is ISO text, and a value that is not a date at
+    all is refused with a sentence before the engine ever sees it."""
+    kinds = {s.canon: s.kind for s in specs or []}
     both: dict[str, Any] = {}
     left: dict[str, Any] = {}
     right: dict[str, Any] = {}
@@ -104,6 +141,14 @@ def build_filters(rows: pd.DataFrame, name_a: str, name_b: str) -> tuple[dict, d
             spec[key] = parts
         else:
             spec[key] = raw
+        if key not in ("like", "is_null", "not_null"):
+            own = kinds.get(col, "text")
+            values = spec[key] if isinstance(spec[key], list) else [spec[key]]
+            if own == "boolean" and kind in ("auto", "string"):
+                values = [BOOL_WORDS.get(v.lower(), v) for v in values]
+            elif kind == "date" or (kind == "auto" and own in ("date", "timestamp")):
+                values = date_texts(col, values, full=kind == "auto" and own == "timestamp")
+            spec[key] = values if isinstance(spec[key], list) else values[0]
         where = str(r.get("Apply to") or "Both")
         target = both if where == "Both" else left if where == name_a else \
             right if where == name_b else both
@@ -143,10 +188,11 @@ def filter_sql(filters: dict) -> str:
 
 
 def signature(a: Side, b: Side, cfg: dict) -> str:
-    """Everything that changes the answer. Used to spot a stale result."""
+    """Everything that changes the answer. Used to spot a stale result. The name, the notes,
+    the table formats, the rows shown on screen and how the pairs were matched do not."""
     payload = {"a": [a.label, a.rows, a.read_key, list(a.schema)],
                "b": [b.label, b.rows, b.read_key, list(b.schema)],
-               "cfg": {k: v for k, v in cfg.items() if k not in ("name", "notes", "table_formats")}}
+               "cfg": {k: v for k, v in cfg.items() if k not in DISPLAY_KEYS}}
     return json.dumps(payload, sort_keys=True, default=str)
 
 
@@ -214,8 +260,8 @@ def engine_compare(con, cfg: dict, folder: Path, out: Path, keys: list[str], say
         "filters": cfg["filters"],
         "left_filters": cfg["left_filters"],
         "right_filters": cfg["right_filters"],
-        "html_limit": cfg["display_rows"],
-        "html_all_limit": cfg["display_rows"],
+        "html_limit": ENGINE_HTML_ROWS,      # the rows shown on screen are display-only
+        "html_all_limit": ENGINE_HTML_ROWS,
         "write_empty": True,                 # the fixed file set: empty tables keep their header
         "mode": "key" if keys else "row_number",
         "case_insensitive_columns": False,   # our views already carry the exact canonical names

@@ -38,12 +38,19 @@ def probe(A: Side, B: Side, specs: list[ColSpec], opts: ReadOptions):
 
 def key_uniqueness(A: Side, B: Side, specs: list[ColSpec], keys: list[str],
                    name_a: str, name_b: str, opts: ReadOptions) -> pd.DataFrame:
+    """Per side: rows, distinct keys and duplicate rows among the rows that have a key, and
+    the rows where any key column is null - those identify nothing, so they are neither
+    distinct nor duplicates, and a key with any is not unique."""
     con = probe(A, B, [s for s in specs if s.canon in keys], opts)
+    missing = " OR ".join(f"{ident(k)} IS NULL" for k in keys)
     rows = []
     for view, label in (("probe_a", name_a), ("probe_b", name_b)):
-        n, d = con.execute(f"SELECT count(*), count(DISTINCT {combo(keys)}) FROM {view}").fetchone()
-        rows.append({"Side": label, "Rows": n, "Distinct keys": d,
-                     "Duplicate rows": n - d, "Unique": "yes" if n == d else "no"})
+        n, d, nulls = con.execute(
+            f"SELECT count(*), count(DISTINCT {combo(keys)}) FILTER (WHERE NOT ({missing})), "
+            f"count(*) FILTER (WHERE {missing}) FROM {view}").fetchone()
+        dup = n - nulls - d
+        rows.append({"Side": label, "Rows": n, "Distinct keys": d, "Duplicate rows": dup,
+                     "Null keys": nulls, "Unique": "yes" if not dup and not nulls else "no"})
     return pd.DataFrame(rows)
 
 

@@ -9,9 +9,9 @@ from .sources import Side
 from .state import bump, forget_results
 from .theme import esc
 from .ui_columns import Setup
-from .values import (CONVERSIONS, FORMAT_PRESETS, NUMERIC_PARAMS, PARAM_LABELS, STEPS, TYPES,
+from .values import (FORMAT_PRESETS, NUMERIC_PARAMS, PARAM_LABELS, STEPS, TYPES,
                      ReadOptions, blank_param, conversion_report, describe_step, final_kind,
-                     function_catalog, has_x, steps_from_json, try_steps)
+                     function_catalog, has_x, try_steps)
 
 
 def _steps_html(steps: list) -> str:

@@ -1,7 +1,7 @@
 # tests/test_keys.py
 from pathlib import Path
 
-from tablecmp.keys import suggest_keys
+from tablecmp.keys import key_uniqueness, suggest_keys
 from tablecmp.profile import profile_singles, profile_tables
 from tablecmp.sources import Side, file_stamp, source_schema
 from tablecmp.values import ColSpec, ReadOptions
@@ -150,6 +150,30 @@ def test_nulls_are_counted(tmp_path):
     row = table[table["Key columns"].str.contains("id")].iloc[0]     # id alone is not unique: grown
     assert "20 nulls" in row["Why"]
     assert "no nulls" in table[table["Key columns"] == "code"].iloc[0]["Why"]
+
+
+def test_key_uniqueness_counts_null_keys_apart_from_duplicates(tmp_path):
+    """A row with no key identifies nothing: it is neither a distinct key nor a duplicate,
+    and a key that is null on every row is not 'not unique, n-1 duplicate rows'."""
+    rows_a = [["" if i % 10 == 0 else i, f"C{i}"] for i in range(100)]          # 10 empty ids
+    rows_b = [[i // 2, f"C{i}"] for i in range(100)]                            # every id twice
+    A, B = _csv_sides(tmp_path, ["id", "code"], rows_a, rows_b)
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("id", "code")]
+    report = key_uniqueness(A, B, specs, ["id"], "a", "b", OPTS).set_index("Side")
+    assert list(report.columns) == ["Rows", "Distinct keys", "Duplicate rows", "Null keys", "Unique"]
+    assert report.loc["a"].to_dict() == {"Rows": 100, "Distinct keys": 90, "Duplicate rows": 0,
+                                         "Null keys": 10, "Unique": "no"}
+    assert report.loc["b"].to_dict() == {"Rows": 100, "Distinct keys": 50, "Duplicate rows": 50,
+                                         "Null keys": 0, "Unique": "no"}
+    # a two-column key is null when any of its columns is
+    two = key_uniqueness(A, B, specs, ["id", "code"], "a", "b", OPTS).set_index("Side")
+    assert two.loc["a"]["Null keys"] == 10 and two.loc["b"]["Unique"] == "yes"
+    # null on every row: no duplicates to speak of
+    (tmp_path / "all").mkdir()
+    A2, B2 = _csv_sides(tmp_path / "all", ["id", "code"], [["", f"C{i}"] for i in range(20)], rows_b[:20])
+    allnull = key_uniqueness(A2, B2, specs, ["id"], "a", "b", OPTS).set_index("Side")
+    assert allnull.loc["a"].to_dict() == {"Rows": 20, "Distinct keys": 0, "Duplicate rows": 0,
+                                          "Null keys": 20, "Unique": "no"}
 
 
 def test_profile_feeds_keys_and_notes():

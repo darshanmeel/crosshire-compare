@@ -161,6 +161,9 @@ def source_panel(tag: str) -> None:
                    + (f"  ·  fetched {side.fetched_at}" if side.fetched_at else "")
                    + (f"  ·  capped at {side.cap:,}" if side.capped else "")
                    + ("  ·  Parquet snapshot" if side.cache_path else ""))
+        box = (st.session_state.get(f"nick_{tag}") or "").strip()
+        if not side.is_database and box in ("", DEFAULT_NAMES[tag]):
+            st.caption("Name this side - it names every output file (left_compare_right).")
         if side.rows == 0:
             st.warning("The filter left no rows." if side.cut else
                        "The fetch returned no rows." if side.is_database else

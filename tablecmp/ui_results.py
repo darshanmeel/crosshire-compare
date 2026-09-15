@@ -39,14 +39,16 @@ def verdict(run: dict, NA: str, NB: str, stale: bool) -> tuple[str, str]:
     return tone, html
 
 
-def render(run: dict, A: Side, B: Side, NA: str, NB: str, stale: bool) -> None:
+def render(run: dict, A: Side, B: Side, NA: str, NB: str, stale: bool, limit: int | None = None) -> None:
+    """`limit` is the Rows to display box as it stands - display-only, so a run made under
+    another value is shown with this one rather than marked stale."""
     res: Outcome = run["result"]
     cfg = run["cfg"]
     mode = run["mode"]
     keys = list(res.keys or cfg["keys"]) if mode == "key" else []
     cols = list(res.columns_compared or cfg["compare_columns"])
     specs = {d["canon"]: ColSpec(**d) for d in cfg["specs"]}
-    limit = cfg["display_rows"]
+    limit = int(limit or cfg["display_rows"])
     _, html = verdict(run, NA, NB, stale)
     st.markdown(html, unsafe_allow_html=True)
 
@@ -264,8 +266,10 @@ def save_row(files: dict[str, bytes | Path], label: str, key: str, run: dict) ->
     base = Path(st.session_state.get("save_dir") or default_save_dir())
     box = f"{key}_dir"
     # a keyed text box keeps whatever it holds, whatever `value` says - so when a new run arrives
-    # the box is set through session state, once, and then left to the user
-    if st.session_state.get(f"{box}_for") != run["run_id"]:
+    # the box is set through session state, once, and then left to the user. Streamlit drops the
+    # box's state on a rerun that stops before it is drawn (Write Parquet copies), so a box that
+    # is gone is seeded again too
+    if st.session_state.get(f"{box}_for") != run["run_id"] or box not in st.session_state:
         st.session_state[box] = str(default_save_folder(run, base))
         st.session_state[f"{box}_for"] = run["run_id"]
     c1, c2 = st.columns([3, 1])

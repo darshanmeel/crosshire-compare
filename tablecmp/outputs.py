@@ -3,7 +3,8 @@
 <pair>__<run_id>/ with <pair>__summary.json (the whole run for a script), __summary.csv
 (one row, fixed columns), __columns.csv, __profile.csv when a profile ran, the engine's
 __cell_diffs / __left_only / __right_only / __diff.html, __paired.csv, __report.html, the same
-tables as Parquet on a switch, and a zip of the lot. <pair> is <left>_compare_<right>.
+tables as Parquet on a switch, and a zip of the lot. <pair> is <left>_compare_<right>, from the
+side names - the Name box, else a database side's connection, else Left / Right.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-from .sources import Side, out_dir, work_dir
+from .sources import Side, out_dir, slug, work_dir
 from .sql import lit
 
 SCHEMA_VERSION = 1
@@ -31,8 +32,8 @@ SETTINGS_KEYS = ["mode", "keys", "compare_columns", "only_a", "only_b", "trim", 
                  "ignore_case", "tolerance", "column_rules", "filters", "left_filters", "right_filters",
                  "null_tokens", "specs", "table_formats"]
 TABLES = ["cell_diffs", "left_only", "right_only", "paired", "columns", "profile"]
-COLUMNS_HEADER = ["column", "name_a", "name_b", "role", "read_as", "matched", "mismatched", "match_pct",
-                  "values_only_a", "values_only_b"]
+COLUMNS_HEADER = ["column", "name_a", "name_b", "role", "read_as", "matched_by", "matched", "mismatched",
+                  "match_pct", "values_only_a", "values_only_b"]
 PROFILE_HEADER = ["column", "side", "rows", "nulls", "null_pct", "distinct", "distinct_pct", "min", "max",
                   "mean", "avg_length"]
 # what the sweep may remove from the work folder: run folders and zips (<pair>__<run_id>),
@@ -61,8 +62,9 @@ def verdict_of(res, mode: str = "key") -> Verdict:
     return Verdict("differences", "bad", "Differences")
 
 
-def pair_name(A: Side, B: Side) -> str:
-    return f"{A.stem or 'Left'}_compare_{B.stem or 'Right'}"
+def pair_name(name_a: str, name_b: str) -> str:
+    """<left>_compare_<right> from the two side names, slugged; a blank side falls back to Left / Right."""
+    return f"{slug(name_a) or 'Left'}_compare_{slug(name_b) or 'Right'}"
 
 
 def run_id(started: datetime | None = None) -> str:
@@ -97,12 +99,17 @@ def _source_block(s: Side, rows_read: int) -> dict:
 
 
 def columns_frame(run: dict) -> pd.DataFrame:
-    """The column sheet with machine headers - the report and the UI rename for display."""
+    """The column sheet with machine headers - the report and the UI rename for display.
+    matched_by is how each pair was made, from the column table (name, similar name, data,
+    guess - check, you, file); blank on a one-sided column."""
     from .compare import column_ledger
     df = column_ledger(run, "A", "B").rename(columns={
         "Column": "column", "A": "name_a", "B": "name_b", "Role": "role", "Read as": "read_as",
         "Matched": "matched", "Mismatched": "mismatched", "Match %": "match_pct",
         "Values only in A": "values_only_a", "Values only in B": "values_only_b"})
+    how = run["cfg"].get("matched_by") or {}
+    paired = (df["name_a"] != "—") & (df["name_b"] != "—")
+    df["matched_by"] = [how.get(c) if p else None for c, p in zip(df["column"], paired)]
     for c in COLUMNS_HEADER:
         if c not in df.columns:
             df[c] = None

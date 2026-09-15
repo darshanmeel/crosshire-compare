@@ -23,6 +23,7 @@ NUMERIC_TYPES = ("INT", "DECIMAL", "NUMERIC", "DOUBLE", "FLOAT", "REAL", "BIGINT
                  "SMALLINT", "TINYINT", "HUGEINT", "NUMBER")
 DATE_TYPES = ("DATE", "TIMESTAMP", "DATETIME")
 TYPES = ["text", "number", "date", "timestamp", "boolean"]
+CASES = ["", "ignore", "exact"]         # a text pair's case: blank follows the global switch
 FALLBACK_FORMATS = ["%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
                     "%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y%m%d",
                     "%d-%b-%Y", "%d %b %Y", "%b %d %Y"]
@@ -93,7 +94,11 @@ class ReadOptions:
 
 @dataclass
 class ColSpec:
-    """One shared column: where it comes from on each side and how it is read."""
+    """One shared column: where it comes from on each side and how it is read.
+
+    `case` is a text pair's own say on case - "ignore", "exact", or "" to follow the
+    Ignore case in values switch; a pair of any other Type takes no notice of it.
+    """
     canon: str
     a_src: str
     b_src: str
@@ -101,6 +106,7 @@ class ColSpec:
     a_steps: list = field(default_factory=list)
     b_steps: list = field(default_factory=list)
     tolerance: float = 0.0
+    case: str = ""
 
     def src(self, which: str) -> str:
         return self.a_src if which == "A" else self.b_src
@@ -111,9 +117,18 @@ class ColSpec:
     def tx(self, which: str) -> str:
         return compile_steps(self.steps(which))
 
+    def case_rule(self) -> bool | None:
+        """The engine's ignore_case for this column: True, False, or None to follow the switch."""
+        if self.kind != "text" or self.case not in ("ignore", "exact"):
+            return None
+        return self.case == "ignore"
+
     def describe(self, which: str | None = None) -> str:
-        """How the column is read, for captions: 'date · B: trim → to date (%d/%m/%Y)'."""
+        """How the column is read, for captions: 'date · B: trim → to date (%d/%m/%Y)',
+        'text · ignore case'."""
         bits = [self.kind]
+        if self.case_rule() is not None:
+            bits.append(f"{self.case} case")
         for w in ([which] if which else ["A", "B"]):
             d = describe_steps(self.steps(w))
             if d:

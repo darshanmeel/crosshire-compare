@@ -213,7 +213,7 @@ status_strip(strip, files_cell, cols_cell, key_cell,
              f"{len(setup.compare)} columns", "not run",
              {"Key": "" if setup.keys else "warn", "Columns": "" if setup.specs else "warn"})
 if not setup.specs:
-    st.warning(f"Nothing is paired yet - pick a counterpart for at least one column in the table.")
+    st.warning("Nothing is paired yet - pick a counterpart for at least one column in the table.")
     st.stop()
 
 # ---- Values -----------------------------------------------------------------
@@ -238,8 +238,9 @@ key_cell = " + ".join(setup.keys) if setup.keys else f"none - {mode}"
 # ---- Rows and profile ---------------------------------------------------------
 st.subheader("Rows")
 with st.expander("Filters - which rows take part, on the common names", expanded=False):
-    st.caption("Applied to both sides after types. To shrink a big file before it is even "
-               "read, use *Rows to read* under that file in the sidebar.")
+    st.caption("Applied to both sides after types. Values are matched exactly - the Ignore case "
+               "switch does not apply to filters. To shrink a big file before it is even read, "
+               "use *Rows to read* under that file in the sidebar.")
     blank = pd.DataFrame([{"Apply to": "Both", "Column": "", "Operator": "=", "Value": "", "Type": "auto"}])
     filter_rows = st.data_editor(
         blank, num_rows="dynamic", width="stretch", hide_index=True, key="filters",
@@ -313,17 +314,22 @@ auto_rerun = d2.checkbox("Re-run on every change", value=False, key="auto_rerun"
 go = d3.button("Compare", type="primary", width="stretch", key="go")
 
 try:
-    both_f, left_f, right_f = build_filters(filter_rows, NA, NB)
+    both_f, left_f, right_f = build_filters(filter_rows, NA, NB, setup.specs)
     filter_error = None
 except ValueError as exc:
     both_f, left_f, right_f, filter_error = {}, {}, {}, str(exc)
 
 column_rules = {s.canon: {"type": "number", **({"tolerance": s.tolerance} if s.tolerance else {})}
                 for s in setup.specs if s.kind == "number" and s.canon in setup.compare}
+# a text pair with its own Case beats the Ignore case in values switch
+column_rules.update({s.canon: {"type": "string", "ignore_case": s.case_rule()}
+                     for s in setup.specs if s.case_rule() is not None and s.canon in setup.compare})
 pending = {
-    "name": pair_name(A, B),
+    "name": pair_name(NA, NB),
     "notes": list(st.session_state.get("auto_notes") or []),
     "table_formats": sorted(table_formats(st.session_state.get("out_fmt"))),
+    "matched_by": {str(r["Common name"]): str(r["Matched by"]) for _, r in setup.cmap.iterrows()
+                   if r["A column"] and r["B column"]},
     "mode": mode, "keys": setup.keys, "specs": [asdict(s) for s in setup.specs],
     "compare_columns": setup.compare, "only_a": list(setup.only_a), "only_b": list(setup.only_b),
     "trim": trim, "empty_as_null": empty_as_null,
@@ -331,7 +337,7 @@ pending = {
     "filters": both_f, "left_filters": left_f, "right_filters": right_f,
     "display_rows": int(display_rows), "null_tokens": st.session_state.get("null_tokens", NULL_TOKENS_DEFAULT),
 }
-sig = signature(A, B, pending)                   # name, notes and table_formats do not make a run stale
+sig = signature(A, B, pending)                   # display-only settings (DISPLAY_KEYS) do not make a run stale
 run = st.session_state.result
 stale = bool(run) and run.get("signature") != sig
 auto_go = st.session_state.pop("auto_go", False)
@@ -363,35 +369,32 @@ def write_outputs(new_run: dict, cfg: dict, profile: dict | None) -> None:
         st.warning(f"The summary files could not be written to the run folder: {exc}")
 
 
-if go or auto_go or (stale and auto_rerun):
-    if filter_error:
-        st.error(filter_error)
-    else:
-        try:
-            with st.status("Comparing…", expanded=True) as box:
-                t0 = time.perf_counter()
-                new_run = run_comparison(A, B, pending, OPTS, sig, previous=run, progress=box.write)
-                box.update(label=f"Compared in {time.perf_counter() - t0:.1f}s", state="complete",
-                           expanded=False)
-            if new_run["result"].error:
-                st.error(f"The engine reported: {new_run['result'].error}"
-                         + (" - the previous result is still shown below." if run else ""))
-                discard_run(new_run)
-            else:
-                st.session_state.result, previous = new_run, run
-                run, stale = new_run, False
-                discard_run(previous)              # only now is it safe to drop the old files
-                write_outputs(new_run, pending, current_profile(profile_key))
-        except (duckdb.Error, RuntimeError, ValueError, KeyError) as exc:
-            st.error(f"The comparison failed: {exc}" + (" - the previous result is still shown below."
-                                                        if run else ""))
+if filter_error:                                  # shown once, whether or not Compare was pressed
+    st.error(filter_error)
+elif go or auto_go or (stale and auto_rerun):
+    try:
+        with st.status("Comparing…", expanded=True) as box:
+            t0 = time.perf_counter()
+            new_run = run_comparison(A, B, pending, OPTS, sig, previous=run, progress=box.write)
+            box.update(label=f"Compared in {time.perf_counter() - t0:.1f}s", state="complete",
+                       expanded=False)
+        if new_run["result"].error:
+            st.error(f"The engine reported: {new_run['result'].error}"
+                     + (" - the previous result is still shown below." if run else ""))
+            discard_run(new_run)
+        else:
+            st.session_state.result, previous = new_run, run
+            run, stale = new_run, False
+            discard_run(previous)                  # only now is it safe to drop the old files
+            write_outputs(new_run, pending, current_profile(profile_key))
+    except (duckdb.Error, RuntimeError, ValueError, KeyError) as exc:
+        st.error(f"The comparison failed: {exc}" + (" - the previous result is still shown below."
+                                                    if run else ""))
 
 if not run:
     status_strip(strip, files_cell, cols_cell, key_cell, f"{len(setup.compare)} columns",
                  "press Compare", {"Result": "warn", "Key": "" if setup.keys else "warn"})
     st.stop()
-if filter_error:
-    st.error(filter_error)
 
 res = run["result"]
 tone, _ = ui_results.verdict(run, NA, NB, stale)
@@ -404,4 +407,4 @@ if stale:
     st.warning("Settings have changed since this comparison ran - the result below is from "
                "the previous settings. Press **Compare** to bring it up to date.")
 st.markdown("---")
-ui_results.render(run, A, B, NA, NB, stale)
+ui_results.render(run, A, B, NA, NB, stale, limit=int(display_rows))

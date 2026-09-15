@@ -216,6 +216,19 @@ def _key_row(res: Outcome, keys: list[str], name_a: str, name_b: str, notes: lis
     return text
 
 
+def _case_bit(cfg: dict) -> str:
+    """'case ignored' or 'case matters', then the columns whose own Case overrides the switch:
+    'case matters · <b>ignored on: city</b>'."""
+    ignore = bool(cfg.get("ignore_case"))
+    rules = cfg.get("column_rules") or {}
+    against = sorted(c for c, r in rules.items() if isinstance(r, dict)
+                     and r.get("ignore_case") is not None and bool(r["ignore_case"]) != ignore)
+    text = "<b>case ignored</b>" if ignore else "case matters"
+    if against:
+        text += f" · <b>{'exact' if ignore else 'ignored'} on: {esc(', '.join(against))}</b>"
+    return text
+
+
 def _values_row(cfg: dict) -> str:
     """How values were read before comparing; anything off the default in bold."""
     tol = cfg.get("tolerance") or 0
@@ -224,7 +237,7 @@ def _values_row(cfg: dict) -> str:
         tokens = [t.strip() for t in tokens.split(",") if t.strip()]
     bits = ["trim spaces" if cfg.get("trim", True) else "<b>keep spaces</b>",
             "empty is null" if cfg.get("empty_as_null", True) else "<b>empty is a value</b>",
-            "<b>case ignored</b>" if cfg.get("ignore_case") else "case matters",
+            _case_bit(cfg),
             f"<b>tolerance {tol}</b>" if tol else f"tolerance {tol}",
             "null tokens: " + (esc(", ".join(str(t) for t in tokens)) or "none")]
     return " · ".join(bits)
@@ -316,7 +329,8 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
 
     # settings card
     steps_rows = [f"<div><code>{esc(s.canon)}</code> {esc(s.describe())}</div>"
-                  for s in specs if s.canon in keys + cols and (s.a_steps or s.b_steps or s.kind != 'text')]
+                  for s in specs if s.canon in keys + cols
+                  and (s.a_steps or s.b_steps or s.kind != 'text' or s.case_rule() is not None)]
     rows = [("Sources", _source_row(name_a, A, res.rows_left_read, payload["sources"]["A"]["path"]) + "<br>"
                         + _source_row(name_b, B, res.rows_right_read, payload["sources"]["B"]["path"]))]
     if by_key:

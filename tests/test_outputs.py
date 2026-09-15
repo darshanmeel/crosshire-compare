@@ -17,9 +17,12 @@ HERE = Path(__file__).resolve().parent.parent / "examples"
 
 
 def test_pair_name_defaults_and_slugs():
-    assert out.pair_name(Side(), Side()) == "Left_compare_Right"
-    assert out.pair_name(Side(name="prod", label="x.parquet", conn="prod"),
-                         Side(label="payroll employees.csv")) == "prod_compare_payroll_employees"
+    """The side names name the pair - not the file stems - slugged, with Left / Right as fallbacks."""
+    assert out.pair_name("Left", "Right") == "Left_compare_Right"
+    assert out.pair_name("", "") == "Left_compare_Right"
+    assert out.pair_name("HR", "Directory") == "HR_compare_Directory"
+    assert out.pair_name("prod", "payroll employees") == "prod_compare_payroll_employees"
+    assert out.pair_name("  HR / Sept 2026 ", "***") == "HR_Sept_2026_compare_Right"
 
 
 @pytest.mark.parametrize("diff,only,matched,word", [(0, 0, 100, "Identical"), (3, 0, 100, "Small differences"),
@@ -50,14 +53,15 @@ def _run(tmp_path, monkeypatch, fmt="csv", mode="key"):
     specs = [ColSpec(canon="emp_id", a_src="emp_id", b_src="EmployeeId", kind="text"),
              ColSpec(canon="department", a_src="department", b_src="Dept", kind="text"),
              ColSpec(canon="active", a_src="active", b_src="IsActive", kind="boolean")]
-    # the app passes pair_name(A, B) (hr_employees_compare_payroll_employees here); a short name keeps
+    # the app passes pair_name(NA, NB) (Left_compare_Right unless the sides are named); a short name keeps
     # the assertions readable - the engine and the writers take whatever cfg["name"] says
     cfg = {"name": "hr_compare_payroll", "mode": mode, "keys": ["emp_id"] if mode == "key" else [],
            "specs": [s.__dict__ for s in specs],
            "compare_columns": ["department", "active"], "only_a": ["salary"], "only_b": ["CostCenter"],
            "trim": True, "empty_as_null": True, "ignore_case": False, "tolerance": 0.0, "column_rules": {},
            "filters": {}, "left_filters": {}, "right_filters": {}, "display_rows": 100,
-           "null_tokens": ["NULL"], "table_formats": [fmt] if fmt != "both" else ["csv", "parquet"]}
+           "null_tokens": ["NULL"], "table_formats": [fmt] if fmt != "both" else ["csv", "parquet"],
+           "matched_by": {"emp_id": "name", "department": "similar name", "active": "you"}}
     opts = ReadOptions(tokens=("NULL", ""), trim=True)
     return run_comparison(A, B, cfg, opts, "sig"), A, B
 
@@ -86,9 +90,17 @@ def test_run_folder_has_every_file(tmp_path, monkeypatch):
     assert rows[0] == out.SUMMARY_COLUMNS and len(rows) == 2
     with open(folder / "hr_compare_payroll__columns.csv", newline="") as fh:
         cols = list(csv.DictReader(fh))
+    assert list(cols[0]) == out.COLUMNS_HEADER
     assert {c["column"] for c in cols} >= {"emp_id", "department", "active", "salary", "CostCenter"}
     assert next(c for c in cols if c["column"] == "department")["role"] == "compared"
+    # matched_by: how each pair was made, from the column table; blank on a one-sided column
+    by = {c["column"]: c["matched_by"] for c in cols}
+    assert by["emp_id"] == "name" and by["department"] == "similar name" and by["active"] == "you"
+    assert by["salary"] == "" and by["CostCenter"] == ""
+    assert "matched_by" not in js["settings"]                      # not a setting: display-only
     assert run["verdict"].status == "differences" and run["pair"] == "hr_compare_payroll"
+    run["cfg"].pop("matched_by")                                   # an older cfg without it: blanks
+    assert out.columns_frame(run)["matched_by"].isna().all()
 
 
 def test_paired_file_and_value_pairs(tmp_path, monkeypatch):

@@ -1,10 +1,8 @@
 # tests/test_ui_results.py
 """The results page: the verdict from the run, the report reused rather than rebuilt, the Downloads
 tab - zip, Parquet on the switch, saves in a per-run folder under COMPARE_OUT_DIR."""
-import os
 from pathlib import Path
 
-import pytest
 
 from tablecmp import ui_results
 from tests.test_outputs import _run          # the sample run helper
@@ -71,7 +69,7 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     run = at.session_state["result"]
     pair, rid = run["pair"], run["run_id"]
     folder = Path(run["folder"])
-    assert pair == "hr_employees_compare_payroll_employees"
+    assert pair == "Left_compare_Right"            # the side names, left at their defaults
     # the report was built when the run finished; the results page reuses it
     html = run["_report"]
     assert html and (folder / f"{pair}__report.html").exists()
@@ -125,11 +123,21 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     assert not any(b.key == "write_pq" for b in at.button)
     with zipfile.ZipFile(run["zip"]) as zf:
         assert f"{pair}__paired.parquet" in zf.namelist()
-    at.text_input(key="save_all_dir").set_value(str(saved)); at.run()
+    # the rerun behind Write Parquet copies stops before the save box is drawn, which drops its
+    # state: the box comes back with the run's own folder, not empty, and Save works at once
+    assert at.text_input(key="save_all_dir").value == str(saved)
     at.button(key="save_all").click(); at.run()
+    assert not any("Type a folder" in e.value for e in at.error)
     assert (saved / f"{pair}__paired.parquet").exists()
-    # a second run gets its own default folder, even though the box held a typed value
+    # Rows to display is display-only: the tables follow it, the run is not stale
+    at.text_input(key="save_all_dir").set_value(str(tmp_path / "out" / "typed")); at.run()
     at.number_input(key="disp_rows").set_value(500); at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["result"] is run and not any("Settings have changed" in w.value for w in at.warning)
+    assert any(e.label.startswith("Rows that differ") and "first 500 of" in e.label for e in at.expander)
+    assert run["_report_key"] == ("report", run["at"], 500)
+    # a second run gets its own default folder, even though the box held a typed value
+    assert at.text_input(key="save_all_dir").value == str(tmp_path / "out" / "typed")
     at.button(key="go").click(); at.run()
     assert not at.exception, at.exception
     run2 = at.session_state["result"]
@@ -137,3 +145,44 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     assert at.text_input(key="save_all_dir").value == str(tmp_path / "out" / f"{pair}__{run2['run_id']}")
     assert at.text_input(key="save_report_dir").value == str(tmp_path / "out" / f"{pair}__{run2['run_id']}")
     assert not Path(run["folder"]).exists() and not z.exists()      # the old run and its zip are gone
+
+
+def test_rows_filters_on_the_page(monkeypatch, tmp_path):
+    """A bad filter is one error on the page, before and after Compare; a boolean filter typed
+    True finds the rows the column holds as true; a date that is not one is refused in a sentence."""
+    import pandas as pd
+    import streamlit
+    typed = {"rows": None}
+    real = streamlit.data_editor
+
+    def filters_editor(data, *args, **kwargs):          # AppTest cannot edit a data_editor
+        if kwargs.get("key") == "filters" and typed["rows"] is not None:
+            return pd.DataFrame(typed["rows"], columns=["Apply to", "Column", "Operator", "Value", "Type"])
+        return real(data, *args, **kwargs)
+    monkeypatch.setattr(streamlit, "data_editor", filters_editor)
+
+    def row(col, op, val, where="Both", kind="auto"):
+        return {"Apply to": where, "Column": col, "Operator": op, "Value": val, "Type": kind}
+    at = _boot(monkeypatch, tmp_path)
+    run = at.session_state["result"]
+    typed["rows"] = [row("salary", "between", "3000", kind="number")]
+    at.run()
+    assert not at.exception, at.exception
+    assert len([e for e in at.error if "between" in e.value]) == 1
+    at.button(key="go").click(); at.run()
+    assert not at.exception, at.exception
+    assert len([e for e in at.error if "between" in e.value]) == 1
+    assert at.session_state["result"] is run                       # nothing ran
+    typed["rows"] = [row("active", "=", "True", where="Left")]
+    at.run(); at.button(key="go").click(); at.run()
+    assert not at.exception, at.exception
+    new = at.session_state["result"]
+    assert new is not run and new["cfg"]["left_filters"] == {"active": {"eq": "true"}}
+    res = new["result"]
+    assert res.rows_left == 2548 and res.rows_right == res.rows_right_read == 2985
+    typed["rows"] = [row("hire_date", ">=", "not-a-date", kind="date")]
+    at.run(); at.button(key="go").click(); at.run()
+    assert not at.exception, at.exception
+    assert [e.value for e in at.error if "not a date" in e.value] == ["filter on 'hire_date': 'not-a-date' is not a date"]
+    assert at.session_state["result"] is new
+    assert any("Ignore case switch does not apply to filters" in c.value for c in at.caption)

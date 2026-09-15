@@ -47,7 +47,8 @@ class Side:
 
     @property
     def stem(self) -> str:
-        """What names this side in output files: the connection for a database, the file's stem."""
+        """The connection for a database, else the file's stem, slugged. Output files are named
+        after the side names instead (outputs.pair_name)."""
         return slug(self.conn if self.is_database else Path(self.label).stem if self.label else "")
 
     @property
