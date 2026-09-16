@@ -93,6 +93,7 @@ pip install desbordante           # optional - exact key discovery (HyUCC / Pyro
 
 python compare_app.py             # starts the app with its own settings: theme, 4 GB uploads
 streamlit run compare_app.py      # also works; uploads are then capped at Streamlit's 200 MB default
+                                  # (Path on disk and Database sources have no size limit either way)
 ```
 
 Python 3.12 to 3.14. Streamlit 1.49 and DuckDB 1.2 are the floors the app checks at start. One `pip install` is the whole install: every database driver is a plain wheel - `snowflake-connector-python`, `databricks-sql-connector`, `pymssql` (FreeTDS is inside the wheel, no ODBC driver), `oracledb` (thin mode, no Oracle client), `psycopg[binary]` - so there is no system package and nothing to install outside pip. `requirements.lock` is the pinned set the Docker image installs; `pip install -r requirements.lock` reproduces it exactly. A driver is only imported when a connection of its kind is used, so a missing one stops that kind alone, with a message naming the package.
@@ -192,7 +193,7 @@ Or press **Figure it all out and compare** in the sidebar. Auto pairs the column
 
 ### Sources
 
-Each side comes from one of three places, picked with the radio under its Name box: **Upload**, **Path on disk**, or **Database**.
+Each side comes from one of three places, picked with the radio under its Name box: **Upload**, **Path on disk**, or **Database**. Only **Upload** has a size limit - the file travels through the browser, so it is capped at 200 MB under `streamlit run` and 4 GB under `python compare_app.py`. **Path on disk** and **Database** never go through the browser: DuckDB reads the file, or the fetched table, straight from disk, and a multi-GB file is fine. For a big file, Path on disk is the route.
 
 A file is a **CSV** (any delimiter), a **JSON** file - an array of objects, or one object per line (`.jsonl` / `.ndjson`) - or a **Parquet** file. A JSON value that is itself an object or list arrives as text, in DuckDB's own spelling of the object or list rather than as JSON; a Parquet BLOB column arrives as hex. With `COMPARE_DATA_DIR` set, a path on disk must sit under one of its folders or the sidebar says *Not under an allowed folder*. Each side has a **Name** (shown everywhere, and the name of every output file), for CSV a delimiter and a *First row is a header* tick, and **Rows to read**: a WHERE filter on the file's own column names, an order, a top N. All three are applied by DuckDB as the file is read - this is how a 20 GB file becomes the 100,000 rows you actually want. The column / condition / value pickers build the filter for you.
 
