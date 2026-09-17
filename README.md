@@ -4,7 +4,7 @@
 
 Two tables, every difference, in one page.
 
-A Streamlit front end over DuckDB that compares two tables row by row. Load a CSV, a JSON file or a database table on either side, pair their columns in one table, set the type once, add transform steps where a side needs them, tick the key and press **Compare** - or press **Auto** and let it work the whole thing out, narrating each step. It is built for reconciling two exports of the same data: two systems, two dates, two vendors. Every run leaves one folder with a fixed set of files - a self-contained HTML report you can hand to someone who never opened the app, the differences as CSV or Parquet, and a JSON with every setting the run used.
+A Streamlit front end over DuckDB that compares two tables row by row. Load a CSV, a JSON file or a database table on either side, pair their columns in one table, set the type once, add transform steps where a side needs them, tick the key and press **Compare** - or press **Auto** and let it work the whole thing out, narrating each step. It is built for reconciling two exports of the same data: two systems, two dates, two vendors. Every run leaves one folder with a fixed set of files - a self-contained HTML report you can hand to someone who never opened the app, the differences as CSV or Parquet, and a JSON with every setting the run used. A second page, **Profiling**, takes one table on its own and measures it column by column.
 
 ![Streamlit 1.49+](https://img.shields.io/badge/Streamlit-1.49%2B-f4b87c?style=flat-square&labelColor=0e0d0b)
 ![DuckDB 1.2+](https://img.shields.io/badge/DuckDB-1.2%2B-f4b87c?style=flat-square&labelColor=0e0d0b)
@@ -17,7 +17,7 @@ A Streamlit front end over DuckDB that compares two tables row by row. Load a CS
 - [Install and run](#install-and-run)
 - [Try it on the sample pair](#try-it-on-the-sample-pair)
 - [How a run goes](#how-a-run-goes)
-- [What it does](#what-it-does): [Sources](#sources), [Connections](#connections), [The column table](#the-column-table), [Values](#values), [The key](#the-key), [Rows](#rows), [Compare and results](#compare-and-results), [Auto](#auto)
+- [What it does](#what-it-does): [Sources](#sources), [Connections](#connections), [The column table](#the-column-table), [Values](#values), [The key](#the-key), [Rows](#rows), [Compare and results](#compare-and-results) (the run disc and the Log), [Auto](#auto), [Profiling](#profiling)
 - [The report](#the-report)
 - [Outputs](#outputs)
 - [Speed](#speed)
@@ -33,57 +33,15 @@ A Streamlit front end over DuckDB that compares two tables row by row. Load a CS
 
 ## What it looks like
 
-Every screenshot below is the app or its report on the sample pair in `examples/` - `hr_employees.csv` against `payroll_employees.csv`, the sides named **HR** and **Payroll** in the sidebar (3,000 employees on the HR side, 2,985 on the Payroll side, every column renamed, the two names joined into one, salaries with thousands separators, dates as dd/mm/yyyy, booleans as Y/N). The run is the one in [Try it on the sample pair](#try-it-on-the-sample-pair): **Figure it all out and compare**, then the one step Auto's guess needs, then **Compare**.
+Every screenshot in this file is the app or its report on the sample pair in `examples/` - `hr_employees.csv` against `payroll_employees.csv`, the sides named **HR** and **Payroll** in the sidebar (3,000 employees on the HR side, 2,985 on the Payroll side, every column renamed, the two names joined into one, salaries with thousands separators, dates as dd/mm/yyyy, booleans as Y/N). The run is the one in [Try it on the sample pair](#try-it-on-the-sample-pair): **Figure it all out and compare**, then the one step Auto's guess needs, then **Compare**. The other screenshots sit next to the text they illustrate.
 
-The empty app: File A's panel in the sidebar - the Name box, the **Upload** / **Path on disk** / **Database** radio, the upload box, the delimiter and header tick, *Rows to read* and *Advanced* folded, **Load A** - and on the page the status strip at *0 of 2 loaded* with the one hint that matters next.
+The result: the verdict line, then the Summary tab - the key as a green chip with the rows matched on it, the row counts, the column counts, and the one-sided columns called out, before any table.
 
-![The app before anything is loaded](docs/app-home.png)
-
-Both files loaded. The sidebar holds the sources; the page walks down numbered sections and the strip under the headline says where things stand.
-
-![The app with both files loaded](docs/app-loaded.png)
-
-The column table: one row per column from either file, its counterpart, the common name, the type both sides are converted to, the Key and Compare ticks, the pair's own Case, how the pair was made, and - off to the right - what DuckDB detected and what the values *look like*. `department` has no counterpart yet - **Match by data** (and Auto) will pair it with `Dept` from its values.
-
-![The column table](docs/app-columns.png)
-
-The result. The verdict line, the row counts, the column counts, and the one-sided columns called out, before any table.
+```
+Differences · 2,960 rows matched on emp_id · 5 columns compared · 649 rows (21.93%) differ in 687 cells · 40 only in HR · 25 only in Payroll · 0.4s at 22:32:04
+```
 
 ![The Summary tab](docs/app-result.png)
-
-Columns & values: the rows that differ, HR above Payroll, differing cells marked. Left rows are black, Right rows are cream, everywhere the two sides sit together.
-
-![Rows that differ, HR above Payroll](docs/app-rows.png)
-
-The Report tab shows the same report the download button hands out, in the page.
-
-![The Report tab](docs/app-report-tab.png)
-
-The Downloads tab: the whole run as one zip, then every file of the run folder, the table format switch, and **Save everything to folder**.
-
-![The Downloads tab](docs/app-downloads.png)
-
-A database side: the `SAMPLE` connection (a DuckDB file, set through `COMPARE_CONN_SAMPLE`), the table `hr.employees`, fetched and loaded. From the fetch on it is a Parquet file like any other.
-
-![The Database panel with the SAMPLE connection fetched](docs/app-database.png)
-
-The Connections manager, under the Auto panel: the connections known (the env one marked read-only), and the form for a new one - the fields follow the kind.
-
-![The Connections manager](docs/app-connections.png)
-
-The report itself, opened on its own: the headline, the verdict with the rule it was judged by, and the setup - where each side came from, the key and why it was chosen, how every column was read.
-
-![The report, Aurora theme](docs/report-aurora.png)
-
-Its column sheet (every column from either file, its role, how it was read, matched / mismatched / match %) and its rows-that-differ section.
-
-![The report's column sheet](docs/report-columns.png)
-
-![The report's rows that differ](docs/report-rows.png)
-
-The same report with `COMPARE_THEME=violet`.
-
-![The report, violet theme](docs/report-violet.png)
 
 ## Install and run
 
@@ -119,13 +77,13 @@ Keep `compare_app.py`, `csvdiff.py` (the comparison engine) and the `tablecmp/` 
 1. Start the app. In the sidebar type `HR` in File A's **Name** box, pick **Path on disk** and give the full path to `examples/hr_employees.csv`; press **Load A**. Same for File B: `Payroll`, `payroll_employees.csv`, **Load B**. (The names are what every output file is called after: `HR_compare_Payroll__report.html` and so on; leave them and the files are `Left_compare_Right__*`.)
 2. Press **Figure it all out and compare**.
 
-Auto pairs six columns - `salary` by name, `hire_date` with `HireDate` and `active` with `IsActive` by similar name, `emp_id` with `EmployeeId` as a guess it flags to check, `department` with `Dept` by their values - reads `salary` as a number with a *remove thousands separators* step on Payroll, `hire_date` as a date with *to date (%d/%m/%Y)* on Payroll, `active` as a boolean, finds the key `emp_id` (its reason: *name says identifier · no nulls · 3,000 distinct of 3,000 in HR, 2,985 of 2,985 in Payroll · 98.7% of HR's values found in Payroll · unique by itself*) and compares. The verdict is:
+Auto pairs six columns - `salary` by name, `hire_date` with `HireDate` and `active` with `IsActive` by similar name, `emp_id` with `EmployeeId` as a guess it flags to check, `department` with `Dept` by their values - reads `salary` as a number with a *remove thousands separators* step on Payroll, `hire_date` as a date with *to date (%d/%m/%Y)* on Payroll, `active` as a boolean, finds the key `emp_id` (its reason: *name says identifier · no nulls · 3,000 distinct of 3,000 in HR, 2,985 of 2,985 in Payroll · 98.7% of HR's values found in Payroll · unique by itself*) and compares - the red disc under the page switch narrating each step, then ending on *Worked out in 1.6s - key: emp_id - comparing now* (the seconds are the machine's own). The verdict is:
 
 ```
 Differences · 2,960 rows matched on emp_id · 5 columns compared · 2,960 rows (100.0%) differ in 3,647 cells · 40 only in HR · 25 only in Payroll
 ```
 
-Every matched row differs, and that is Auto's one wrong guess, flagged as such: it paired `last_name` with `FullName` by similar name (*Matched by* says `guess - check`), and `Okafor` is never `Omar Okafor`. The tell is in its notes - *last_name: 18 distinct values on HR against 361 on Payroll - spelled differently, or a different field* - and the column's expander under Columns & values says *every matched row differs on this column*.
+Every matched row differs, and that is Auto's one wrong guess, flagged as such: it paired `last_name` with `FullName` by similar name (*Matched by* says `guess - check`), and `Okafor` is never `Omar Okafor`. The tell is in its decisions, in the Log at the foot of the page - *last_name: 18 distinct values on HR against 361 on Payroll - spelled differently, or a different field* - and the column's expander under Columns & values says *every matched row differs on this column*.
 
 3. Open **Transform and convert values**, pick the column `last_name` and the side `Payroll`, add the step *part N split by S* with the separator a single space and N = 2, press **Add**, then **Compare**:
 
@@ -133,7 +91,7 @@ Every matched row differs, and that is Auto's one wrong guess, flagged as such: 
 Differences · 2,960 rows matched on emp_id · 5 columns compared · 649 rows (21.93%) differ in 687 cells · 40 only in HR · 25 only in Payroll
 ```
 
-`department` differs on 337 rows (the renamed departments), `salary` on 319, `active` on 31, `last_name` and `hire_date` on none. Those are the numbers the screenshots above show. The Auto-only counts - 2,960 matched, 40 and 25 one-sided, 2,960 differing rows, 3,647 cells - are what the tests assert (`docs/superpowers/plans/COUNTS.md`).
+`department` differs on 337 rows (the renamed departments), `salary` on 319, `active` on 31, `last_name` and `hire_date` on none. Those are the numbers the Summary screenshot at the top shows. The Auto-only counts - 2,960 matched, 40 and 25 one-sided, 2,960 differing rows, 3,647 cells - are what the tests assert (`docs/superpowers/plans/COUNTS.md`).
 
 ### 2. The same pair through a database
 
@@ -182,18 +140,27 @@ Differences · 2,970 rows matched on emp_id · 6 columns compared · 357 rows (1
 
 ## How a run goes
 
-1. **Load A and B in the sidebar.** Upload, give a path, or fetch from a database. Each side has a name (Left and Right by default) that is shown everywhere and names every output file - `<left>_compare_<right>__report.html` - so name them; the sidebar reminds you under a file side that is still called Left or Right, and under either side when both carry the same name. For a big file open *Rows to read* first and cut it down. Both sides get a 10-row preview and nothing else runs.
-2. **Check the column table, press Confirm columns.** Pairs by name are already made. Fix the rest with the dropdowns, set Type, tick Key and Compare. Confirm folds the table away and shows the setup card: the key, what is compared, what is missing on each side.
-3. **Transform where a side needs it.** Pick a column and a side, add steps - trim, left 10, to date (%d/%m/%Y) - previewed on the first five rows.
-4. **Press Compare.** Progress is shown step by step. The result stays on screen until the next run - a failure never wipes it, a settings change only marks it stale. Changing a Name box or *Rows to display* does not; the next Compare picks the new name up.
+Before anything is loaded: File A's panel in the sidebar - the Name box, the **Upload** / **Path on disk** / **Database** radio, the upload box, the delimiter and header tick, *Rows to read* and *Advanced* folded, **Load A** - and on the page the **Compare** | **Profiling** switch, the status strip at *0 of 2 loaded*, the one hint that matters next, and the folded Log.
 
-Or press **Figure it all out and compare** in the sidebar. Auto pairs the columns, works out every type and date spelling, finds the key, compares - narrating each step and listing every decision as a cell you can change.
+![The app before anything is loaded](docs/app-home.png)
+
+1. **Load A and B in the sidebar.** Upload, give a path, or fetch from a database. Each side has a name (Left and Right by default) that is shown everywhere and names every output file - `<left>_compare_<right>__report.html` - so name them; the sidebar reminds you under a file side that is still called Left or Right, and under either side when both carry the same name. For a big file open *Rows to read* first and cut it down. Both sides get a 10-row preview and nothing else runs. The sidebar holds the sources; the page walks down numbered sections and the strip under the headline says where things stand.
+
+   ![The app with both files loaded](docs/app-loaded.png)
+
+2. **Check the column table.** Pairs by name are already made. Fix the rest with the dropdowns, set Type, tick Key and Compare - the **Role** column and the chips under the table turn green for the key and red for what is left out, as you tick. The table never folds; the setup card under it says what it amounts to: the key, what is compared, what is missing on each side.
+3. **Transform where a side needs it.** Pick a column and a side, add steps - trim, left 10, to date (%d/%m/%Y) - previewed on the first five rows.
+4. **Press Compare.** The red disc under the status strip pulses through each step and settles with a check mark and the time it took; the steps are kept in the Log at the foot of the page. The result stays on screen until the next run - a failure never wipes it, a settings change only marks it stale. Changing a Name box or *Rows to display* does not; the next Compare picks the new name up.
+
+Or press **Figure it all out and compare** in the sidebar. Auto pairs the columns, works out every type and date spelling, finds the key, compares - narrating each step in the disc; every decision is a cell in the column table or a step in the transform section, and the list of them is in the Log.
+
+To measure one table on its own, switch to **Profiling** under the headline - see [Profiling](#profiling).
 
 ## What it does
 
 ### Sources
 
-Each side comes from one of three places, picked with the radio under its Name box: **Upload**, **Path on disk**, or **Database**. Only **Upload** has a size limit - the file travels through the browser, so it is capped at 200 MB under `streamlit run` and 4 GB under `python compare_app.py`. **Path on disk** and **Database** never go through the browser: DuckDB reads the file, or the fetched table, straight from disk, and a multi-GB file is fine. For a big file, Path on disk is the route.
+Each side comes from one of three places, picked with the radio under its Name box: **Upload**, **Path on disk**, or **Database** (the Profiling page's one **File** panel is the same panel). Only **Upload** has a size limit - the file travels through the browser, so it is capped at 200 MB under `streamlit run` and 4 GB under `python compare_app.py`. **Path on disk** and **Database** never go through the browser: DuckDB reads the file, or the fetched table, straight from disk, and a multi-GB file is fine. For a big file, Path on disk is the route.
 
 A file is a **CSV** (any delimiter), a **JSON** file - an array of objects, or one object per line (`.jsonl` / `.ndjson`) - or a **Parquet** file. A JSON value that is itself an object or list arrives as text, in DuckDB's own spelling of the object or list rather than as JSON; a Parquet BLOB column arrives as hex. With `COMPARE_DATA_DIR` set, a path on disk must sit under one of its folders or the sidebar says *Not under an allowed folder*. Each side has a **Name** (shown everywhere, and the name of every output file), for CSV a delimiter and a *First row is a header* tick, and **Rows to read**: a WHERE filter on the file's own column names, an order, a top N. All three are applied by DuckDB as the file is read - this is how a 20 GB file becomes the 100,000 rows you actually want. The column / condition / value pickers build the filter for you.
 
@@ -206,10 +173,14 @@ Also under **Advanced**, a comma-separated list of column names overrides a head
 - **Connection** - the saved and environment connections by name, kind and host; none yet, and it says so and points at the [Connections](#connections) manager below. A connection whose password was not saved gets a **Password - kept for this session only** box; the password lives in the session and nowhere else.
 - **Table** or **SQL query**. A table is `schema.table`, quoted for the dialect: a part you quote yourself (`"My Table"`, `[My Table]`, `` `my table` ``) is kept as written, a bare part is folded the way that database folds it (Snowflake and Oracle to upper case, Postgres to lower), so `hr.employees` finds `HR.EMPLOYEES` on Snowflake. A query is one `SELECT` or `WITH` statement - see *read-only* below.
 - **Fetch at most (0 = all)**, default 1,000,000. The cap goes into the SQL where the dialect can take it (`LIMIT`, `FETCH FIRST n ROWS ONLY`, `TOP (n)`) and is enforced by the fetch loop everywhere, so it holds on every kind. A cap on a query with no `ORDER BY` gets a warning: the two sides could get different rows.
-- **Fetch A** / **Fetch B**. The statement runs, the rows stream in batches of 50,000 straight into Parquet, and the status box counts along - *120,000 rows · 38 MB · 12 s*. The fetch stops with a plain message when the work folder has under 1 GB free; on any error the half-written file is removed. Afterwards the panel says *Fetched at 10:12:38 - 3,000 rows* (and *capped* when the cap was hit) and offers **Fetch again**. The fetch is kept while the connection, the SQL and the cap stay the same, so changing the name, the cut or the column table below does not fetch again; changing any of the three does.
+- **Fetch A** / **Fetch B**. The statement runs, the rows stream in batches of 50,000 straight into Parquet, and the run disc under the status strip counts along - *Fetching from SAMPLE…*, *120,000 rows · 38 MB · 12 s* - and ends on *Fetched 120,000 rows in 12.3s*, kept in the Log. The fetch stops with a plain message when the work folder has under 1 GB free; on any error the half-written file is removed. Afterwards the panel says *Fetched at 10:12:38 - 3,000 rows* (and *capped* when the cap was hit) and offers **Fetch again**. The fetch is kept while the connection, the SQL and the cap stay the same, so changing the name, the cut or the column table below does not fetch again; changing any of the three does.
 - **Same SQL as A** on side B copies A's connection, Table / SQL choice, text and cap, for the case where both sides are the same query against two databases or two dates.
 
 After a fetch the rest of the panel is the file panel: the columns caption, **Rows to read** (applied to the fetched rows - to cut at the database, put a WHERE in the SQL), **Advanced**, **Load**. The caption under Load reads `SAMPLE · DuckDB file · hr.employees - 3,000 rows, 7 columns · fetched 10:12:38`, with *capped at N* when it was. A database side left at its default name takes the connection's name.
+
+A database side: the `SAMPLE` connection (a DuckDB file, set through `COMPARE_CONN_SAMPLE`), the table `hr.employees`, fetched and loaded. From the fetch on it is a Parquet file like any other.
+
+![The Database panel with the SAMPLE connection fetched](docs/app-database.png)
 
 ### Connections
 
@@ -223,6 +194,10 @@ Connections are kept the way Airflow keeps them: named, in a file in your home f
 | Oracle | Host, Port (1521), User, Password, Service name |
 | Postgres | Host, Port (5432), Database, User, Password |
 | DuckDB file | File path |
+
+The connections known (the env one marked read-only), and the form for a new one - the fields follow the kind:
+
+![The Connections manager](docs/app-connections.png)
 
 **Test** connects, runs the smallest query (`SELECT 1`, or `SELECT 1 FROM dual`) and says who the database thinks you are: *OK - USER · ROLE · WH · DB - 0.6 s* (for a DuckDB file, how many tables it holds), or the driver's own message with every credential blanked.
 
@@ -249,10 +224,11 @@ What was and was not exercised: the DuckDB kind runs end to end here (the sample
 
 ### The column table
 
-Every column from either file is a row; one place to decide everything.
+Every column from either file is a row; one place to decide everything. The table is always open - it never folds away.
 
 | Column | What it is |
 |---|---|
+| Role | What the row is - `key`, `compared`, `not compared`, `only in HR` / `only in Payroll` - in colour: green for a key, red for a row that takes no part in the comparison, no colour for a compared one. Not editable; it changes the moment you tick Key or Compare. |
 | Left column, Right column | Dropdowns. Each row is one column from either file with its counterpart on the other side, or blank. Pick a counterpart for a blank row and the two rows merge; pick a column already used elsewhere and it moves - the row you edited wins. A column that is in no pair always has a row of its own; a row with nothing on either side disappears. |
 | Common name | What the pair is called from here on: in transforms, filters, results, downloads. |
 | Type · both sides | What both sides are converted to before comparing: `text`, `number`, `date`, `timestamp`, `boolean`. `number`: 100.00 = 100 = 1e2. `date`: 27/08/2026 = 2026-08-27. `timestamp` keeps the time of day. `boolean`: 1 = yes = true. A value that will not convert keeps its text, so it shows as a difference rather than vanishing. The type is a property of the pair. |
@@ -269,7 +245,11 @@ The *looks like* cells come from up to 2,000 distinct values of the first 50,000
 
 **Match by data** reads a sample of both files and pairs the unpaired columns that hold the same values, whatever they are called - `Dept` with `department`. **Reset to name matches** starts the table over. **Save mapping** writes the pairs as JSON - one entry per pair with `a`, `b`, `name`, `type`, `key`, `compare`, `case`, `a_steps` and `b_steps`, each step as `{"op": "to date", "params": {"fmt": "%d-%b-%Y"}}` - and the upload box under it (a JSON file) loads one back for the next run of the same two feeds: every pair whose columns both exist is taken, a column named in several entries is paired several times, an identical entry listed twice is taken once, and the unpaired rows are rebuilt from the files. `examples/mapping_hr_directory.json` is one to read. The *looks like* cells are not in the file.
 
-**Confirm columns** folds the table away. The **setup card** under it always shows what the table amounts to: how many pairs and any column used twice, the key, the compare list, how every typed or transformed column is read (`department text · ignore case`, `hire_date date · B: to date (format=%d-%b-%Y)`) with the suggestions not taken, and the columns that exist on one side only - those are null on the other side and are not compared.
+**The colours.** The Role cell carries them - the editable cells stay plain - and the **chips** under the table say the same in one line: a green chip per key column, a plain one per compared column, a red one for a column that is not compared (`salary · not compared`) or is only in one file (`CostCenter · only in Payroll`). Tick Key or Compare and the row and its chip change colour at once. The **setup card** under the table always shows what it amounts to: how many pairs and any column used twice, the key, the compare list, how every typed or transformed column is read (`department text · ignore case`, `hire_date date · B: to date (format=%d-%b-%Y)`) with the suggestions not taken, and the columns that exist on one side only - those are null on the other side and are not compared.
+
+The column table after Auto and the one transform step on the sample pair: `emp_id` is the key, green; five compared rows; `first_name` only in HR and `CostCenter` only in Payroll, red - and the same in one line as chips under the table. Off to the right (out of the frame) sit the pair's own Case, how the pair was made, what DuckDB detected and what the values *look like*.
+
+![The column table](docs/app-columns.png)
 
 ### Values
 
@@ -300,7 +280,7 @@ An example: `hired_at` holds `2026-08-27 10:11:12.123` on Left and `27/08/2026 1
 
 Tick **Key** in the table and rows are matched on it; you can always change it by hand - tick another column, untick this one. Nothing measures the key until you ask.
 
-**Suggest keys** finds the combinations of up to four columns that identify a row on both sides - with Desbordante when it is installed (HyUCC for exact keys on the first 200,000 rows of each side, verified on every row; PyroUCC's almost-unique combinations when nothing is exact), otherwise by measuring every column and growing the most selective ones. Every candidate gets its **Overlap %** - the share of the Left side's distinct key values that exist on the Right, which is what a key is for - and a **Why**: one line of plain reasons. *name says identifier · no nulls · 3,000 distinct of 3,000 in HR, 2,985 of 2,985 in Payroll · 98.7% of HR's values found in Payroll · unique by itself*; or *salary: a measure, decimal - never a key*; or *adds nothing - emp_id is already unique* for a combination that only adds columns to a key that already works; or *no values in common - none of HR's hire_date values found in Payroll* for a key that pairs nothing because one column is spelled differently. Candidates rank by unique on both sides, then whether they add nothing, then how much the names look like a key, then overlap, then fewer columns. The best is in the status line when it finishes; pick rows from the list and press **Use as key**. When a profile of the same columns exists (Auto's *Profile both sides first*, or **Profile both files** under Rows), the single-column counts come from it and are not measured twice; a column with nulls is penalised and a constant column is skipped.
+**Suggest keys** finds the combinations of up to four columns that identify a row on both sides - with Desbordante when it is installed (HyUCC for exact keys on the first 200,000 rows of each side, verified on every row; PyroUCC's almost-unique combinations when nothing is exact), otherwise by measuring every column and growing the most selective ones. Every candidate gets its **Overlap %** - the share of the Left side's distinct key values that exist on the Right, which is what a key is for - and a **Why**: one line of plain reasons. *name says identifier · no nulls · 3,000 distinct of 3,000 in HR, 2,985 of 2,985 in Payroll · 98.7% of HR's values found in Payroll · unique by itself*; or *salary: a measure, decimal - never a key*; or *adds nothing - emp_id is already unique* for a combination that only adds columns to a key that already works; or *no values in common - none of HR's hire_date values found in Payroll* for a key that pairs nothing because one column is spelled differently. Candidates rank by unique on both sides, then whether they add nothing, then how much the names look like a key, then overlap, then fewer columns. The search runs in the red disc like every other run and ends on the best - *Best key: emp_id in 0.8s* - with its steps kept in the Log; pick rows from the list and press **Use as key**. When a profile of the same columns exists (Auto's *Profile both sides first*, or **Profile both files** under Rows), the single-column counts come from it and are not measured twice; a column with nulls is penalised and a constant column is skipped.
 
 **Check key** counts, per side, the rows, the distinct key values and the duplicate rows among the rows that have a full key, and the **Null keys** - rows where any key column is null, which identify nothing. A key with duplicates or nulls is not unique, and the warning says which: *This key is null on 12 rows of Left - those rows cannot match*, then *This key is not unique on Right (40 duplicate rows). Rows sharing a key are paired in file order, which can produce differences that are really mis-pairing. Tick another column.*
 
@@ -317,35 +297,63 @@ If everything differs: a key that pairs every row and then finds every row diffe
 
 **Filters** apply to both sides, or one, after types: `=`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `between`, `like`, `is null`, `is not null`, on the common names, each with a Type of `auto`, `string`, `number` or `date`. Values are matched exactly - the *Ignore case* switch does not apply to filters - but they are spelled the way the column is before the engine sees them: on a boolean column `True`, `t`, `yes`, `y` and `1` mean `true` (and their opposites `false`), in lists and ranges too; on a date or timestamp column a value becomes the ISO text the column holds, read with the format the column's own *to date* or *to timestamp* step names on the side the filter applies to, else in any of the usual spellings (`05/01/2024` is `2024-05-01` on a column read with `%m/%d/%Y` and `2024-01-05` without a format; a value the two sides' formats read as different days is refused and asked for in ISO; the time of day is kept on a timestamp column); on a number column the value compares as a number - `10 > 9`, also when the column is the key and never compared, or when rows pair by hashing - and a value that is not a date, or not a number, is refused in a sentence - *filter on 'hire_date': 'not-a-date' is not a date* - shown once above the result, whether or not Compare was pressed. `between` takes two values, comma separated. To shrink a big file before it is even read, use *Rows to read* under that file in the sidebar instead; the caption over the filters says so.
 
-**Profile both files** runs only when pressed: per column per file, null %, distinct count, min, max, mean, average length - side by side with the gap - and the 10 most and 10 least frequent values, on the same typed values the comparison uses. A profile also feeds **Suggest keys** and Auto, goes into the run folder as `profile.csv`, and is dropped when the column table or the reads change; the one Auto takes with *Profile both sides first* shows here too, without the press.
+**Profile both files** runs only when pressed: per column per file, null %, distinct count, min, max, mean, average length - side by side with the gap - and the 10 most and 10 least frequent values, on the same typed values the comparison uses. It runs in the red disc (*Profiling…*, then *Profile ready in 1.2s*) and lands in the Log. A profile also feeds **Suggest keys** and Auto, goes into the run folder as `profile.csv`, and is dropped when the column table or the reads change; the one Auto takes with *Profile both sides first* shows here too, without the press. To profile one table with no second side, use the [Profiling](#profiling) page.
 
 ### Compare and results
 
-Press **Compare**. Both sides are materialised once as DuckDB tables under the common names with the canonical values applied, then the engine (or the hash matcher) runs on those. The status line narrates: reading Left, reading Right, matching on the key, comparing N columns, writing the paired rows. The result gets a **verdict**: *Identical* when no row differs and none is one-sided; *Small differences* when the rows that differ are under 5% of the matched rows and the one-sided rows are no more than the matched rows; *Differences* otherwise; *Error* when the engine reported one. The verdict is the run's own: it sits on the banner, in the status strip, in the report and in `summary.json` / `summary.csv`.
+Press **Compare**. Both sides are materialised once as DuckDB tables under the common names with the canonical values applied, then the engine (or the hash matcher) runs on those. The run disc narrates: reading Left, reading Right, matching on the key and comparing N columns, writing the paired rows. The result gets a **verdict**: *Identical* when no row differs and none is one-sided; *Small differences* when the rows that differ are under 5% of the matched rows and the one-sided rows are no more than the matched rows; *Differences* otherwise; *Error* when the engine reported one. The verdict is the run's own: it sits on the banner, in the status strip, in the report and in `summary.json` / `summary.csv`.
+
+**While it runs.** Every long run - Auto, a profile, the key search, a database fetch, Compare - shows in one place, right under the status strip: a big red disc that pulses while the run works, the run's label beside it (*Comparing…*) and its latest step under that in mono. When the run finishes the disc stays red and takes a check mark, and the label carries the elapsed time: *Compared in 3.2s*, *Profile ready in 1.2s*, *Best key: emp_id in 0.8s*, *Fetched 3,000 rows in 0.4s*, *Worked out in 1.6s - key: emp_id - comparing now*. A run that fails leaves a red ring saying *could not finish*, and the error message is shown as before. The last disc stays until the next run, on the page it ran on; a run pressed far down the page - Profile, Suggest keys, Compare - draws it a second time next to its button, so there is no scrolling up to watch it.
+
+![Auto running: the red disc pulsing, its latest step under the label](docs/app-running.png)
+
+**The Log.** The last thing on either page is the **Log** expander - *Log - 4 entries*, *Log - empty* before the first run - folded by default. Every run is an entry, newest first: the time of day it started as HH:MM:SS, what it was (Auto, Profile, Key search, Fetch, Compare), the label it ended with - the elapsed time included - and every progress line under it; Auto adds a second entry, *Auto decisions*, with one line per decision: the pairs it made and how, the type and steps of every column, the key and why, the columns compared. A run that failed says *could not finish*. The Log keeps the last 50 entries across reruns and page switches, and **Clear** empties it. The report keeps Auto's decisions as well, under its Key row as *How this was worked out*, and `summary.json` carries them as `notes`.
+
+![The Log opened: two Compare runs, Auto's decisions and Auto's own steps, newest first](docs/app-log.png)
 
 **Re-run on every change** is off by default - the last result stays on screen and is marked stale when a setting that changes the answer changes. The side names, *Rows to display per section* and the table format do not: *Rows to display* (100 to 10,000, default 1,000) caps the tables on screen and in the report only, and changing it redraws them without a run; downloads always contain everything. The engine's own `diff.html` is capped at 2,000 rows per tab.
 
 | Tab | What it holds |
 |---|---|
-| Summary | Row counts; then every column from either file on one sheet - its name on each side, its role (key, compared, paired but not compared, only in Left, only in Right), how it was read, and for compared columns matched / mismatched / match % - with the one-sided columns called out above it. **Profile by bucket**: the top values of every column for the rows whose keys matched, matched but differ, or exist on one side only, key columns first. The matched-but-different bucket opens with **differences by key value** - the rows that paired on the key but disagree, grouped by each key column's value, with the columns that differ. The key is identical on both sides for these rows: this is where the differences sit, not what they are. |
+| Summary | A **Key** block first: the key columns as green chips and the line *Rows are matched on emp_id - 2,960 rows matched* - or *No key - rows were matched by hashing the 5 compared columns*, or *No key - rows were paired by position, line 1 against line 1* - with the warning under it when the key is not unique. Then the row counts; then every column from either file on one sheet - its name on each side, its role (key, compared, paired but not compared, only in Left, only in Right) in the column table's colours, green for the key and red for a column that took no part, how it was read, and for compared columns matched / mismatched / match % - with the one-sided columns called out above it. **Profile by bucket**: the top values of every column for the rows whose keys matched, matched but differ, or exist on one side only, key columns first. The matched-but-different bucket opens with **differences by key value** - the rows that paired on the key but disagree, grouped by each key column's value, with the columns that differ. The key is identical on both sides for these rows: this is where the differences sit, not what they are. |
 | Columns & values | The rows that differ, Left above Right, differing cells marked. Then every compared column, worst first: the value pairs behind the count (one DuckDB pass over the cell differences), the distribution on each side. **Near-match analysis** says whether differences are formatting or data. |
 | Report | The house-style HTML report, viewed in the page and downloaded with one button; **Download engine report** is the second button. |
 | Downloads | The whole run as one zip, then every file of the run folder, the table format switch and **Save everything to folder** - see [Outputs](#outputs). |
 
+Columns & values: the rows that differ, HR above Payroll, differing cells marked. Left rows are black, Right rows are cream, everywhere the two sides sit together.
+
+![Rows that differ, HR above Payroll](docs/app-rows.png)
+
 ### Auto
 
-Auto does everything by itself - pairs the columns, works out the types, finds the key, compares - and lists each decision so you can change it. It reads both files several times over, so on big files cut them first with *Rows to read*.
+Auto does everything by itself - pairs the columns, works out the types, finds the key, compares - narrating each step in the red disc and listing each decision in the Log, every one a cell in the column table or a step in the transform section that you can change. It reads both files several times over, so on big files cut them first with *Rows to read*.
 
 1. **Pair columns.** By name, then similar name, then by their values for whatever is left over.
 2. **Analyse types.** One pass over the first 50,000 rows of each side: how many values read as a number, a number once commas go, an ISO date, day-first, month-first, any known spelling, with a time of day, a boolean. Each pair gets a Type; a side that needs it gets a step - *remove thousands separators*, *to date (%d/%m/%Y)*. Two spellings are only merged when both sides read cleanly.
 3. **Check case.** Text pairs whose sides only agree once case is ignored get an *upper* step on both. (Auto does not set the Case cell; the step is the decision, visible in the transform section.)
 4. **Profile both sides** - the **Profile both sides first** tick under the button, on by default. Counts, nulls and distinct values per column feed the key search, show under Rows as the Profile, and land in the run folder as `profile.csv`; a constant column, an empty one, or a distinct count that differs more than twice between the sides becomes a note. Untick it on a very big pair. A profile already taken on the same columns and Types is reused; one taken before Auto changed a Type is measured again, on the typed values.
-5. **Find the key.** Same as Suggest keys. The status line shows the key it chose and the note carries its *Why* and the runner-up; if nothing is unique, the closest is used and said so; if nothing at all, hash mode.
-6. **Compare.** Every paired non-key column, immediately. Every decision is listed under Columns as a bullet, and is a cell in the table or a step in the transform section; the report keeps the list under its Key row as *How this was worked out*.
+5. **Find the key.** Same as Suggest keys. The disc ends on the key it chose - *Worked out in 1.6s - key: emp_id - comparing now* - and the decision carries its *Why* and the runner-up; if nothing is unique, the closest is used and said so; if nothing at all, hash mode.
+6. **Compare.** Every paired non-key column, immediately. Every decision is a line of the *Auto decisions* entry in the Log - *12 decisions - every one a cell in the column table* - and is a cell in the table or a step in the transform section; the report keeps the list under its Key row as *How this was worked out*.
+
+### Profiling
+
+The **Compare** | **Profiling** switch under the headline picks the page. Profiling takes one table on its own - the headline reads *One table, every column.* - and measures it the way the Profile section under Rows measures a pair. The sidebar holds a single **File** panel, the same panel File A has: a **Name** (*Table* by default - it names the profile file, and a database table left at the default takes its connection's name), the **Upload** / **Path on disk** / **Database** radio, the delimiter and header tick, *Rows to read*, *Advanced*, **Load**; for a database the same Connection, Table or SQL query, cap and **Fetch**, with the Connections manager under it. Load, then press **Profile**.
+
+What the values look like decides the types - there is no column table here to take a suggestion in - so a text column of `12,686.95` profiles as a number, `06-Nov-2019` as a date with its format, `Y`/`N` as a boolean; a column DuckDB typed keeps that type. The run shows in the red disc under the switch (*Profiling…*, then *Profile ready in 0.3s*) and lands in the Log like any other. Then:
+
+- **File** - the name, the file, rows × columns and the cut, with *First 10 rows* folded under it.
+- **Profile** - the statistics table, one row per column: Column, Type, Rows, Nulls, Null %, Distinct, Distinct %, Min, Max, Mean, Avg length. **Download profile.csv** hands it out through the browser as `<Table>__profile.csv`; **Save to folder** writes it to the folder in the box beside it - `<COMPARE_OUT_DIR>/<Table>__<run_id>` when the variable is set (and then the save must stay under it), else a folder of that name next to the file, or under your Downloads folder - the same rule as the Compare page's saves.
+- **Value frequencies** - one fold per column, labelled *emp_id - text · 3,000 distinct · 0.0% null*, with the 10 most and the 10 least frequent values side by side.
+
+The profile goes when another table is loaded; measured under other null tokens or another *Trim whitespace* setting than the page's (both set under *How values are read* on the Compare page, and they apply here too), it says so (*This profile is from earlier settings - run it again to refresh*). Compare is untouched: switch back and the sides, the column table, the result and the Log are where they were.
+
+![The Profiling page: the done disc, the File section, the statistics table, the save row and the first value-frequency folds](docs/app-profiling.png)
 
 ## The report
 
-The Report tab shows the report in the page. **Download report** saves it through the browser as `<pair>__report.html`. **Save report to folder** writes it straight to the folder in the box beside it - `<COMPARE_OUT_DIR>/<pair>__<run_id>` when the variable is set, else a folder of that name next to file A or under your Downloads folder - and prints the path: the reliable route for big runs. The Downloads tab has the same **Save everything to folder** for the whole run folder at once.
+The Report tab shows the report in the page - the same report the download button hands out. **Download report** saves it through the browser as `<pair>__report.html`. **Save report to folder** writes it straight to the folder in the box beside it - `<COMPARE_OUT_DIR>/<pair>__<run_id>` when the variable is set, else a folder of that name next to file A or under your Downloads folder - and prints the path: the reliable route for big runs. The Downloads tab has the same **Save everything to folder** for the whole run folder at once.
+
+![The Report tab](docs/app-report-tab.png)
 
 It is one self-contained file - fonts from Google, everything else inline - so it can be mailed or dropped in a ticket and opens without the app; offline, the fonts fall back to the system's and the page is otherwise whole. It prints: a `@media print` block turns the ground white and keeps cards and rows in one piece. It is written for the person who did not run the comparison: what was compared, how, and where it went wrong, in that order.
 
@@ -359,6 +367,20 @@ It is one self-contained file - fonts from Google, everything else inline - so i
 | Rows that differ | The paired rows, Left above Right, key columns first. **Left rows are black with cream text, Right rows are cream with black text**, and the cells that differ are picked out in the trouble colour on both. A legend sits above the table. Capped at *Rows to display* (at most 2,000) or 150,000 cells, whichever comes first - the subtitle says which; the CSVs hold everything. |
 | Only in Left / Only in Right | The one-sided rows on the same black and cream - the paired columns under their common names, key columns included; a column present on one side only is not in them - each section opening with the top values per column, key columns first - the key values are the reason those rows found no partner. Capped the same way. |
 | Footer | When the run happened, how long it took, the run id, the caps that applied, and a folded *Settings as JSON* - the `sources` and `settings` blocks of `summary.json`. |
+
+The report opened on its own: the headline, the verdict with the rule it was judged by, and the setup - where each side came from, the key and why it was chosen, how every column was read.
+
+![The report, Aurora theme](docs/report-aurora.png)
+
+Its column sheet (every column from either file, its role, how it was read, matched / mismatched / match %) and its rows-that-differ section.
+
+![The report's column sheet](docs/report-columns.png)
+
+![The report's rows that differ](docs/report-rows.png)
+
+The same report with `COMPARE_THEME=violet`.
+
+![The report, violet theme](docs/report-violet.png)
 
 **Download engine report** is the second button: the comparison engine's own side-by-side HTML (`<pair>__diff.html`) with its tabs, row search and *only columns with differences* toggle. Same numbers, different presentation; keep whichever the reader prefers.
 
@@ -402,6 +424,10 @@ In key and position mode every file is present after every run - an empty table 
 
 **The zip.** **Download all as zip** is the first button on the Downloads tab: `<pair>__<run_id>.zip`, the whole run folder, built once per run on the first visit and rebuilt when Parquet copies are added. Under it one button per file - *Cell differences*, *Rows only in HR*, *Rows only in Payroll*, *Paired rows*, *Columns*, *Profile*, *Summary*, *Settings and result*, *Report*, *Engine report* - and the Parquet copies when they exist.
 
+The Downloads tab: the whole run as one zip, then every file of the run folder, the table format switch, and **Save everything to folder**.
+
+![The Downloads tab](docs/app-downloads.png)
+
 **Save everything to folder** copies the run folder to the folder in the box beside it. The default is `<COMPARE_OUT_DIR>/<pair>__<run_id>` when the variable is set - and then every save must stay under it, or it is refused with *Saves must stay under …* - otherwise a folder of that name next to file A, or under your Downloads folder for an upload; the next run's box defaults beside the last save. The report is written at run time, so the folder and the zip always hold it.
 
 **The sweep.** At the first run of a server process the app removes run folders, zips, staged uploads, snapshots, fetches and key-search scratch files in the work folder older than `COMPARE_KEEP_HOURS` (24). Saved folders under `COMPARE_OUT_DIR` are never touched.
@@ -417,6 +443,7 @@ Nothing heavy runs unless you press it.
 - The comparison and the key search materialise each side as a DuckDB table under the common names, so the engine reads each file once. Numbers go through a fast 8-decimal decimal first and the wide one only when needed. The value pairs behind every column's count come from one DuckDB pass over the cell differences.
 - A one-off measurement, 500,000 rows x 6 columns with the real engine: load 1.2 s a side, the comparison itself 7 s (both sides materialised, keyed join, cell differences written), the whole Auto run 16 s including Desbordante and the report. Treat it as an order of magnitude; there is no benchmark script in the repo. The sample pair above compares in about a second.
 - For a very big file, cut it in *Rows to read* first - a date filter or a top N - and keep the Parquet snapshot on. `COMPARE_DUCKDB_MEMORY` caps DuckDB's memory when the machine is shared.
+- Every long run ends with its elapsed time on the disc and in its Log entry, so the Log says which step of which run took the time.
 
 ## Settings
 
@@ -482,25 +509,27 @@ tests/                the pytest suite: units per module, and the app headless t
 tablecmp/
   theme.py            colours, fonts, page CSS, STREAMLIT_THEME, status strip, cards - the only place to change the look
   sql.py              quoting, the scratch DuckDB connection (UTC, temp directory, memory limit)
-  state.py            session defaults
+  state.py            session defaults; what survives the switch between the Compare and Profiling pages
   sources.py          one side: a file or a fetched table, which rows to read; schema sniff, snapshot, preview; the work, out and data folders
   connections.py      named connections: the URI form, the home-folder store, COMPARE_CONN_* overrides, redaction
   databases.py        the six dialects, the read-only guard, connect, test, the streamed Parquet fetch
   values.py           transform steps, null folding, types, canonical text, registration, type check
   sniff.py            what a text column's values look like - the looks-like suggestions
-  columns.py          the column table: pairing, normalisation, specs, mapping JSON, match by data
+  columns.py          the column table: pairing, normalisation, specs, roles and chips, mapping JSON, match by data
   keys.py             key uniqueness, overlap, reasons, Desbordante / DuckDB suggestion
-  profile.py          statistics and value frequencies; what the key search reads from them
+  profile.py          statistics and value frequencies, of a pair or of one table; what the key search reads from them
   compare.py          running a comparison (engine, position, hash), filters, and reading it back
   outputs.py          the run folder: pair name, verdict, summary / columns / profile writers, Parquet copies, zip, saves, sweep
   report.py           the HTML report
   auto.py             two sides in, the rest worked out
-  ui_sidebar.py       the sidebar: loading files, the Auto panel
+  ui_sidebar.py       the sidebar: loading files (A and B, or the one table P), the Auto panel
   ui_database.py      the Database branch of the sidebar and the Connections manager
   ui_columns.py       the column table and the setup card
   ui_transform.py     transform steps with the five-row preview
   ui_keys.py          Suggest keys, Check key, hash / position without a key
   ui_results.py       the verdict and the four result tabs
+  ui_log.py           the run disc and the Log panel - every long run reports to one place
+  ui_profile.py       the Profiling page: one table, its statistics and value frequencies
 ```
 
 The engine is a black box to the app: it receives two DuckDB tables named `src_a` and `src_b` with the common column names and canonical values already applied, and the app reads back its counts and its CSV outputs. Only the `ui_*.py` modules, `compare_app.py` and `state.py` touch Streamlit; everything else is plain Python over DuckDB and pandas, which is what makes the headless tests below possible.
@@ -523,7 +552,7 @@ Matching strategies: `key` (join on one or more business-key columns, recommende
 Small, verified steps. Before handing over a change:
 
 1. `python -m py_compile compare_app.py tablecmp/*.py` - everything must compile.
-2. `python -m pytest tests -q` - the suite (158 tests, about a minute and a half): units for every module - the start-up settings, connections and URIs, the dialects and the read-only guard, the read-only switches passed to a stub driver, the fetch against a fake cursor and DuckDB end to end, the column table, the looks-like sniff, keys and reasons, the outputs and the sweep, the report - and the whole app headless through Streamlit's `AppTest`: the file flow and the database flow on the sample pair, asserting the counts in `docs/superpowers/plans/COUNTS.md` and grepping every output for the fake password. The database tests set `COMPARE_CONNECTIONS` to a temp file, so your own connections are never read or written.
+2. `python -m pytest tests -q` - the suite (181 tests, about two minutes): units for every module - the start-up settings, connections and URIs, the dialects and the read-only guard, the read-only switches passed to a stub driver, the fetch against a fake cursor and DuckDB end to end, the column table with its roles and chips, the looks-like sniff, keys and reasons, the profile of one table, the outputs and the sweep, the report, the run disc and the Log - and the whole app headless through Streamlit's `AppTest`: the file flow and the database flow on the sample pair, asserting the counts in `docs/superpowers/plans/COUNTS.md` and grepping every output for the fake password, the Summary tab's Key block, and the Profiling page from a file and from the sample database. The database tests set `COMPARE_CONNECTIONS` to a temp file, so your own connections are never read or written.
 3. To drive the app yourself, the same way the tests do - check the numbers, not just that it ran:
 
 ```python
@@ -540,11 +569,11 @@ res = at.session_state["result"]["result"]          # the Outcome
 assert (res.matched_rows, res.only_left, res.only_right, res.diff_rows, res.cell_diffs) == (2960, 40, 25, 2960, 3647)
 ```
 
-Re-fetch widgets after every `at.run()`; elements go stale, and `at.session_state` has no `.get`. The column table is a data editor and cannot be edited headlessly - set `at.session_state["cmap"]` through `tablecmp.columns.apply_mapping_json` (or `set_steps`) and bump `at.session_state["map_rev"]` instead. Widget keys worth knowing: `nick_A` / `nick_B` (the Name boxes), `how_A` / `how_B`, `pt_A` / `pt_B`, `load_A` / `load_B`, `auto_btn`, `auto_profile`, `go` (Compare), `disp_rows`, `auto_rerun`, `opt_tol`, `sugg_btn`, `check_btn`, `do_profile`, `bucket_pick`, `out_fmt`, `save_report`, `save_all`; for a database side `conn_A` / `conn_B`, `dbmode_A` / `dbmode_B`, `tbl_A` / `tbl_B`, `sql_A` / `sql_B`, `cap_A` / `cap_B`, `fetch_A` / `fetch_B`, `refetch_A` / `refetch_B`, `pw_A` / `pw_B`, `same_as_A`; in the manager `conn_pick`, `cf_kind`, `cf_name`, `cf_<field>`, `cf_save_pw`, `cf_timeout`, `test_conn`, `conn_save`, `conn_delete`. Under `streamlit run` the app does one `st.rerun()` on its first run to apply the theme; AppTest handles it. Set `COMPARE_THEME=violet` in the environment and run the same test to cover the second palette; set `COMPARE_CONN_SAMPLE=duckdb:///examples/sample.duckdb` and pick *Database* to cover the database route.
+Re-fetch widgets after every `at.run()`; elements go stale, and `at.session_state` has no `.get`. The column table is a data editor and cannot be edited headlessly - set `at.session_state["cmap"]` through `tablecmp.columns.apply_mapping_json` (or `set_steps`) and bump `at.session_state["map_rev"]` instead. Widget keys worth knowing: `page` (the Compare | Profiling radio), `nick_A` / `nick_B` (the Name boxes), `how_A` / `how_B`, `pt_A` / `pt_B`, `load_A` / `load_B`, `auto_btn`, `auto_profile`, `go` (Compare), `disp_rows`, `auto_rerun`, `opt_tol`, `sugg_btn`, `check_btn`, `do_profile`, `bucket_pick`, `out_fmt`, `save_report`, `save_all`, `log_clear`; for a database side `conn_A` / `conn_B`, `dbmode_A` / `dbmode_B`, `tbl_A` / `tbl_B`, `sql_A` / `sql_B`, `cap_A` / `cap_B`, `fetch_A` / `fetch_B`, `refetch_A` / `refetch_B`, `pw_A` / `pw_B`, `same_as_A`; on the Profiling page the same panel keys with `_P` (`nick_P`, `how_P`, `pt_P`, `load_P`, `conn_P`, `fetch_P`, ...) and `do_profile_P`, `dl_profile_P`, `save_profile_P`; in the manager `conn_pick`, `cf_kind`, `cf_name`, `cf_<field>`, `cf_save_pw`, `cf_timeout`, `test_conn`, `conn_save`, `conn_delete`. The Log is `at.session_state["log"]`, a list of entries with `at`, `kind`, `label`, `state`, `seconds` and `lines`, newest last; the last run's disc is the markdown with `class="runbox done"`. Download buttons are not in `at.button` - read them with `at.main.get("download_button")`. Under `streamlit run` the app does one `st.rerun()` on its first run to apply the theme; AppTest handles it. Set `COMPARE_THEME=violet` in the environment and run the same test to cover the second palette; set `COMPARE_CONN_SAMPLE=duckdb:///examples/sample.duckdb` and pick *Database* to cover the database route.
 
 4. For anything visible, look at it: `streamlit run compare_app.py --server.headless true` and a Playwright screenshot, or the app in a browser. The screenshots in `docs/` were taken that way. `examples/make_sample.py` regenerates the sample data (seed 7) when the samples need to change - and then the counts in `COUNTS.md` and here do too.
 
-Conventions the code keeps: identifiers go through `sql.ident`, literals through `sql.lit`, never f-strings into SQL; `st.*` only in the `ui_*.py` modules, `compare_app.py` and `state.py`; the app is read-only against databases and no credential reaches an output, a log or the screen; plain, human wording in the UI with captions that say why, and no emojis anywhere; tables shown to people use thousands separators, blank for not-applicable and a null glyph for a real null; `README.html` is updated when behaviour changes; `csvdiff.py` is not modified by the app's changes; no config file and no `.streamlit/` folder, ever; Streamlit does not hot-reload `tablecmp/`, so restart after editing it.
+Conventions the code keeps: identifiers go through `sql.ident`, literals through `sql.lit`, never f-strings into SQL; `st.*` only in the `ui_*.py` modules, `compare_app.py` and `state.py`; the app is read-only against databases and no credential reaches an output, a log or the screen; plain, human wording in the UI with captions that say why, and no emojis anywhere; every long run goes through `ui_log.running`, so it shows in the disc and lands in the Log - `st.status` is not used; tables shown to people use thousands separators, blank for not-applicable and a null glyph for a real null; `README.html` is updated when behaviour changes; `csvdiff.py` is not modified by the app's changes; no config file and no `.streamlit/` folder, ever; Streamlit does not hot-reload `tablecmp/`, so restart after editing it.
 
 ## Troubleshooting
 
@@ -554,7 +583,8 @@ Conventions the code keeps: identifiers go through `sql.ident`, literals through
 | Few rows match on the key | Key values spelled differently - case, padding, a date format. The summary lists sample unmatched values; *Check key* counts null keys. Give the key column a Type or a step. |
 | A date column shows as text | Look at its *looks like* cell: add *to date* with that format on the side that needs it, or pick the Type and let the built-in spellings read it. Ambiguous day/month order needs the format spelled out. |
 | Auto picked a key that is not unique | It says so, with the reason. Suggest keys shows the alternatives with their overlap; or tick a column in the table. |
-| The comparison failed | The message is shown and the previous result stays on screen. Usually a filter value or a custom expression DuckDB cannot read - the preview shows DuckDB's own message; a filter value that is not a date or not a number is refused before the run. |
+| Where Auto's decisions went | Open the **Log** at the foot of the page: the *Auto decisions* entry lists them, one line each, newest run first; the report keeps them under *How this was worked out*. |
+| The comparison failed | The message is shown, the disc says *could not finish* and the previous result stays on screen; the Log keeps the steps up to the failure. Usually a filter value or a custom expression DuckDB cannot read - the preview shows DuckDB's own message; a filter value that is not a date or not a number is refused before the run. |
 | Header names look like data | Untick *First row is a header* and load again; give names under Advanced if you have them. |
 | An upload over 200 MB is refused | Start the app with `python compare_app.py` (4 GB, or `COMPARE_UPLOAD_MB`) instead of `streamlit run`, or load the file by path. |
 | *Not under an allowed folder (COMPARE_DATA_DIR)* | The server restricts paths on disk to the folders in `COMPARE_DATA_DIR` (`/data` under Docker). Put the file there, or upload it. |

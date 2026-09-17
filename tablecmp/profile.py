@@ -10,6 +10,9 @@ from .sources import Side
 from .sql import ident, lit, scratch
 from .values import ColSpec, ReadOptions, register
 
+STATS_COLS = ["Column", "Type", "Rows", "Nulls", "Null %", "Distinct", "Distinct %", "Min", "Max",
+              "Mean", "Avg length"]                # the stats table, one row per column
+
 
 def show(v: Any) -> str:
     if v is None or (isinstance(v, float) and pd.isna(v)):
@@ -48,7 +51,7 @@ def stats_table(con, table: str, specs: list[ColSpec]) -> pd.DataFrame:
             "Max": show(r["max_n"] if numeric else r["max_t"]),
             "Mean": show(round(r["mean_n"], 4)) if numeric and pd.notna(r["mean_n"]) else "",
             "Avg length": r["avg_len"]})
-    return pd.DataFrame(out)
+    return pd.DataFrame(out, columns=STATS_COLS)
 
 
 def freq_tables(con, table: str, col: str, n: int = 10) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -72,20 +75,35 @@ def freq_tables(con, table: str, col: str, n: int = 10) -> tuple[pd.DataFrame, p
     return shape(df[df["top_rk"] <= n], "top_rk"), shape(df[df["bot_rk"] <= n], "bot_rk")
 
 
+def measure(side: Side, which: str, specs: list[ColSpec], opts: ReadOptions, say
+            ) -> tuple[pd.DataFrame, dict[str, tuple[pd.DataFrame, pd.DataFrame]]]:
+    """One side read once under the shared names: (the stats table, {column: (most
+    frequent, least frequent)})."""
+    say(f"Reading {side.name or which}…")
+    con = scratch()
+    register(con, side, "prof", specs, which, opts, materialize=True)
+    say(f"{side.name or which}: statistics for {len(specs)} columns…")
+    stats = stats_table(con, "prof", specs)
+    say(f"{side.name or which}: value frequencies…")
+    return stats, {s.canon: freq_tables(con, "prof", s.canon) for s in specs}
+
+
+def profile_single(side: Side, specs: list[ColSpec], opts: ReadOptions, progress=None) -> dict:
+    """A table on its own - the Profiling page. The specs name the table's own columns on
+    both sides (columns.single_specs), so it is read as side A of each."""
+    stats, freq = measure(side, "A", specs, opts, progress or (lambda _m: None))
+    return {"stats": stats, "freq": freq, "specs": [asdict(s) for s in specs]}
+
+
 def profile_tables(A: Side, B: Side, specs: list[ColSpec], opts: ReadOptions,
                    progress=None) -> dict:
     say = progress or (lambda _m: None)
     out: dict[str, Any] = {"stats": {}, "freq": {s.canon: {} for s in specs},
                            "specs": [asdict(s) for s in specs]}      # what it was measured on
     for side, which in ((A, "A"), (B, "B")):
-        say(f"Reading {side.name or which}…")
-        con = scratch()
-        register(con, side, "prof", specs, which, opts, materialize=True)
-        say(f"{side.name or which}: statistics for {len(specs)} columns…")
-        out["stats"][which] = stats_table(con, "prof", specs)
-        say(f"{side.name or which}: value frequencies…")
-        for s in specs:
-            out["freq"][s.canon][which] = freq_tables(con, "prof", s.canon)
+        out["stats"][which], freq = measure(side, which, specs, opts, say)
+        for canon, tables in freq.items():
+            out["freq"][canon][which] = tables
     ia, ib = out["stats"]["A"].set_index("Column"), out["stats"]["B"].set_index("Column")
     both, notes = [], []
     for s in specs:

@@ -7,8 +7,10 @@ from pathlib import Path
 import duckdb
 import streamlit as st
 
-from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows, diffs_by_key_value, matched_values,
-                      near_match, side_labels, style_pairs, top_values, value_pairs)
+from .columns import key_chips_html, row_css
+from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows,
+                      diffs_by_key_value, matched_values, near_match, side_labels, style_pairs, top_values,
+                      value_pairs)
 from .outputs import default_save_folder, save_target, table_formats, verdict_of, write_parquet_copies, zip_run
 from .report import build_report
 from .sources import Side
@@ -76,6 +78,21 @@ def render(run: dict, A: Side, B: Side, NA: str, NB: str, stale: bool, limit: in
 
 
 def summary_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode) -> None:
+    st.markdown("#### Key")
+    if mode == "key":
+        st.markdown(key_chips_html(keys), unsafe_allow_html=True)
+        st.markdown(f"Rows are matched on **{' + '.join(keys)}** - **{res.matched_rows:,}** rows matched")
+        if res.duplicate_keys_left or res.duplicate_keys_right:
+            st.warning(f"The key **{' + '.join(keys)}** is not unique: **{res.duplicate_keys_left:,}** rows in "
+                       f"{NA} and **{res.duplicate_keys_right:,}** in {NB} share their key with an earlier row. "
+                       "Rows with the same key were paired in file order - first with first, second with "
+                       "second - so a difference reported under a repeated key may be two rows swapped rather "
+                       "than a changed value. Add a column to the key to make it unique (Suggest keys helps).")
+    elif mode == "hash":
+        st.markdown(f"No key - rows were matched by hashing the {len(cols)} compared columns")
+    else:
+        st.markdown("No key - rows were paired by position, line 1 against line 1")
+
     st.markdown("#### Row counts")
     m = st.columns(6)
     m[0].metric(f"Rows {NA}", f"{res.rows_left_read:,}")
@@ -86,12 +103,6 @@ def summary_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode) -> None:
     m[4].metric(f"Only in {NB}", f"{res.only_right:,}")
     m[5].metric("Rows that differ", f"{res.diff_rows:,}",
                 help="Matched rows where at least one compared column differs")
-    if mode == "key" and (res.duplicate_keys_left or res.duplicate_keys_right):
-        st.warning(f"The key **{' + '.join(keys)}** is not unique: **{res.duplicate_keys_left:,}** rows in "
-                   f"{NA} and **{res.duplicate_keys_right:,}** in {NB} share their key with an earlier row. "
-                   "Rows with the same key were paired in file order - first with first, second with "
-                   "second - so a difference reported under a repeated key may be two rows swapped rather "
-                   "than a changed value. Add a column to the key to make it unique (Suggest keys helps).")
     if res.filter_left or res.filter_right:
         st.info(f"Filter applied - comparing **{res.rows_left:,}** of {res.rows_left_read:,} "
                 f"{NA} rows and **{res.rows_right:,}** of {res.rows_right_read:,} {NB} rows.")
@@ -131,8 +142,9 @@ def summary_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode) -> None:
     for col in ("Matched", "Mismatched", f"Values only in {NA}", f"Values only in {NB}"):
         if col in ledger.columns:
             config[col] = st.column_config.NumberColumn(col, format="localized")
-    st.dataframe(ledger, width="stretch", hide_index=True, height=min(640, 45 + 35 * len(ledger)),
-                 column_config=config)
+    # the rows in the column table's colours: a key green, a column that took no part red
+    st.dataframe(ledger.style.apply(row_css, axis=1), width="stretch", hide_index=True,
+                 height=min(640, 45 + 35 * len(ledger)), column_config=config)
     where_they_sit(run, res, NA, NB, keys, cols)
 
 
@@ -244,10 +256,11 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
                          height=min(400, 45 + 35 * len(df)))
 
 
-def default_save_dir() -> str:
-    """Next to file A when it was given as a path; otherwise the user's Downloads folder."""
+def default_save_dir(tag: str = "A") -> str:
+    """Next to file A - or the profiled table, P - when it was given as a path; otherwise
+    the user's Downloads folder."""
     import tempfile
-    a = st.session_state.get("A")
+    a = st.session_state.get(tag)
     tmp = Path(tempfile.gettempdir()).resolve()
     if a is not None and a.csv_path:
         folder = Path(a.csv_path).resolve().parent
@@ -257,14 +270,14 @@ def default_save_dir() -> str:
     return str(downloads if downloads.exists() else Path.home())
 
 
-def save_row(files: dict[str, bytes | Path], label: str, key: str, run: dict) -> None:
+def save_row(files: dict[str, bytes | Path], label: str, key: str, run: dict, tag: str = "A") -> None:
     """A folder box and a button that writes the given files there - no browser involved,
     which is the reliable route for big results. The default is a folder per run,
     <base>/<pair>__<run_id>, where <base> is COMPARE_OUT_DIR when it is set, else the folder
-    of the last save, else next to file A or Downloads. Under COMPARE_OUT_DIR every save must
-    stay inside it."""
+    of the last save, else next to file A (`tag` names another side - the Profiling page's
+    table) or Downloads. Under COMPARE_OUT_DIR every save must stay inside it."""
     per_run = f"{run['pair']}__{run['run_id']}"
-    base = Path(st.session_state.get("save_dir") or default_save_dir())
+    base = Path(st.session_state.get("save_dir") or default_save_dir(tag))
     box = f"{key}_dir"
     # a keyed text box keeps whatever it holds, whatever `value` says - so when a new run arrives
     # the box is set through session state, once, and then left to the user. Streamlit drops the
@@ -394,9 +407,9 @@ def downloads_tab(run, A, B, NA, NB, limit) -> None:
                                mime=MIME.get(path.suffix, "application/octet-stream"),
                                key=f"dl_{fname}_{run['at']}", on_click="ignore")
     env = table_formats()                        # COMPARE_TABLE_FORMATS, or csv
-    start = "both" if {"csv", "parquet"} <= env else "parquet" if "parquet" in env else "csv"
+    st.session_state.setdefault("out_fmt", "both" if {"csv", "parquet"} <= env else
+                                "parquet" if "parquet" in env else "csv")
     fmt = st.radio("Tables as", ["csv", "parquet", "both"], horizontal=True, key="out_fmt",
-                   index=["csv", "parquet", "both"].index(start),
                    format_func={"csv": "CSV", "parquet": "Parquet", "both": "both"}.get,
                    help="Parquet: typed counts, a fraction of the size, straight into DuckDB, pandas or a "
                         "warehouse. Applies to the next run; COMPARE_TABLE_FORMATS sets the default.")

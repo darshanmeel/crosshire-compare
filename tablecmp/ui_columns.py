@@ -7,9 +7,9 @@ import duckdb
 import pandas as pd
 import streamlit as st
 
-from .columns import (SHOWN_COLS, apply_mapping_json, build_table, fill_looks,
+from .columns import (SHOWN_COLS, apply_mapping_json, build_table, chips_html, fill_looks,
                       mapping_json, match_columns_by_data, normalise, only_in, pair_rows, reused,
-                      shape, specs_from, table_compare, table_keys, untaken)
+                      roles, row_css, shape, specs_from, table_compare, table_keys, untaken)
 from .sniff import looks_like
 from .sources import Side
 from .state import bump, forget_results
@@ -29,7 +29,6 @@ class Setup:
     compare: list[str]
     only_a: list[str]
     only_b: list[str]
-    confirmed: bool = False
 
     @property
     def canon(self) -> list[str]:
@@ -67,41 +66,37 @@ def seed_table(A: Side, B: Side, opts: ReadOptions) -> None:
 def render(A: Side, B: Side, NA: str, NB: str, opts: ReadOptions) -> Setup:
     seed_table(A, B, opts)
     looks = st.session_state["looks_like"]
-    notes = st.session_state.get("auto_notes")
-    if notes:
-        with st.expander(f"What Auto decided - {len(notes)} decisions, every one a cell below",
-                         expanded=True):
-            for n_ in notes:
-                st.markdown(f"- {n_}")
-            if st.button("Dismiss", key="auto_dismiss"):
-                st.session_state.pop("auto_notes", None)
-                st.rerun()
-
-    confirmed = bool(st.session_state.get("confirmed"))
     prev: pd.DataFrame = fill_looks(st.session_state["cmap"], looks)    # Auto's table has none
     n_pairs = int(((prev["A column"] != "") & (prev["B column"] != "")).sum())
-    with st.expander(f"Column table - {n_pairs} pairs · every column from either file",
-                     expanded=not confirmed):
+    with st.expander(f"Column table - {n_pairs} pairs · every column from either file", expanded=True):
         st.caption(
             f"One row per column from either file. Pick the counterpart in the *{NA} column* "
             f"or *{NB} column* dropdown - blank means no counterpart. Give the pair its "
             "**common name**, choose the **Type** both sides are converted to, tick **Key** "
             "on what identifies a row and **Compare** on what to compare. Double-click a cell "
-            "to change it; greyed cells are information. **Case** on a text pair says whether "
-            "case matters for it - blank follows the *Ignore case in values* switch under "
-            "*How values are read*. Transforms live in the next section. "
+            "to change it. **Role** says what each row is, and its cell and the chips under the "
+            "table carry the colour: green for a key, red for a column that is not compared or is "
+            "only in one file (the editable cells take no colour). **Case** on a text "
+            "pair says whether case matters for it - blank follows the *Ignore case in values* "
+            "switch under *How values are read*. Transforms live in the next section. "
             "A column may be used in more than one pair - split a full name into first and "
             "last with a step on each pair. The *looks like* cells are suggestions from a "
             "sample of the values - the Type stays what you set; to take one, change Type or "
             "add a to date / to number step with that format in the next section.")
         tcol, bcol = st.columns([4, 1.25])
         with tcol:
+            shown = prev.copy()                     # the Role column is for the eye: not stored
+            shown.insert(0, "Role", roles(prev, NA, NB))
             edited = st.data_editor(
-                prev, key=f"cmap_{st.session_state['map_rev']}", hide_index=True,
-                width="stretch", num_rows="fixed", column_order=SHOWN_COLS,
+                shown.style.apply(row_css, axis=1), key=f"cmap_{st.session_state['map_rev']}",
+                hide_index=True, width="stretch", num_rows="fixed", column_order=["Role", *SHOWN_COLS],
                 height=min(640, 45 + 35 * len(prev)),
-                disabled=["Matched by", "A detected", "A looks like", "B detected", "B looks like"],
+                disabled=["Role", "Matched by", "A detected", "A looks like", "B detected", "B looks like"],
                 column_config={
+                    "Role": st.column_config.TextColumn(
+                        "Role", width="small",
+                        help="What the row is: a key, compared, not compared, or a column "
+                             "only one file has. Tick Key or Compare to change it."),
                     "A column": st.column_config.SelectboxColumn(f"{NA} column", options=[""] + A.columns),
                     "B column": st.column_config.SelectboxColumn(f"{NB} column", options=[""] + B.columns),
                     "Common name": st.column_config.TextColumn("Common name"),
@@ -123,13 +118,16 @@ def render(A: Side, B: Side, NA: str, NB: str, opts: ReadOptions) -> Setup:
                     "B detected": st.column_config.TextColumn(f"{NB} detected", width="small"),
                     "B looks like": st.column_config.TextColumn(f"{NB} looks like", width="medium", help=LOOKS_HELP),
                 })
+        edited = edited.drop(columns="Role")
         cmap = normalise(edited, prev, A, B, looks)
         st.session_state["cmap"] = cmap
         if shape(cmap) != shape(edited) or len(cmap) != len(prev):
             bump()                              # rows moved or merged: redraw the editor
-            st.session_state["confirmed"] = False
             forget_results()
             st.rerun()
+        if roles(cmap, NA, NB).tolist() != roles(prev, NA, NB).tolist():
+            st.rerun()                          # a Key or Compare tick: the editor was drawn before it - again, with it
+        tcol.markdown(chips_html(cmap, NA, NB), unsafe_allow_html=True)
 
         dup_n = sorted(set(cmap["Common name"][cmap["Common name"].duplicated()]))
         if dup_n:
@@ -146,7 +144,6 @@ def render(A: Side, B: Side, NA: str, NB: str, opts: ReadOptions) -> Setup:
                 st.session_state["data_match"] = (table, found)
             if st.button("Reset to name matches", width="stretch"):
                 st.session_state["cmap"] = build_table(A, B, looks)
-                st.session_state["confirmed"] = False
                 bump()
                 forget_results()
                 st.rerun()
@@ -188,19 +185,10 @@ def render(A: Side, B: Side, NA: str, NB: str, opts: ReadOptions) -> Setup:
                 st.session_state.pop("data_match", None)
                 st.rerun()
 
-        c1, c2, _ = st.columns([1, 1, 4])
-        if c1.button("Confirm columns", type="primary", width="stretch", key="confirm_cols",
-                     help="Folds the table away and shows the setup it amounts to."):
-            st.session_state["confirmed"] = True
-            st.rerun()
-        if confirmed and c2.button("Edit columns", width="stretch", key="edit_cols"):
-            st.session_state["confirmed"] = False
-            st.rerun()
-
     cmap = st.session_state["cmap"]
     specs = specs_from(cmap)
     setup = Setup(cmap, specs, table_keys(cmap), table_compare(cmap),
-                  only_in(cmap, "A"), only_in(cmap, "B"), confirmed)
+                  only_in(cmap, "A"), only_in(cmap, "B"))
     render_setup_card(setup, NA, NB)
     return setup
 

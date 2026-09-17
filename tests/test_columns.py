@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from tablecmp.columns import (MAP_COLS, SHOWN_COLS, apply_mapping_json, build_table, mapping_json, norm_key, normalise,
-                              only_in, reused, specs_from)
+from tablecmp.columns import (MAP_COLS, SHOWN_COLS, apply_mapping_json, build_table, chips_html, key_chips_html,
+                              mapping_json, norm_key, normalise, only_in, reused, role_tone, roles, specs_from)
 from tablecmp.compare import run_comparison
 from tablecmp.keys import key_uniqueness, suggest_keys
 from tablecmp.outputs import columns_frame, write_summary
@@ -369,6 +369,66 @@ def test_app_flow_with_every_item_together(monkeypatch, tmp_path):
     _ok(at.button(key="save_all").click().run())
     saved = sorted(Path(tmp_path / "out").glob(f"{pair}__*"))
     assert len(saved) == 1 and (saved[0] / f"{pair}__summary.json").exists()
+
+
+def test_roles_name_what_each_row_is():
+    """A paired row is a key, compared or not compared; a one-sided row says which file has
+    it - one role per row, on the table's own index."""
+    A, B = _sides()
+    cm = apply_mapping_json(json.dumps(MAPPING), A, B)
+    cm.loc[cm["Common name"] == "department", "Compare"] = False
+    got = roles(cm, "HR", "Directory")
+    assert list(got.index) == list(cm.index)
+    assert dict(zip(cm["Common name"], got)) == {
+        "emp_id": "key", "first_name": "compared", "last_name": "compared", "department": "not compared",
+        "salary": "compared", "hire_date": "compared", "active": "compared", "manager_id": "only in Directory"}
+    cm2 = build_table(A, B)                                      # last_name has no counterpart here
+    assert dict(zip(cm2["A column"], roles(cm2, "HR", "Directory")))["last_name"] == "only in HR"
+    assert roles(cm.iloc[0:0], "HR", "Directory").empty
+    assert [role_tone(r) for r in ("key", "compared", "not compared", "only in HR")] == ["pos", "", "neg", "neg"]
+
+
+def test_chips_html_one_chip_per_row_in_its_colour():
+    """Green for a key, plain for a compared column, red with the reason otherwise - the
+    source name on a one-sided chip, the common name on a pair, everything escaped."""
+    A = Side(name="a", label="a.csv", schema={"emp_id": "VARCHAR", "salary": "DOUBLE", "notes": "VARCHAR", "a<b": "VARCHAR"})
+    B = Side(name="b", label="b.csv", schema={"emp_id": "VARCHAR", "salary": "DOUBLE", "notes": "VARCHAR", "CostCenter": "VARCHAR"})
+    cm = build_table(A, B)
+    cm.loc[cm["Common name"] == "emp_id", "Key"] = True
+    cm.loc[cm["Common name"] == "notes", "Compare"] = False
+    assert chips_html(cm, "HR", "Payroll") == (
+        '<div class="chips"><span class="chip key">emp_id</span><span class="chip">salary</span>'
+        '<span class="chip off">notes · not compared</span><span class="chip off">a&lt;b · only in HR</span>'
+        '<span class="chip off">CostCenter · only in Payroll</span></div>')
+    assert chips_html(cm.iloc[0:0], "HR", "Payroll") == '<div class="chips"></div>'
+
+
+def test_key_chips_are_one_green_chip_per_key_column():
+    """The Summary tab's Key block: every key column a green chip, escaped, in key order."""
+    assert key_chips_html(["emp_id", "a<b"]) == ('<div class="chips"><span class="chip key">emp_id</span>'
+                                                 '<span class="chip key">a&lt;b</span></div>')
+    assert key_chips_html([]) == '<div class="chips"></div>'
+
+
+def test_page_column_table_shows_roles_and_chips(monkeypatch, tmp_path):
+    """After Auto on the sample pair the column table is open, with a green chip for the key
+    and a red one for the column only Payroll has - and nothing to confirm or edit."""
+    from tests.test_apptest import _boot, _load_path, _ok
+    at = _boot(monkeypatch, tmp_path)
+    at.text_input(key="nick_B").input("Payroll").run()
+    _load_path(at, "A", EX / "hr_employees.csv")
+    _load_path(at, "B", EX / "payroll_employees.csv")
+    _ok(at.button(key="auto_btn").click().run())
+    at = _ok(at.run())
+    table = next(e for e in at.main.expander if e.label.startswith("Column table - "))
+    assert table.label == "Column table - 6 pairs · every column from either file"
+    page = "\n".join(m.value for m in at.markdown)
+    assert 'class="chip key">emp_id<' in page and 'class="chip off">CostCenter · only in Payroll<' in page
+    assert not [b for b in at.button if b.label in ("Confirm columns", "Edit columns")]
+    assert "confirmed" not in at.session_state
+    assert list(at.session_state["cmap"].columns) == MAP_COLS         # the Role column is not stored
+    caption = next(c.value for c in at.caption if "One row per column" in c.value)
+    assert "**Role**" in caption and "green for a key" in caption and "greyed" not in caption
 
 
 def test_apply_mapping_json_skips_an_identical_pair_listed_twice():

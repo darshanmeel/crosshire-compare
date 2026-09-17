@@ -1,5 +1,6 @@
 """The sidebar: load side A and side B - a CSV or JSON file, or a database table - the Auto
-button and the Connections manager. Nothing else lives here."""
+button and the Connections manager; on the Profiling page the one table, P, the same way.
+Nothing else lives here."""
 from __future__ import annotations
 
 import time
@@ -11,9 +12,14 @@ import streamlit as st
 from . import ui_database
 from .sources import (Side, apply_names, file_stamp, kind_of, looks_headerless, path_allowed,
                       quick_clause, row_count, short_header, snapshot, source_schema, work_dir)
-from .state import drop_result
+from .state import DEFAULT_NAMES, drop_result
 
-DEFAULT_NAMES = {"A": "Left", "B": "Right"}
+NAME_HELP = {"side": "What to call this side everywhere - and it names every output file: "
+                     "left_compare_right. Defaults: Left and Right. A database side with the "
+                     "default name takes its connection's name.",
+             "table": "What to call this table - it names the profile file: table__profile.csv. "
+                      "Default: Table. A database table with the default name takes its "
+                      "connection's name."}
 QUICK_OPS = ["=", "!=", ">", ">=", "<", "<=", "contains", "starts with",
              "in (comma separated)", "is null", "is not null"]
 
@@ -39,11 +45,10 @@ def side_name(tag: str) -> str:
 
 
 def source_panel(tag: str) -> None:
-    st.markdown(f"#### File {tag}")
-    name = st.text_input("Name", value=DEFAULT_NAMES[tag], key=f"nick_{tag}",
-                         help="What to call this side everywhere - and it names every output file: "
-                              "left_compare_right. Defaults: Left and Right. A database side with the "
-                              "default name takes its connection's name.")
+    """One side of the comparison (A or B), or the one table the Profiling page reads (P)."""
+    single = tag == "P"
+    st.markdown("#### File" if single else f"#### File {tag}")
+    name = st.text_input("Name", key=f"nick_{tag}", help=NAME_HELP["table" if single else "side"])
     how = st.radio("From", ["Upload", "Path on disk", "Database"], horizontal=True, key=f"how_{tag}",
                    label_visibility="collapsed")
     path, label, origin = "", "", ""
@@ -74,8 +79,8 @@ def source_panel(tag: str) -> None:
     delim, hdr = ",", True
     if kind == "csv":
         d1, d2 = st.columns([1, 2])
-        delim = d1.text_input("Delimiter", value=",", key=f"dl_{tag}", max_chars=3)
-        hdr = d2.checkbox("First row is a header", value=True, key=f"hd_{tag}")
+        delim = d1.text_input("Delimiter", key=f"dl_{tag}", max_chars=3)
+        hdr = d2.checkbox("First row is a header", key=f"hd_{tag}")
 
     schema: dict[str, str] = {}
     if path:
@@ -114,10 +119,12 @@ def source_panel(tag: str) -> None:
                              key=f"cw_{tag}_{rev}", height=90,
                              placeholder="hire_date >= '2026-07-20'\nAND department = 'Finance'")
         st.session_state[f"where_{tag}"] = where
-        order = st.multiselect("Order by", cols, key=f"ob_{tag}_{abs(hash(tuple(cols)))}",
-                               placeholder="file order")
+        kept = st.session_state.get(f"ob_{tag}", [])
+        if any(c not in cols for c in kept):     # another file now: its columns are not this one's
+            st.session_state[f"ob_{tag}"] = [c for c in kept if c in cols]
+        order = st.multiselect("Order by", cols, key=f"ob_{tag}", placeholder="file order")
         desc = st.checkbox("Descending", key=f"od_{tag}", disabled=not order)
-        top = st.number_input("Top N rows (0 = all)", 0, 500_000_000, 0, step=10_000,
+        top = st.number_input("Top N rows (0 = all)", 0, 500_000_000, step=10_000,
                               key=f"top_{tag}",
                               help="Taken after the filter and the order, so 'order by date "
                                    "descending, top 100,000' is the latest 100,000 rows.")
@@ -127,13 +134,16 @@ def source_panel(tag: str) -> None:
                                  key=f"nm_{tag}", height=68,
                                  placeholder="emp_id, first_name, dept_name, ...",
                                  help="Use this when the header row is missing names.")
-        snap = st.checkbox("Snapshot the rows read to Parquet", value=True, key=f"pq_{tag}",
+        snap = st.checkbox("Snapshot the rows read to Parquet", key=f"pq_{tag}",
                            help="Reads the CSV once, keeps the result as a compact Parquet "
                                 "file in the temp folder, and everything below reads that "
                                 "instead of re-parsing the CSV. Recommended for big files.")
 
-    if st.button(f"Load {tag}", key=f"load_{tag}", type="primary", width="stretch",
-                 disabled=not cols):
+    go = st.button("Load" if single else f"Load {tag}", key=f"load_{tag}", type="primary",
+                   width="stretch", disabled=not cols)
+    if go and not path:                          # a click sent before the button knew there is nothing to load
+        st.error("Nothing to load - pick a file, or fetch a table, first.")
+    elif go:
         side = Side(name=name.strip() or tag, label=label, csv_path=path, kind=kind, origin=origin,
                     delimiter=delim, header=hdr, where=where, order_by=list(order),
                     desc=bool(desc), limit=int(top),
@@ -169,13 +179,8 @@ def source_panel(tag: str) -> None:
                    + (f"  ·  fetched {side.fetched_at}" if side.fetched_at else "")
                    + (f"  ·  capped at {side.cap:,}" if side.capped else "")
                    + ("  ·  Parquet snapshot" if side.cache_path else ""))
-        box = (st.session_state.get(f"nick_{tag}") or "").strip()
-        other = side_name("B" if tag == "A" else "A")
-        if side_name(tag) == other:              # two database sides on one connection, typically
-            st.caption(f"Both sides are called {other} - name this one to tell them apart; the "
-                       "names are on every output file (left_compare_right).")
-        elif not side.is_database and box in ("", DEFAULT_NAMES[tag]):
-            st.caption("Name this side - it names every output file (left_compare_right).")
+        if not single:
+            name_hint(tag, side)
         if side.rows == 0:
             st.warning("The filter left no rows." if side.cut else
                        "The fetch returned no rows." if side.is_database else
@@ -193,8 +198,21 @@ def source_panel(tag: str) -> None:
                      "and load again.")
 
 
+def name_hint(tag: str, side: Side) -> None:
+    """A word under a loaded side about its name: the two sides share one, or a file side
+    is still called Left or Right."""
+    box = (st.session_state.get(f"nick_{tag}") or "").strip()
+    other = side_name("B" if tag == "A" else "A")
+    if side_name(tag) == other:              # two database sides on one connection, typically
+        st.caption(f"Both sides are called {other} - name this one to tell them apart; the "
+                   "names are on every output file (left_compare_right).")
+    elif not side.is_database and box in ("", DEFAULT_NAMES[tag]):
+        st.caption("Name this side - it names every output file (left_compare_right).")
+
 
 def finish(tag: str, side: Side) -> None:
+    """The loaded side takes its place; what was measured on the old one goes - the last
+    comparison for A or B, the profile for P."""
     old: Side = st.session_state[tag]
     if old.cache_path and old.cache_path != side.cache_path:
         Path(old.cache_path).unlink(missing_ok=True)
@@ -203,7 +221,10 @@ def finish(tag: str, side: Side) -> None:
             and not (held and held[1] == old.csv_path)):      # a fetch nothing reads any more
         Path(old.csv_path).unlink(missing_ok=True)
     st.session_state[tag] = side
-    drop_result()
+    if tag == "P":
+        st.session_state.pop("profile_P", None)
+    else:
+        drop_result()
 
 
 def auto_panel() -> None:
@@ -212,7 +233,7 @@ def auto_panel() -> None:
     both_in = A.loaded and B.loaded
     st.caption("Auto does everything by itself - pairs the columns, finds the key, "
                "compares, and lists each decision so you can change it.")
-    st.checkbox("Profile both sides first", value=True, key="auto_profile",
+    st.checkbox("Profile both sides first", key="auto_profile",
                 help="Counts, nulls and distinct values per column feed the key search, the "
                      "Profile section under Rows and the profile.csv in the run folder. "
                      "Untick to skip it on a very big pair.")

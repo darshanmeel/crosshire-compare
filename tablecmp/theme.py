@@ -18,8 +18,8 @@ It shows in the browser tab, the sidebar mark, the page header and the report.
 
 What the rest of the app reads from here: THEME (the active token dict), THEMES (both),
 tokens_css() (the :root block that puts the tokens on the page), FONTS (the Google Fonts
-URL), css() (the app's styling on top of Streamlit) and STREAMLIT_THEME (what Streamlit
-itself draws with).
+URL), css() (the app's styling on top of Streamlit), row_tint() (the colour of a row of the
+column table, for a pandas Styler) and STREAMLIT_THEME (what Streamlit itself draws with).
 """
 from __future__ import annotations
 
@@ -113,6 +113,22 @@ def tokens_css(theme: dict[str, Any] | None = None) -> str:
     return ":root{" + ";".join(f"{var}:{t[key]}" for key, var in _CSS_VARS) + "}"
 
 
+TINT_ALPHA = 0.22            # the wash behind a coloured row of the column table and a coloured chip
+
+
+def rgba(token: str, alpha: float) -> str:
+    """A theme colour at an alpha - rgba(127,176,105,0.22) for ("pos", 0.22)."""
+    h = THEME[token].lstrip("#")
+    return f"rgba({int(h[:2], 16)},{int(h[2:4], 16)},{int(h[4:6], 16)},{alpha})"
+
+
+def row_tint(tone: str) -> str:
+    """The Styler css for a cell of the column table or the Summary tab's ledger: the tone's colour
+    for the text on a wash of it behind - "pos" for a key row, "neg" for a row that is not
+    compared, "" for nothing."""
+    return f"background-color: {rgba(tone, TINT_ALPHA)}; color: {THEME[tone]}" if tone else ""
+
+
 STREAMLIT_THEME = {          # what Streamlit itself draws with: grids, menus, focus rings
     "theme.base": "dark",
     "theme.primaryColor": THEME["accent"],
@@ -148,9 +164,11 @@ def css() -> str:
        the face and colour of the element the rules below style (the display face, the mono, the button's
        ink on the accent), not the sans above - same specificity, later in the sheet, so this one wins.
        The colour half is deliberate: a heading's own colour rule beats it, an unstyled child inherits. */
-    .stApp :where(h1 *, .hero-h *, .rail-mark *, .eyebrow *, .steps *, h3 *, h4 *, [data-testid="stMetricValue"] *, [data-baseweb="tab"] *,
+    .stApp :where(h1 *, .hero-h *, .rail-mark *, .eyebrow *, .steps *, .runbox *, .logbook *, h3 *, h4 *, [data-testid="stMetricValue"] *, [data-baseweb="tab"] *,
         .stButton button *, .stDownloadButton button *) {{ font-family: inherit !important; color: inherit; }}
-    [data-testid*="Icon"], [data-testid*="Icon"] *, [class*="material-symbols"] {{ font-family: "Material Symbols Rounded" !important; }}
+    /* Streamlit's icon glyphs are ligatures of the Material Symbols face - never a button's label, or a
+       button with help= (it sits inside the stTooltipIcon wrapper) would draw "keys" as a key */
+    [data-testid*="Icon"], [data-testid*="Icon"] *:not(button, button *), [class*="material-symbols"] {{ font-family: "Material Symbols Rounded" !important; }}
     [data-testid="stHeader"] {{ background: var(--fs-bg); }}
     .block-container {{ padding-top: 2.4rem; padding-bottom: 7rem; max-width: 1500px; counter-reset: sec; }}
     ::selection {{ background: var(--fs-accent-line); color: var(--fs-text); }}
@@ -301,6 +319,38 @@ def css() -> str:
     .steps .n {{ color: var(--fs-warn); margin-right: .6rem; }}
     .steps .arrow {{ color: var(--fs-text3); margin: 0 .5rem; }}
     @media (max-width: 900px) {{ .strip {{ grid-template-columns: 1fr 1fr; }} .card .row {{ grid-template-columns: 1fr; }} }}
+
+    /* the chips under the column table and in the Summary tab's Key block: green for a key, red for a
+       column that takes no part */
+    .chips {{ display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; }}
+    .chip {{ font-family: var(--font-mono) !important; font-size: 12px; line-height: 1.5; color: var(--fs-text2);
+        border: 1px solid var(--fs-line); border-radius: var(--r-sm); padding: 2px 8px; }}
+    .chip.key {{ color: var(--fs-pos); border-color: var(--fs-pos); background: {rgba("pos", TINT_ALPHA)}; }}
+    .chip.off {{ color: var(--fs-neg); border-color: var(--fs-neg); background: {rgba("neg", TINT_ALPHA)}; }}
+
+    /* the run disc: red and pulsing while a run works, red with a check mark once it is done,
+       a red ring when it could not finish - the label in the display face, the latest line in mono */
+    .runbox {{ display: flex; align-items: center; gap: 1.1rem; border: 1px solid var(--fs-line); border-radius: var(--r-sm);
+        background: var(--fs-surface); padding: .9rem 1.2rem; margin: 0 0 1.4rem; }}
+    .runbox .disc {{ flex: 0 0 46px; width: 46px; height: 46px; box-sizing: border-box; border-radius: 50%;
+        background: var(--fs-neg); color: var(--fs-text); font-size: 26px; line-height: 1;
+        display: flex; align-items: center; justify-content: center; }}
+    .runbox.running .disc {{ animation: runpulse 2s ease-out infinite; }}
+    .runbox.error .disc {{ background: transparent; border: 3px solid var(--fs-neg); }}
+    .runbox .rl {{ display: flex; flex-direction: column; min-width: 0; }}
+    .runbox .rl b {{ font-family: var(--font-display) !important; font-weight: 400; font-size: 1.25rem; line-height: 1.3; color: var(--fs-text); }}
+    .runbox .rl .m {{ font-family: var(--font-mono) !important; font-size: 12px; color: var(--fs-text3); margin-top: .2rem; overflow-wrap: anywhere; }}
+    .runbox .rl .m:empty {{ display: none; }}
+    @keyframes runpulse {{ 0% {{ box-shadow: 0 0 0 0 var(--fs-neg); }} 70% {{ box-shadow: 0 0 0 20px transparent; }} 100% {{ box-shadow: 0 0 0 0 transparent; }} }}
+    @media (prefers-reduced-motion: reduce) {{ .runbox.running .disc {{ animation: none; }} }}
+
+    /* the log: one entry per run, newest first - when, what kind, how it ended, then its lines */
+    .logbook {{ font-family: var(--font-mono) !important; font-size: 12px; line-height: 1.7; color: var(--fs-text2); }}
+    .logbook .e {{ padding: .45rem 0; border-top: 1px solid var(--fs-border); }}
+    .logbook .e:first-child {{ border-top: 0; }}
+    .logbook .at {{ color: var(--fs-text3); }}
+    .logbook .kind {{ color: var(--fs-accent); }}
+    .logbook .l {{ padding-left: 1.5rem; color: var(--fs-text3); overflow-wrap: anywhere; }}
 </style>
 """
 

@@ -13,11 +13,13 @@ from __future__ import annotations
 import difflib
 import json
 import re
+from typing import Iterable
 
 import pandas as pd
 
 from .sources import Side
 from .sql import ident, scratch
+from .theme import esc, row_tint
 from .values import (CASES, DATE_TYPES, NUMERIC_TYPES, TYPES, ColSpec, ReadOptions, final_kind,
                      register_plain, steps_from_json, steps_json)
 
@@ -227,6 +229,30 @@ def specs_from(cmap: pd.DataFrame) -> list[ColSpec]:
             for _, r in cmap.iterrows() if r["A column"] and r["B column"]]
 
 
+def suggested_steps(kind: str, detail: str) -> list[dict]:
+    """The step that takes a looks-like suggestion: the thousands separators a number
+    carries, the spelling a date or timestamp is in - none for ISO, a boolean or plain text."""
+    if kind == "number" and "thousands separators" in detail:
+        return [{"op": "remove thousands separators", "params": {}}]
+    fmt = detail.rpartition(" → ")[2] if kind in ("date", "timestamp") else ""
+    return [{"op": f"to {kind}", "params": {"fmt": fmt}}] if fmt.startswith("%") else []
+
+
+def single_specs(side: Side, looks: dict[str, str] | None = None) -> list[ColSpec]:
+    """One spec per column of a table on its own - the Profiling page: the column is the
+    common name and both sources, its Type the detected one. There is no table to take a
+    looks-like suggestion in, so one is taken here: its type, and the step that reads it."""
+    out = []
+    for col, det in side.schema.items():
+        kind, steps = default_kind(det, det), []
+        head, _, detail = str((looks or {}).get(col, "") or "").partition(" · ")
+        if head in TYPES:
+            kind, steps = head, suggested_steps(head, detail)
+        out.append(ColSpec(canon=col, a_src=col, b_src=col, kind=kind,
+                           a_steps=steps, b_steps=list(steps)))
+    return out
+
+
 def table_keys(cmap: pd.DataFrame) -> list[str]:
     return [str(r["Common name"]) for _, r in cmap.iterrows()
             if r["A column"] and r["B column"] and r["Key"]]
@@ -240,6 +266,54 @@ def table_compare(cmap: pd.DataFrame) -> list[str]:
 def only_in(cmap: pd.DataFrame, which: str) -> list[str]:
     own, other = ("A column", "B column") if which == "A" else ("B column", "A column")
     return [str(r[own]) for _, r in cmap.iterrows() if r[own] and not r[other]]
+
+
+def roles(cmap: pd.DataFrame, name_a: str, name_b: str) -> pd.Series:
+    """What each row is, in a word or two: "key", "compared", "not compared", or "only in
+    HR" for a column with no counterpart - aligned to the table's index."""
+    def role(r) -> str:
+        if r["A column"] and r["B column"]:
+            return "key" if r["Key"] else "compared" if r["Compare"] else "not compared"
+        return f"only in {name_a if r['A column'] else name_b}"
+    return pd.Series([role(r) for _, r in cmap.iterrows()], index=cmap.index, dtype=object)
+
+
+def role_tone(role: str) -> str:
+    """The colour a role is drawn in: "pos" (green) for a key, "neg" (red) for a row that
+    takes no part in the comparison, "" for a compared column."""
+    return "pos" if role == "key" else "" if role == "compared" else "neg"
+
+
+def row_css(row: pd.Series) -> list[str]:
+    """The Styler's say on one row of a table with a Role column - the column table, the
+    Summary tab's ledger: the role's tint in every cell."""
+    return [row_tint(role_tone(row["Role"]))] * len(row)
+
+
+def chip(text: str, cls: str = "") -> str:
+    """One chip of a strip: plain, "key" (green) or "off" (red)."""
+    return f'<span class="chip{" " + cls if cls else ""}">{esc(text)}</span>'
+
+
+def chip_strip(chips: Iterable[str]) -> str:
+    return f'<div class="chips">{"".join(chips)}</div>'
+
+
+def chips_html(cmap: pd.DataFrame, name_a: str, name_b: str) -> str:
+    """The strip under the table: one chip per row - green for a key, plain for a compared
+    column, red with the reason for a column that is not compared or only in one file."""
+    chips = []
+    for (_, r), role in zip(cmap.iterrows(), roles(cmap, name_a, name_b)):
+        paired = bool(r["A column"] and r["B column"])
+        name = r["Common name"] if paired else (r["A column"] or r["B column"])
+        cls = {"pos": "key", "neg": "off"}.get(role_tone(role), "")
+        chips.append(chip(f"{name} · {role}" if cls == "off" else name, cls))
+    return chip_strip(chips)
+
+
+def key_chips_html(keys: list[str]) -> str:
+    """The key columns as a strip of green chips - the Key block at the top of the Summary tab."""
+    return chip_strip(chip(k, "key") for k in keys)
 
 
 def reused(specs: list[ColSpec], name_a: str, name_b: str) -> list[str]:

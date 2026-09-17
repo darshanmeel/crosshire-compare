@@ -1,10 +1,11 @@
 # tests/test_ui_results.py
-"""The results page: the verdict from the run, the report reused rather than rebuilt, the Downloads
-tab - zip, Parquet on the switch, saves in a per-run folder under COMPARE_OUT_DIR."""
+"""The results page: the verdict from the run, the Summary tab's Key block, the report reused rather
+than rebuilt, the Downloads tab - zip, Parquet on the switch, saves in a per-run folder under
+COMPARE_OUT_DIR."""
 from pathlib import Path
 
 
-from tablecmp import ui_results
+from tablecmp import theme, ui_results
 from tests.test_outputs import _run          # the sample run helper
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,6 +63,28 @@ def _boot(monkeypatch, tmp_path):
     at.sidebar.button(key="auto_btn").click(); at.run()
     assert not at.exception, at.exception
     return at
+
+
+def test_summary_tab_opens_with_the_key(monkeypatch, tmp_path):
+    """The Summary tab starts with a Key block - the key columns as green chips and the line that
+    says what the rows were matched on - before the row counts; the ledger under Columns carries
+    the column table's colours, a key row green and a one-sided row red."""
+    at = _boot(monkeypatch, tmp_path)
+    summary = next(t for t in at.tabs if t.label == "Summary")
+    texts = [m.value for m in summary.markdown]
+    assert texts.index("#### Key") < texts.index("#### Row counts") < texts.index("#### Columns")
+    assert texts[texts.index("#### Key") + 1] == '<div class="chips"><span class="chip key">emp_id</span></div>'
+    matched = at.session_state["result"]["result"].matched_rows
+    assert texts[texts.index("#### Key") + 2] == f"Rows are matched on **emp_id** - **{matched:,}** rows matched"
+    ledger = summary.dataframe[0]
+    roles = ledger.value["Role"].tolist()
+    assert roles[0] == "key" and roles[-1].startswith("only in ")
+    # the Styler's rules, one per coloured row: "#T_x_row0_col0, ... { background-color: ...; color: ... }"
+    rules = ledger.proto.arrow_data.styler.styles.splitlines()
+    assert any("_row0_col0," in r and r.endswith(f"{{ {theme.row_tint('pos')} }}") for r in rules)
+    assert any(f"_row{len(roles) - 1}_col0," in r and r.endswith(f"{{ {theme.row_tint('neg')} }}") for r in rules)
+    plain = roles.index("compared")
+    assert not any(f"_row{plain}_col0," in r for r in rules)     # a compared row is left alone
 
 
 def test_downloads_tab_and_saves(monkeypatch, tmp_path):

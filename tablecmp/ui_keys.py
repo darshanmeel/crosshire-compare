@@ -4,6 +4,7 @@ from __future__ import annotations
 import duckdb
 import streamlit as st
 
+from . import ui_log
 from .keys import key_uniqueness, suggest_keys
 from .sources import Side
 from .state import bump, forget_results
@@ -33,23 +34,24 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
                        "on one side - useful when there is no key at all. Position only works "
                        "when both files are sorted identically.")
     with k2:
-        if st.button("Suggest keys", width="stretch", key="sugg_btn",
-                     help="Finds the column combinations that identify a row on both sides - "
-                          "with Desbordante (HyUCC / PyroUCC) when it is installed. Only runs "
-                          "when pressed."):
-            try:
-                with st.status("Looking for keys…", expanded=True) as box:
-                    st.session_state["key_suggestions"] = suggest_keys(
-                        A, B, setup.specs, NA, NB, opts, progress=box.write, profile=profile)
-                    table, combos, _ = st.session_state["key_suggestions"]
-                    best = combos[0] if combos else None
-                    box.update(label=("Best key: " + " + ".join(best)) if best else "No key found",
-                               state="complete", expanded=False)
-            except (duckdb.Error, RuntimeError) as exc:
-                st.error(f"Could not measure the columns: {exc}")
+        suggest = st.button("Suggest keys", width="stretch", key="sugg_btn",
+                            help="Finds the column combinations that identify a row on both sides - "
+                                 "with Desbordante (HyUCC / PyroUCC) when it is installed. Only runs "
+                                 "when pressed.")
     with k3:
         check = st.button("Check key", width="stretch", disabled=not keys, key="check_btn",
                           help="Counts distinct key values against rows on each side.")
+    if suggest:                                   # under the row, so the disc has the width
+        try:
+            with ui_log.running("Looking for keys…", "Key search", here=True) as box:
+                st.session_state["key_suggestions"] = suggest_keys(
+                    A, B, setup.specs, NA, NB, opts, progress=box.write, profile=profile)
+                table, combos, _ = st.session_state["key_suggestions"]
+                best = combos[0] if combos else None
+                box.update(label=("Best key: " + " + ".join(best)) if best else "No key found",
+                           state="complete")
+        except (duckdb.Error, RuntimeError) as exc:
+            st.error(f"Could not measure the columns: {exc}")
 
     sugg = st.session_state.get("key_suggestions")
     if sugg is not None:

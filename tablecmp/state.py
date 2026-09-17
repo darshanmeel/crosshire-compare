@@ -1,21 +1,49 @@
-"""Session state: defaults, and what to forget when the inputs change."""
+"""Session state: defaults, what a run keeps across the two pages, and what to forget when
+the inputs change."""
 from __future__ import annotations
 
 import streamlit as st
 
 from .sources import Side
+from .values import NULL_TOKENS_DEFAULT
 
-DEFAULTS = {"A": Side, "B": Side, "result": lambda: None, "cmap": lambda: None,
-            "cmap_seed": lambda: None, "map_rev": lambda: 0, "confirmed": lambda: False,
-            "nokey_mode": lambda: "hash",
+DEFAULT_NAMES = {"A": "Left", "B": "Right", "P": "Table"}    # what a side is called until it is named
+
+# the sidebar panel's widgets, per tag (A and B on Compare, P on Profiling) - the ones whose
+# value is worth keeping when the page is switched; the upload box cannot be kept, nor the
+# quick-filter pickers, whose options are the file's columns
+PANEL_KEYS = ("nick", "how", "pt", "dl", "hd", "ob", "od", "top", "nm", "pq",
+              "conn", "pw", "dbmode", "tbl", "sql", "cap")
+# Streamlit forgets a widget's value when a run does not draw it, and a run draws one page
+# only: every run writes these back before any widget is drawn, so the Compare page's
+# settings and both sidebars survive a trip to the other page. A widget listed here takes
+# its default from DEFAULTS, not from a value= of its own - the value written back is the
+# only one Streamlit sees.
+KEEP = ("opt_trim", "opt_empty", "opt_case", "opt_tol", "null_tokens", "disp_rows", "auto_rerun",
+        "nokey_mode", "out_fmt", "auto_profile",
+        *(f"{k}_{tag}" for tag in "ABP" for k in PANEL_KEYS))
+
+DEFAULTS = {"A": Side, "B": Side, "P": Side,  # the two sides compared, the one table profiled
+            "result": lambda: None, "cmap": lambda: None,
+            "cmap_seed": lambda: None, "map_rev": lambda: 0, "nokey_mode": lambda: "hash",
             "db_passwords": dict,                 # typed this session, never written anywhere
-            "fetched_A": lambda: None, "fetched_B": lambda: None}   # the database fetch each side holds
+            "fetched_A": lambda: None, "fetched_B": lambda: None,   # the database fetch each side holds
+            "fetched_P": lambda: None,
+            # the widgets kept across pages that do not start blank, off or at zero
+            "opt_trim": lambda: True, "opt_empty": lambda: True, "auto_profile": lambda: True,
+            "null_tokens": lambda: NULL_TOKENS_DEFAULT, "disp_rows": lambda: 1000,
+            **{f"nick_{tag}": (lambda name=name: name) for tag, name in DEFAULT_NAMES.items()},
+            **{f"{k}_{tag}": (lambda: True) for tag in "ABP" for k in ("hd", "pq")},
+            **{f"dl_{tag}": (lambda: ",") for tag in "ABP"}}
 
 
 def init_state() -> None:
     for key, make in DEFAULTS.items():
         if key not in st.session_state:
             st.session_state[key] = make()
+    for key in KEEP:                              # see KEEP: written back before any widget is drawn
+        if key in st.session_state:
+            st.session_state[key] = st.session_state[key]
 
 
 def forget_results() -> None:

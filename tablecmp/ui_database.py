@@ -13,6 +13,7 @@ import streamlit as st
 
 from . import connections as cx
 from . import databases as db
+from . import ui_log
 from .sources import Side, work_dir
 
 EXTRAS = {"snowflake": ["warehouse", "role", "authenticator"], "databricks": ["http_path", "token", "catalog"],
@@ -108,15 +109,15 @@ def source_panel(tag: str) -> tuple[str, str, Side | None]:
         if cap and sql and not db.has_order_by(sql):
             st.warning("A cap without an ORDER BY can give the two sides different rows - "
                        "add ORDER BY, or fetch everything.")
-        if st.button(f"Fetch {tag}", key=f"fetch_{tag}", type="primary", width="stretch", disabled=not sql):
+        if st.button("Fetch" if tag == "P" else f"Fetch {tag}", key=f"fetch_{tag}", type="primary",
+                     width="stretch", disabled=not sql):
             done = False
             try:
                 conn = cx.resolve(name, _passwords())
                 path = work_dir() / f"fetch_{tag}_{int(time.time())}.parquet"
-                with st.status(f"Fetching from {name}…", expanded=True) as box:
+                with ui_log.running(f"Fetching from {name}…", "Fetch") as box:
                     r = db.fetch_parquet(conn, sql, str(path), cap, progress=box.write)
-                    box.update(label=f"Fetched {r.rows:,} rows in {r.seconds:.1f}s", state="complete",
-                               expanded=False)
+                    box.update(label=f"Fetched {r.rows:,} rows in {r.seconds:.1f}s", state="complete")
                 if held:
                     _unlink_unless_loaded(tag, held[1])
                 st.session_state[f"fetched_{tag}"] = (key, str(path), what, time.strftime("%H:%M:%S"),
