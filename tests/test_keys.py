@@ -59,7 +59,7 @@ def _csv_single(tmp_path, header, rows):
     return P
 
 
-def test_reasons_and_overlap():
+def test_reasons_and_overlap(tmp_path):
     A, B, specs = _sides()
     table, combos, note = suggest_keys(A, B, specs, "hr", "payroll", OPTS)
     assert combos[0] == ["emp_id"]
@@ -67,9 +67,17 @@ def test_reasons_and_overlap():
     assert top["Unique on both"] == "yes" and 95 < top["Overlap %"] < 100
     assert "identifier" in top["Why"] and "no nulls" in top["Why"]
     assert "hr" in top["Why"] and "payroll" in top["Why"]
-    sal = table[table["Key columns"].str.contains("salary")]
-    if len(sal):
-        assert "measure" in sal.iloc[0]["Why"]
+    # a pair whose only unique combination holds a measure column: it is offered, and
+    # the row says the measure is no key even so (the one-table search does the same)
+    rows = [[i % 5, (i // 5) * 10.5] for i in range(25)]
+    MA, MB = _csv_sides(tmp_path, ["dept", "amount"], rows, rows)
+    mspecs = [ColSpec(canon="dept", a_src="dept", b_src="dept", kind="text"),
+              ColSpec(canon="amount", a_src="amount", b_src="amount", kind="number")]
+    mtable, mcombos, _ = suggest_keys(MA, MB, mspecs, "a", "b", OPTS)
+    assert mcombos[0] == ["dept", "amount"]
+    row = mtable.iloc[0]
+    assert row["Unique on both"] == "yes" and row["Looks like a key"] == "measure columns"
+    assert row["Why"].startswith("amount: a measure, decimal - never a key") and "measure" in row["Why"]
 
 
 def test_superset_of_a_unique_key_ranks_below_it():

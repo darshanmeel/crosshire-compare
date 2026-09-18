@@ -5,7 +5,7 @@ import duckdb
 import streamlit as st
 
 from . import ui_log
-from .keys import key_uniqueness, suggest_keys
+from .keys import MAX_KEY_COLS, key_uniqueness, suggest_keys
 from .sources import Side
 from .state import bump, forget_results
 from .ui_columns import Setup
@@ -61,8 +61,8 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
             st.success(f"{len(good)} combination(s) identify a single row on both sides - "
                        f"best: **{good.iloc[0]['Key columns']}**. {note}.")
         else:
-            st.warning("Nothing up to four columns was unique on both sides - the closest "
-                       f"are below. {note}.")
+            st.warning(f"Nothing up to {MAX_KEY_COLS} columns was unique on both sides - "
+                       f"the closest are below. {note}.")
         s1, s2 = st.columns([3, 1])
         s1.dataframe(table, width="stretch", hide_index=True)
         with s2:

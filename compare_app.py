@@ -128,8 +128,9 @@ def hero(page: str) -> None:
     if page == "Profiling":
         st.markdown(f'<div class="eyebrow">{APP_NAME} · <span>CSV, JSON or a database table</span></div>'
                     '<h1 class="hero-h">One table, <em>every column.</em></h1>'
-                    '<p class="lede">Read by DuckDB, measured column by column: the statistics of each, '
-                    'and its most and least frequent values.</p>', unsafe_allow_html=True)
+                    '<p class="lede">Read by DuckDB once: which column identifies a row, what stands out, '
+                    'the statistics of every column, its outliers, shapes and dependencies, and its most '
+                    'and least frequent values.</p>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="eyebrow">{APP_NAME} · <span>CSV or JSON, either side</span></div>'
                     '<h1 class="hero-h">Two tables, <em>every difference.</em></h1>'

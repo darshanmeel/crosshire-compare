@@ -422,7 +422,7 @@ A fold with nothing in it writes a file with the header alone, so a script can r
 
 The profile goes when another table is loaded; measured under other null tokens or another *Trim whitespace* setting than the page's (both set under *How values are read* on the Compare page, and they apply here too), it says so (*This profile is from earlier settings - run it again to refresh*). Compare is untouched: switch back and the sides, the column table, the result and the Log are where they were.
 
-![The Profiling page: the done disc, the File section, the statistics table, the save row and the first value-frequency folds](docs/app-profiling.png)
+![The Profiling page: the done disc naming the key, the File section, the headline, the Keys block with its candidate table, and What stands out](docs/app-profiling.png)
 
 ## The report
 
