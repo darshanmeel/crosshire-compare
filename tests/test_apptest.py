@@ -193,24 +193,112 @@ def test_profiling_page(monkeypatch, tmp_path):
     key, prof, made = at.session_state["profile_P"]
     assert len(prof["stats"]) == 7 and "Null %" in prof["stats"].columns
     assert set(prof["freq"]) == set(P.columns)
-    entry = at.session_state["log"][-1]
+    # the run, then its notes as their own entry - the way Auto's decisions are logged
+    entry, noted = at.session_state["log"][-2], at.session_state["log"][-1]
     assert entry["kind"] == "Profile" and entry["state"] == "done"
-    assert entry["lines"][0] == "Looking at the values…" and entry["label"].startswith("Profile ready in ")
+    assert entry["lines"][0] == "Looking at the values…" and "Looking for keys…" in entry["lines"]
+    assert entry["label"].startswith("Profile ready - key: emp_id in ")
+    assert noted["kind"] == "Profile notes" and noted["lines"] == prof["notes"]
+    assert noted["label"] == f"{len(prof['notes'])} things stand out" and len(prof["notes"]) > 1
     assert [h.value for h in at.main.subheader] == ["File", "Profile"]
     assert 'class="runbox done"' in "".join(m.value for m in at.main.markdown)
+    # top to bottom: the headline, the key line and table, what stands out, the statistics,
+    # the three folds, then the frequencies
+    captions = [c.value for c in at.main.caption]
+    assert prof["headline"].startswith("3,000 rows × 7 columns · key: emp_id") and prof["headline"] in captions
+    assert [s.value for s in at.main.success] == [f"Key: **emp_id** - unique on every row. {prof['keys'][2]}."]
+    frames = [d.value for d in at.main.dataframe]
+    keys_df = next(f for f in frames if "Key columns" in f.columns)
+    assert keys_df.iloc[0]["Key columns"] == "emp_id" and keys_df.iloc[0]["Unique"] == "yes"
+    notes_md = next(m.value for m in at.main.markdown if "- key: emp_id - unique on every row" in m.value)
+    assert notes_md.splitlines() == [f"- {n}" for n in prof["notes"]]
+    labels = [e.label for e in at.main.expander]
+    assert [lb for lb in labels if lb in ("Outliers", "Patterns", "Dependencies")] == ["Outliers", "Patterns", "Dependencies"]
+    assert labels.index("Dependencies") < labels.index("**emp_id** - text · 3,000 distinct · 0.0% null")
     assert [d.proto.label for d in at.main.get("download_button")] == ["Download profile.csv"]
     assert [e.label for e in at.main.expander if e.label.startswith("**emp_id**")] == [
         "**emp_id** - text · 3,000 distinct · 0.0% null"]
     assert "profile is from earlier settings" not in "".join(c.value for c in at.main.caption)
-    # Save to folder: the profile CSV lands in a folder named after the table, under COMPARE_OUT_DIR
+    # Save to folder: the six files land in a folder named after the table, under COMPARE_OUT_DIR
     _ok(at.button(key="save_profile_P").click().run())
-    saved = list(Path(os.environ["COMPARE_OUT_DIR"]).glob(f"Table__{made}/Table__profile.csv"))
-    assert len(saved) == 1 and saved[0].read_text(encoding="utf-8").startswith("Column,Type,Rows,Nulls,Null %,")
+    folder = Path(os.environ["COMPARE_OUT_DIR"]) / f"Table__{made}"
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "Table__dependencies.csv", "Table__keys.csv", "Table__notes.txt", "Table__outliers.csv",
+        "Table__patterns.csv", "Table__profile.csv"]
+    assert (folder / "Table__profile.csv").read_text(encoding="utf-8").startswith("Column,Type,Rows,Nulls,Null %,")
+    assert (folder / "Table__keys.csv").read_text(encoding="utf-8").startswith("Key columns,Distinct,Unique,")
+    assert (folder / "Table__outliers.csv").read_text(encoding="utf-8").startswith("Column,Type,P1,P5,")
+    assert (folder / "Table__patterns.csv").read_text(encoding="utf-8").startswith("Column,Pattern,Collapsed,")
+    assert (folder / "Table__dependencies.csv").read_text(encoding="utf-8").startswith("Column A,Column B,Kind,")
+    assert (folder / "Table__notes.txt").read_text(encoding="utf-8") == (
+        prof["headline"] + "\n\n" + "\n".join(prof["notes"]) + "\n")
     # back to Compare: its own sidebar, and the profile is still held
     at.radio(key="page").set_value("Compare").run()
     _ok(at)
     assert at.button(key="load_A") is not None and not [b for b in at.button if b.key == "load_P"]
     assert at.session_state["profile_P"][1] is prof
+
+
+def test_profiling_page_with_no_key_and_nothing_to_measure(monkeypatch, tmp_path):
+    """A table with no unique column and no number or date columns: the Keys warning says
+    the search depth (keys.MAX_KEY_COLS), every candidate reads Unique = no, the Outliers
+    fold says there is nothing to measure, and Save to folder still writes the six files,
+    the outliers one header-only. A clean table - a unique id and one text column - notes
+    the key and nothing else, so only a table with no rows has nothing standing out. A
+    measure that raises shows 'Profile failed', not a traceback."""
+    from tablecmp import ui_profile
+    from tablecmp.keys import MAX_KEY_COLS
+    from tablecmp.observe import OUTLIER_COLS
+    rows = ["dept,grade,flag"] + [f"{'Sales' if i % 3 else 'Ops'},G{i % 4},{'Y' if i % 2 else 'N'}" for i in range(24)]
+    (tmp_path / "nokey.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    (tmp_path / "clean.csv").write_text("id,name\n" + "".join(f"{i},n{i}\n" for i in range(1, 6)), encoding="utf-8")
+    (tmp_path / "empty.csv").write_text("id,name\n", encoding="utf-8")
+    at = _boot(monkeypatch, tmp_path)
+    at.radio(key="page").set_value("Profiling").run()
+    _load_path(at, "P", tmp_path / "nokey.csv")
+    at = _ok(at.button(key="do_profile_P").click().run())
+    key, prof, made = at.session_state["profile_P"]
+    assert MAX_KEY_COLS == 4                       # the depth the warning and the headline say
+    assert [w.value for w in at.main.warning] == [
+        f"Nothing up to 4 columns is unique - the closest are below. {prof['keys'][2]}."]
+    assert not at.main.success
+    keys_df = next(d.value for d in at.main.dataframe if "Key columns" in d.value.columns)
+    assert len(keys_df) and set(keys_df["Unique"]) == {"no"}
+    assert prof["headline"].startswith("24 rows × 3 columns · no key up to 4 columns · ")
+    assert at.session_state["log"][-2]["label"].startswith("Profile ready - no key in ")
+    captions = [c.value for c in at.main.caption]
+    assert not len(prof["outliers"]) and "No number, date or timestamp columns - nothing to measure." in captions
+    assert not any(c.startswith("Nothing stands out") for c in captions)     # the no-key line is a note
+    _ok(at.button(key="save_profile_P").click().run())
+    folder = Path(os.environ["COMPARE_OUT_DIR"]) / f"Table__{made}"
+    assert sorted(p.name for p in folder.iterdir()) == [
+        "Table__dependencies.csv", "Table__keys.csv", "Table__notes.txt", "Table__outliers.csv",
+        "Table__patterns.csv", "Table__profile.csv"]
+    assert (folder / "Table__outliers.csv").read_text(encoding="utf-8") == ",".join(OUTLIER_COLS) + "\n"
+    assert (folder / "Table__keys.csv").read_text(encoding="utf-8").count("\n") == len(keys_df) + 1
+    assert (folder / "Table__notes.txt").read_text(encoding="utf-8").startswith(prof["headline"] + "\n\n")
+    # a clean table: the key is the one note, so the caption for no notes does not show
+    _load_path(at, "P", tmp_path / "clean.csv")
+    at = _ok(at.button(key="do_profile_P").click().run())
+    prof = at.session_state["profile_P"][1]
+    assert prof["notes"] == ["key: id - unique on every row"]
+    assert [s.value for s in at.main.success] == [f"Key: **id** - unique on every row. {prof['keys'][2]}."]
+    assert not at.main.warning and "- key: id - unique on every row" in [m.value for m in at.main.markdown]
+    assert not any(c.value.startswith("Nothing stands out") for c in at.main.caption)
+    # no rows at all: nothing to note, and the page says so
+    _load_path(at, "P", tmp_path / "empty.csv")
+    at = _ok(at.button(key="do_profile_P").click().run())
+    prof = at.session_state["profile_P"][1]
+    assert prof["notes"] == [] and prof["headline"] == "0 rows × 2 columns · 0 duplicate rows"
+    assert "Nothing stands out - no nulls, no duplicates, no constant columns, no outliers." in [
+        c.value for c in at.main.caption]
+    # a measure that raises - a date past Python's range, say - is an error line, not a traceback
+    def boom(*_args, **_kwargs):
+        raise OverflowError("date value out of range")
+    monkeypatch.setattr(ui_profile, "profile_single", boom)
+    at = _ok(at.button(key="do_profile_P").click().run())
+    assert [e.value for e in at.main.error] == ["Profile failed: date value out of range"]
+    assert at.session_state["log"][-1]["kind"] == "Profile" and at.session_state["log"][-1]["state"] == "error"
 
 
 def _discs(at) -> list[str]:
@@ -304,4 +392,5 @@ def test_profiling_page_from_a_database(monkeypatch, tmp_path):
     assert stats.at["Salary", "Mean"] != "" and stats.at["IsActive", "Distinct"] == 2
     assert [d.proto.label for d in at.main.get("download_button")] == ["Download profile.csv"]
     assert at.text_input(key="save_profile_P_dir").value.startswith(os.environ["COMPARE_OUT_DIR"])
-    assert at.session_state["log"][-1]["kind"] == "Profile" and at.session_state["log"][-2]["kind"] == "Fetch"
+    assert [e["kind"] for e in at.session_state["log"][-3:]] == ["Fetch", "Profile", "Profile notes"]
+    assert at.session_state["log"][-2]["label"].startswith("Profile ready - key: EmployeeId in ")

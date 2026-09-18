@@ -79,6 +79,26 @@ def test_every_shape_on_a_text_file(tmp_path):
     assert looks_like(S, []) == {}
 
 
+def test_inf_and_nan_cells_do_not_break_the_sniff(tmp_path):
+    """DuckDB reads 'inf' as the infinite timestamp, which cannot be cast to a time of day:
+    a column with inf on 30 of 100 rows still gets a decision without raising, and is not
+    called a timestamp - the same for Infinity, -inf and nan cells."""
+    rows = [["id", "ratio", "spelt", "neg", "nan"]]
+    for i in range(100):     # one 'x' keeps the nan column VARCHAR - all numbers and DuckDB types it DOUBLE
+        rows.append([str(i), "inf" if i % 10 < 3 else f"{i * 1.5}", "Infinity" if i % 4 == 0 else "abc",
+                     "-inf" if i % 3 == 0 else f"{i}", "nan" if i % 2 == 0 else ("x" if i == 1 else f"{i}")])
+    p = tmp_path / "inf.csv"
+    with open(p, "w", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerows(rows)
+    S = _side(p)
+    assert S.schema["ratio"] == S.schema["neg"] == S.schema["nan"] == "VARCHAR"
+    got = looks_like(S, S.columns)
+    assert set(got) == set(S.columns)
+    assert not any(v.startswith(("timestamp", "date")) for v in got.values()), got
+    assert got["ratio"] == "number" and got["neg"] == "number" and got["nan"] == "number"
+    assert got["spelt"] == ""
+
+
 def test_cells_ride_on_the_table_and_never_touch_the_type():
     A, B = _side(EX / "hr_employees.csv"), _side(EX / "payroll_employees.csv")
     looks = {"A": looks_like(A, A.columns), "B": looks_like(B, B.columns)}

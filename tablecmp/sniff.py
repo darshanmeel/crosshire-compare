@@ -69,7 +69,10 @@ def _decide(con: duckdb.DuckDBPyConnection, col: str, n: int, opts: ReadOptions)
             "arg_min(v, rn) FILTER (WHERE regexp_matches(v, '[0-9],[0-9]'))",
             "count(try_cast(v AS TIMESTAMP))",
             "arg_min(v, rn) FILTER (WHERE try_cast(v AS TIMESTAMP) IS NOT NULL)",
-            "count(*) FILTER (WHERE CAST(try_cast(v AS TIMESTAMP) AS TIME) <> TIME '00:00:00')"]
+            # a time of day: the timestamp is past its own date. Not CAST(... AS TIME), which
+            # throws on the infinite timestamp 'inf' / 'Infinity' cast to (and DuckDB does not
+            # short-circuit an isfinite() guard in front of it)
+            "count(*) FILTER (WHERE try_cast(v AS TIMESTAMP) <> CAST(try_cast(v AS DATE) AS TIMESTAMP))"]
     for f in fmts:
         aggs += [f"count(try_strptime(v, {lit(f)}))",
                  f"arg_min(v, rn) FILTER (WHERE try_strptime(v, {lit(f)}) IS NOT NULL)"]

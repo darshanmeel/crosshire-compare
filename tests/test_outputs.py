@@ -103,6 +103,36 @@ def test_run_folder_has_every_file(tmp_path, monkeypatch):
     assert out.columns_frame(run)["matched_by"].isna().all()
 
 
+def test_profile_frame_carries_every_stat(tmp_path, monkeypatch):
+    """profile.csv: one row per column per side with machine headers - the distinct share
+    both ways, the top value and its share, and the length range next to the average."""
+    from tablecmp.profile import profile_tables
+    run, A, B = _run(tmp_path, monkeypatch)
+    specs = [ColSpec(**s) for s in run["cfg"]["specs"]]
+    prof = profile_tables(A, B, specs, ReadOptions(tokens=("NULL", ""), trim=True))
+    df = out.profile_frame(prof, "hr", "payroll")
+    assert list(df.columns) == out.PROFILE_HEADER == [
+        "column", "side", "rows", "nulls", "null_pct", "distinct", "distinct_pct", "distinct_pct_rows",
+        "top_value", "top_pct", "min", "max", "mean", "avg_length", "min_length", "max_length"]
+    assert list(df["side"].unique()) == ["hr", "payroll"] and len(df) == 6
+    r = df[(df["column"] == "department") & (df["side"] == "hr")].iloc[0]
+    assert r["rows"] == 3000 and r["distinct"] == 8 and r["nulls"] == 0
+    assert r["distinct_pct"] == r["distinct_pct_rows"] == round(8 / 3000 * 100, 2)      # no nulls: the same share
+    assert r["top_value"] == "Support" and r["top_pct"] == round(412 / 3000 * 100, 2)
+    assert r["min_length"] <= r["avg_length"] <= r["max_length"]
+    e = df[(df["column"] == "emp_id") & (df["side"] == "hr")].iloc[0]
+    assert e["min_length"] == e["max_length"] == 6 and e["distinct_pct"] == 100.0
+    assert (df["distinct_pct_rows"] <= df["distinct_pct"]).all()               # of all rows never exceeds of filled
+    assert str(df["min_length"].dtype) == str(df["max_length"].dtype) == "Int64"
+    out.write_summary(run, A, B, "hr", "payroll", profile=prof)
+    with open(Path(run["folder"]) / "hr_compare_payroll__profile.csv", newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    assert list(rows[0]) == out.PROFILE_HEADER and len(rows) == 6
+    assert next(x for x in rows if x["column"] == "emp_id" and x["side"] == "hr")["min_length"] == "6"
+    assert "hr_compare_payroll__profile.csv" in run["files"]
+    assert out.profile_frame({"stats": {}}, "hr", "payroll").empty                # no profile: header only
+
+
 def test_paired_file_and_value_pairs(tmp_path, monkeypatch):
     from tablecmp.compare import value_pairs
     run, A, B = _run(tmp_path, monkeypatch)

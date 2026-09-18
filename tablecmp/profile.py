@@ -10,8 +10,10 @@ from .sources import Side
 from .sql import ident, lit, scratch
 from .values import ColSpec, ReadOptions, register
 
-STATS_COLS = ["Column", "Type", "Rows", "Nulls", "Null %", "Distinct", "Distinct %", "Min", "Max",
-              "Mean", "Avg length"]                # the stats table, one row per column
+STATS_COLS = ["Column", "Type", "Rows", "Nulls", "Null %", "Distinct", "Distinct % of filled",
+              "Distinct % of rows", "Top value", "Top %", "Min", "Max", "Mean", "Avg length",
+              "Min length", "Max length"]          # the stats table, one row per column
+LENGTH_COLS = ["Min length", "Max length"]         # whole numbers, blank on a column with nothing filled
 
 
 def show(v: Any) -> str:
@@ -27,6 +29,9 @@ def label(v: Any) -> str:
 
 
 def stats_table(con, table: str, specs: list[ColSpec]) -> pd.DataFrame:
+    """One row per column, every STATS_COLS column. The distinct share is given both ways -
+    of the filled rows and of all rows. Top value / Top % are left blank here: measure_on
+    fills them from the frequency tables, which already hold the most frequent value."""
     branches = []
     for s in specs:
         c = ident(s.canon)
@@ -35,23 +40,31 @@ def stats_table(con, table: str, specs: list[ColSpec]) -> pd.DataFrame:
             f"SELECT {lit(s.canon)} AS col, count(*) AS n, count({c}) AS filled, "
             f"count(DISTINCT {c}) AS uniq, min({c}) AS min_t, max({c}) AS max_t, "
             f"min({num}) AS min_n, max({num}) AS max_n, avg({num}) AS mean_n, "
-            f"round(avg(length({c})), 1) AS avg_len FROM {table}")
+            f"round(avg(length({c})), 1) AS avg_len, "
+            f"min(length({c})) AS min_len, max(length({c})) AS max_len FROM {table}")
     raw = con.execute(" UNION ALL ".join(branches)).fetchdf()
     kinds = {s.canon: s.kind for s in specs}
     out = []
     for _, r in raw.iterrows():
-        n, filled = int(r["n"]), int(r["filled"])
+        n, filled, uniq = int(r["n"]), int(r["filled"]), int(r["uniq"])
         numeric = kinds[r["col"]] == "number"
         out.append({
             "Column": r["col"], "Type": kinds[r["col"]], "Rows": n, "Nulls": n - filled,
             "Null %": round((n - filled) / max(n, 1) * 100, 2),
-            "Distinct": int(r["uniq"]),
-            "Distinct %": round(int(r["uniq"]) / max(filled, 1) * 100, 2) if filled else 0.0,
+            "Distinct": uniq,
+            "Distinct % of filled": round(uniq / filled * 100, 2) if filled else 0.0,
+            "Distinct % of rows": round(uniq / n * 100, 2) if n else 0.0,
+            "Top value": "", "Top %": 0.0,
             "Min": show(r["min_n"] if numeric else r["min_t"]),
             "Max": show(r["max_n"] if numeric else r["max_t"]),
             "Mean": show(round(r["mean_n"], 4)) if numeric and pd.notna(r["mean_n"]) else "",
-            "Avg length": r["avg_len"]})
-    return pd.DataFrame(out, columns=STATS_COLS)
+            "Avg length": r["avg_len"],
+            "Min length": int(r["min_len"]) if pd.notna(r["min_len"]) else None,
+            "Max length": int(r["max_len"]) if pd.notna(r["max_len"]) else None})
+    df = pd.DataFrame(out, columns=STATS_COLS)
+    for c in LENGTH_COLS:                       # whole numbers, blank where nothing is filled
+        df[c] = pd.to_numeric(df[c], errors="coerce").astype("Int64")
+    return df
 
 
 def freq_tables(con, table: str, col: str, n: int = 10) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -75,24 +88,59 @@ def freq_tables(con, table: str, col: str, n: int = 10) -> tuple[pd.DataFrame, p
     return shape(df[df["top_rk"] <= n], "top_rk"), shape(df[df["bot_rk"] <= n], "bot_rk")
 
 
-def measure(side: Side, which: str, specs: list[ColSpec], opts: ReadOptions, say
-            ) -> tuple[pd.DataFrame, dict[str, tuple[pd.DataFrame, pd.DataFrame]]]:
-    """One side read once under the shared names: (the stats table, {column: (most
-    frequent, least frequent)})."""
-    say(f"Reading {side.name or which}…")
-    con = scratch()
-    register(con, side, "prof", specs, which, opts, materialize=True)
+def measure_on(con, side: Side, which: str, specs: list[ColSpec], say
+               ) -> tuple[pd.DataFrame, dict[str, tuple[pd.DataFrame, pd.DataFrame]]]:
+    """The statistics and frequencies of a side already registered on `con` as `prof`:
+    (the stats table, {column: (most frequent, least frequent)}). The one place the
+    measures are taken - measure reads a side for the pair and profile_single for the
+    Profiling page, each on its own connection."""
     say(f"{side.name or which}: statistics for {len(specs)} columns…")
     stats = stats_table(con, "prof", specs)
     say(f"{side.name or which}: value frequencies…")
-    return stats, {s.canon: freq_tables(con, "prof", s.canon) for s in specs}
+    freq = {s.canon: freq_tables(con, "prof", s.canon) for s in specs}
+    # the most frequent value and its share of all rows head the frequency table already -
+    # a null counts as a value there, shown as ∅ null; an empty table has no head
+    heads = {c: top.iloc[0] for c, (top, _) in freq.items() if len(top)}
+    stats["Top value"] = [heads[c]["Value"] if c in heads else "" for c in stats["Column"]]
+    stats["Top %"] = [float(heads[c]["%"]) if c in heads else 0.0 for c in stats["Column"]]
+    return stats, freq
 
 
-def profile_single(side: Side, specs: list[ColSpec], opts: ReadOptions, progress=None) -> dict:
-    """A table on its own - the Profiling page. The specs name the table's own columns on
-    both sides (columns.single_specs), so it is read as side A of each."""
-    stats, freq = measure(side, "A", specs, opts, progress or (lambda _m: None))
-    return {"stats": stats, "freq": freq, "specs": [asdict(s) for s in specs]}
+def measure(side: Side, which: str, specs: list[ColSpec], opts: ReadOptions, say
+            ) -> tuple[pd.DataFrame, dict[str, tuple[pd.DataFrame, pd.DataFrame]]]:
+    """One side read once under the shared names, on a scratch connection of its own:
+    (the stats table, {column: (most frequent, least frequent)})."""
+    say(f"Reading {side.name or which}…")
+    con = scratch()
+    register(con, side, "prof", specs, which, opts, materialize=True)
+    return measure_on(con, side, which, specs, say)
+
+
+def profile_single(side: Side, specs: list[ColSpec], opts: ReadOptions, progress=None,
+                   name: str = "", looks: dict[str, str] | None = None) -> dict:
+    """A table on its own - the Profiling page: the statistics and frequencies as `measure`
+    takes them, then the candidate keys and what stands out (duplicates, dependencies,
+    correlations, outliers, patterns, the raw-text checks), all on one read of the table.
+    The specs name the table's own columns on both sides (columns.single_specs), so it is
+    read as side A of each; `looks` is what the values looked like (sniff.looks_like), for
+    the notes to say what was read as what. Nothing returned holds the connection - the
+    dict lives in session state, so it is DataFrames, lists, strings and ints only."""
+    from .keys import MAX_KEY_COLS, suggest_keys_single    # local: keys and observe import profile
+    from .observe import observe
+    say = progress or (lambda _m: None)
+    who = side.name or "A"
+    say(f"Reading {who}…")
+    con = scratch()
+    register(con, side, "prof", specs, "A", opts, materialize=True)
+    stats, freq = measure_on(con, side, "A", specs, say)
+    say("Looking for keys…")
+    keys = suggest_keys_single(side, specs, name or who, opts, say, con=con, view="prof", stats=stats,
+                               max_cols=MAX_KEY_COLS)
+    say("What stands out…")
+    out = {"stats": stats, "freq": freq, "specs": [asdict(s) for s in specs], "keys": keys}
+    out.update(observe(con, "prof", side, specs, stats, freq, opts, looks or {}, keys, say))
+    con.close()
+    return out
 
 
 def profile_tables(A: Side, B: Side, specs: list[ColSpec], opts: ReadOptions,

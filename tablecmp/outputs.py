@@ -34,8 +34,8 @@ SETTINGS_KEYS = ["mode", "keys", "compare_columns", "only_a", "only_b", "trim", 
 TABLES = ["cell_diffs", "left_only", "right_only", "paired", "columns", "profile"]
 COLUMNS_HEADER = ["column", "name_a", "name_b", "role", "read_as", "matched_by", "matched", "mismatched",
                   "match_pct", "values_only_a", "values_only_b"]
-PROFILE_HEADER = ["column", "side", "rows", "nulls", "null_pct", "distinct", "distinct_pct", "min", "max",
-                  "mean", "avg_length"]
+PROFILE_HEADER = ["column", "side", "rows", "nulls", "null_pct", "distinct", "distinct_pct", "distinct_pct_rows",
+                  "top_value", "top_pct", "min", "max", "mean", "avg_length", "min_length", "max_length"]
 # what the sweep may remove from the work folder: run folders and zips (<pair>__<run_id>),
 # uploads and snapshots (cmp_*), database fetches (fetch_*), key-search scratch files (ucc_*)
 SWEEP_PREFIXES = ("cmp_", "fetch_", "ucc_")
@@ -122,6 +122,9 @@ def columns_frame(run: dict) -> pd.DataFrame:
 
 
 def profile_frame(prof: dict, name_a: str, name_b: str) -> pd.DataFrame:
+    """The profile sheet with machine headers, one row per column per side. distinct_pct is
+    the share of the filled rows (what it always was), distinct_pct_rows the share of all
+    rows; top_value / top_pct the most frequent value and its share, a null shown as ∅ null."""
     rows = []
     for which, name in (("A", name_a), ("B", name_b)):
         stats = (prof.get("stats") or {}).get(which)
@@ -129,9 +132,15 @@ def profile_frame(prof: dict, name_a: str, name_b: str) -> pd.DataFrame:
             continue
         for _, r in stats.iterrows():
             rows.append({"column": r["Column"], "side": name, "rows": r["Rows"], "nulls": r["Nulls"],
-                         "null_pct": r["Null %"], "distinct": r["Distinct"], "distinct_pct": r["Distinct %"],
-                         "min": r["Min"], "max": r["Max"], "mean": r["Mean"], "avg_length": r["Avg length"]})
-    return pd.DataFrame(rows, columns=PROFILE_HEADER)
+                         "null_pct": r["Null %"], "distinct": r["Distinct"],
+                         "distinct_pct": r["Distinct % of filled"], "distinct_pct_rows": r["Distinct % of rows"],
+                         "top_value": r["Top value"], "top_pct": r["Top %"],
+                         "min": r["Min"], "max": r["Max"], "mean": r["Mean"], "avg_length": r["Avg length"],
+                         "min_length": r["Min length"], "max_length": r["Max length"]})
+    df = pd.DataFrame(rows, columns=PROFILE_HEADER)
+    for c in ("min_length", "max_length"):          # whole numbers, blank on a column with nothing filled
+        df[c] = pd.to_numeric(df[c], errors="coerce").astype("Int64")
+    return df
 
 
 def _rows_in(p: Path) -> int | None:

@@ -297,7 +297,7 @@ If everything differs: a key that pairs every row and then finds every row diffe
 
 **Filters** apply to both sides, or one, after types: `=`, `!=`, `>`, `>=`, `<`, `<=`, `in`, `not in`, `between`, `like`, `is null`, `is not null`, on the common names, each with a Type of `auto`, `string`, `number` or `date`. Values are matched exactly - the *Ignore case* switch does not apply to filters - but they are spelled the way the column is before the engine sees them: on a boolean column `True`, `t`, `yes`, `y` and `1` mean `true` (and their opposites `false`), in lists and ranges too; on a date or timestamp column a value becomes the ISO text the column holds, read with the format the column's own *to date* or *to timestamp* step names on the side the filter applies to, else in any of the usual spellings (`05/01/2024` is `2024-05-01` on a column read with `%m/%d/%Y` and `2024-01-05` without a format; a value the two sides' formats read as different days is refused and asked for in ISO; the time of day is kept on a timestamp column); on a number column the value compares as a number - `10 > 9`, also when the column is the key and never compared, or when rows pair by hashing - and a value that is not a date, or not a number, is refused in a sentence - *filter on 'hire_date': 'not-a-date' is not a date* - shown once above the result, whether or not Compare was pressed. `between` takes two values, comma separated. To shrink a big file before it is even read, use *Rows to read* under that file in the sidebar instead; the caption over the filters says so.
 
-**Profile both files** runs only when pressed: per column per file, null %, distinct count, min, max, mean, average length - side by side with the gap - and the 10 most and 10 least frequent values, on the same typed values the comparison uses. It runs in the red disc (*Profiling…*, then *Profile ready in 1.2s*) and lands in the Log. A profile also feeds **Suggest keys** and Auto, goes into the run folder as `profile.csv`, and is dropped when the column table or the reads change; the one Auto takes with *Profile both sides first* shows here too, without the press. To profile one table with no second side, use the [Profiling](#profiling) page.
+**Profile both files** runs only when pressed: per column, a *Both sides* sheet with the null %, distinct count, min and max of each file and the null % gap, then each file's own statistics table - the same columns the [Profiling](#profiling) page's Statistics has - and the 10 most and 10 least frequent values, on the same typed values the comparison uses. It runs in the red disc (*Profiling…*, then *Profile ready in 1.2s*) and lands in the Log. A profile also feeds **Suggest keys** and Auto, goes into the run folder as `profile.csv`, and is dropped when the column table or the reads change; the one Auto takes with *Profile both sides first* shows here too, without the press. To profile one table with no second side, use the [Profiling](#profiling) page.
 
 ### Compare and results
 
@@ -337,13 +337,87 @@ Auto does everything by itself - pairs the columns, works out the types, finds t
 
 ### Profiling
 
-The **Compare** | **Profiling** switch under the headline picks the page. Profiling takes one table on its own - the headline reads *One table, every column.* - and measures it the way the Profile section under Rows measures a pair. The sidebar holds a single **File** panel, the same panel File A has: a **Name** (*Table* by default - it names the profile file, and a database table left at the default takes its connection's name), the **Upload** / **Path on disk** / **Database** radio, the delimiter and header tick, *Rows to read*, *Advanced*, **Load**; for a database the same Connection, Table or SQL query, cap and **Fetch**, with the Connections manager under it. Load, then press **Profile**.
+The **Compare** | **Profiling** switch under the headline picks the page. Profiling takes one table on its own - the headline reads *One table, every column.* - and says what a person opening an unfamiliar table wants to know first: which column identifies a row, what stands out, the statistics of every column, where the numbers and dates run wild, what shape the text takes, which columns determine which, and the most and least frequent values. The sidebar holds a single **File** panel, the same panel File A has: a **Name** (*Table* by default - it names the saved files, and a database table left at the default takes its connection's name), the **Upload** / **Path on disk** / **Database** radio, the delimiter and header tick, *Rows to read*, *Advanced*, **Load**; for a database the same Connection, Table or SQL query, cap and **Fetch**, with the Connections manager under it. Load, then press **Profile**.
 
-What the values look like decides the types - there is no column table here to take a suggestion in - so a text column of `12,686.95` profiles as a number, `06-Nov-2019` as a date with its format, `Y`/`N` as a boolean; a column DuckDB typed keeps that type. The run shows in the red disc under the switch (*Profiling…*, then *Profile ready in 0.3s*) and lands in the Log like any other. Then:
+What the values look like decides the types - there is no column table here to take a suggestion in - so a text column of `12,686.95` profiles as a number, `06-Nov-2019` as a date with its format, `Y`/`N` as a boolean; a column DuckDB typed keeps that type. The table is read into DuckDB once and every measure below runs on that one read; only the checks for stray spaces, case variants and leading zeros go back to the file, because they need the value as written. The run shows in the red disc under the switch - *Profiling…*, then *Looking for keys…* and *What stands out…* on the way, ending on *Profile ready - key: emp_id in 0.4s* (or *Profile ready - no key in 0.4s*) - and lands in the Log as two entries: the run with its steps, and *Profile notes* - *8 things stand out* - with one line per note, the way Auto's decisions are logged. The page then reads, top to bottom: **File**, **Profile** with its headline, **Keys**, **What stands out**, **Statistics** with the download and save row, the **Outliers**, **Patterns** and **Dependencies** folds, then **Value frequencies**.
 
-- **File** - the name, the file, rows × columns and the cut, with *First 10 rows* folded under it.
-- **Profile** - the statistics table, one row per column: Column, Type, Rows, Nulls, Null %, Distinct, Distinct %, Min, Max, Mean, Avg length. **Download profile.csv** hands it out through the browser as `<Table>__profile.csv`; **Save to folder** writes it to the folder in the box beside it - `<COMPARE_OUT_DIR>/<Table>__<run_id>` when the variable is set (and then the save must stay under it), else a folder of that name next to the file, or under your Downloads folder - the same rule as the Compare page's saves.
-- **Value frequencies** - one fold per column, labelled *emp_id - text · 3,000 distinct · 0.0% null*, with the 10 most and the 10 least frequent values side by side.
+**File** - the name, the file, rows × columns and the cut, with *First 10 rows* folded under it.
+
+**Profile** - one line under the heading: `3,000 rows × 7 columns · key: emp_id · 0 duplicate rows`. The rows and columns, the key (or *no key up to 4 columns*), the exact duplicate rows - always said, even at 0 - and then only what is there: *1 empty column*, *1 constant column*, *2 columns with outliers*.
+
+**Keys** - a green line when the best candidate is unique on every row: *Key: emp_id - unique on every row. Found by measuring every column and growing the most selective ones - `pip install desbordante` for exact key discovery (HyUCC / PyroUCC) - single-column figures from the profile.* Otherwise a warning, *Nothing up to four columns is unique - the closest are below.*, with the same note after it. The candidate table sits under it. This is the Compare page's **Suggest keys** on one table: every column unique by itself, then combinations of up to four columns grown from the most selective ones - with Desbordante when it is installed (HyUCC on the first 200,000 rows, verified on every row; PyroUCC's almost-unique combinations when nothing is exact). The distinct and null counts of the single columns come from the statistics just measured, so nothing is counted twice - that is what the note's last words say - and a column with one value is never a candidate. There is no other side, so no Overlap %; candidates rank by unique first, then whether they only add columns to a key that already works, then how much the names look like a key, then fewer columns. The columns:
+
+| Column | What it is |
+|---|---|
+| Key columns | The column, or the combination joined with `+`. |
+| Distinct | The distinct values of the combination among the rows that have a full key. |
+| Unique | `yes` when Duplicate rows and Null keys are both 0. |
+| Duplicate rows | Rows minus null keys minus distinct: the rows that share their key with another. |
+| Null keys | Rows where any key column is null; they identify nothing. |
+| Looks like a key | `yes` when the names and detected types read as identifiers, `measure columns` when one of them is a measure - an amount, a rate, a decimal. |
+| Why | The reasons in one line, as on the Compare page but naming no side. `emp_id`: *name says identifier · no nulls · 3,000 distinct of 3,000 · unique by itself*. `hire_date + emp_id`, ranked under it: *emp_id says identifier · no nulls · 3,000 distinct of 3,000 · adds nothing - emp_id is already unique · grown from the most selective column*. A combination a null spoils - `manager_id + id` on the directory JSON: *manager_id, id say identifier · 277 nulls · 2,713 distinct of 2,990 · 277 rows share it · adds nothing - id is already unique · grown from the most selective column*. |
+
+**What stands out** - one line per thing, as a list: the table-level lines first, then column by column in the table's order. When there is nothing, *Nothing stands out - no nulls, no duplicates, no constant columns, no outliers.* On `hr_employees.csv`:
+
+```
+key: emp_id - unique on every row
+patterns: the 3 most common shapes per column are listed - more exist in first_name (4 shapes), last_name (5 shapes), department (6 shapes)
+first_name: 20 values - Jonas, Nadia, Ines, Aarav, Rafael, Uma, Fatima, Elena, Amara, Omar, Tomasz, Priya, …
+last_name: 18 values - Ibrahim, Silva, Rossi, Costa, Larsen, Haddad, Nakamura, Schmidt, Mensah, Moreau, Novak, Okafor, …
+department: 8 values - Support, Marketing, Operations, Engineering, Finance, Sales, People, Legal
+salary: nearly unique - 5 rows share a value with another
+hire_date: 16 dates after today
+active: 2 values - true, false
+```
+
+(The sample's hire dates run to 2026-09-28, so how many fall after today depends on the day you run it.) Every kind of line, in the order they come - a line marked with a sample file is that file's own, the others show the form:
+
+| Line | When it appears |
+|---|---|
+| `12 exact duplicate rows - the same values in every column` | Rows that repeat another one in every column, a null equal to a null. |
+| `key: emp_id - unique on every row` (HR), or `no single column or combination up to 4 is unique - closest: first_name + last_name (2,998 distinct of 3,000)` | The best candidate from Keys, measured again on the table. |
+| `Dept → CostCenter: every Dept has one CostCenter` (Payroll), `cust_id ↔ cust_email: one-to-one` | One line per row of the Dependencies fold, the first 10, then `… and n more in Dependencies`. |
+| `tenure_years ~ leave_days: correlated, r = 0.93` | One line per correlated pair, the first 5, then `… and n more`. |
+| `patterns: the 3 most common shapes per column are listed - more exist in first_name (4 shapes), …` (HR) | A text column has more shapes than the Patterns fold shows. A line of the same kind says when the dependency search or the correlations were capped. |
+| `notes: empty - null on every row` | Null on every row; nothing else is said about the column. |
+| `company: constant - one value on every row (ACME)` | One distinct value. |
+| `manager_id: null on 9.3% of rows` (Directory) | Null on 5% of rows or more - or on any row at all when the name says identifier: `id`, `key`, `code`, `ref`, `no`, `num`, `account` and the like. |
+| `salary: nearly unique - 5 rows share a value with another` (HR) | The distinct values are 99% or more of the filled rows, but not all of them. |
+| `manager_id: says identifier but 2,653 rows share a value` (Directory) | The name says identifier and the values do not: neither unique nor nearly so. |
+| `department: 8 values - Support, Marketing, Operations, Engineering, Finance, Sales, People, Legal` (HR) | Between 2 and 20 distinct values, covering at most half the rows - a category. The values by count, the first 12, then `…`. |
+| `status: active on 97.3% of rows` | One value on 95% of rows or more, and it is not the only value. |
+| `Salary: read as a number - 12,686.95 has thousands separators` (Payroll), `hire_date: read as a date - 06-Nov-2019 → %d-%b-%Y` (Directory), `IsActive: read as a boolean - Y/N` (Payroll) | What the *looks like* sniff decided for a text column, in its own words - what the column was read as. |
+| `zip: reads as a number but 120 values have leading zeros - keep it as text` | A column read as a number whose values in the file start with a zero - a code, not an amount. |
+| `city: 5 values differ only in case - Paris / paris / PARIS` | The same value in more than one case in the file; one example group of up to three spellings. |
+| `dept: 123 values have leading or trailing spaces - trimmed before measuring` (Directory) | Values in the file with a space at either end; the tail is there when *Trim whitespace* is on. |
+| `salary: 2 outliers - above 21,489.10 (1.5 × IQR) · highest 1,000,000` | Values outside Tukey's fences (see Outliers below), with the fence and the extreme on each side that is crossed; a side nothing crosses is left out. |
+| `salary: 3 negative values · 40 zeros` | Either count above zero, on a number column. |
+| `hire_date: 16 dates after today` (HR), `birth_date: 3 dates before 1900` | Either count above zero, on a date or timestamp column. |
+| `emp_id: 99.7% of values are A9999 - 3 are not (e1234, E12, 12E4)` | One shape covers 90% or more of a text column's values but not all of them; up to three of the others, then `…` when there are more. |
+
+**Statistics** - the statistics table, one row per column: Column, Type, Rows, Nulls, Null %, Distinct, **Distinct % of filled** (distinct ÷ the non-null rows) and **Distinct % of rows** (distinct ÷ all rows - the two differ only where there are nulls: `manager_id` in the directory JSON is 2.21% of filled and 2.01% of rows), **Top value** and **Top %** (the most frequent value and its share of all rows, a null counting as a value and shown as `∅ null` - `department` has `Support` on 13.73%), Min, Max, Mean (numbers only), Avg length, **Min length** and **Max length** (of the text as read; blank on a column with nothing filled). **Download profile.csv** hands the table out through the browser as `<Table>__profile.csv`; **Save to folder** writes six files to the folder in the box beside it - `<COMPARE_OUT_DIR>/<Table>__<run_id>` when the variable is set (and then the save must stay under it), else a folder of that name next to the file, or under your Downloads folder - the same rule as the Compare page's saves:
+
+```
+Table__profile.csv        the statistics table, the columns above
+Table__keys.csv           the candidate table: Key columns, Distinct, Unique, Duplicate rows, Null keys,
+                          Looks like a key, Why
+Table__notes.txt          the headline, a blank line, then one note per line
+Table__outliers.csv       the Outliers fold: Column, Type, P1, P5, P25, Median, P75, P95, P99, Std dev,
+                          Low fence, High fence, Outliers, Outlier %, Lowest, Highest, Zeros, Negatives
+Table__patterns.csv       the Patterns fold: Column, Pattern, Collapsed, Count, %, Example
+Table__dependencies.csv   the dependencies and the correlated pairs on one sheet: Column A, Column B,
+                          Kind (many-to-one, one-to-one, correlated), Distinct, r
+```
+
+A fold with nothing in it writes a file with the header alone, so a script can rely on the set.
+
+**Outliers** - folded: one row per number, date and timestamp column. The percentiles P1, P5, P25, Median, P75, P95, P99 and the standard deviation - `salary`: `5384.155`, `8672.865` and `11826.135` for P25, the median and P75, std dev `3714.9289` - then Tukey's fences, P25 − 1.5 × IQR and P75 + 1.5 × IQR with the IQR being P75 − P25 (`-4278.815` and `21489.105`), Outliers and Outlier % for the values outside them (none in the sample), Lowest and Highest (`2152.33`, `14979.57`), Zeros and Negatives. A date column takes the same percentiles on the dates - `hire_date`: median `2022-06-27`, fences `2013-06-08` and `2031-07-25` - with Std dev, Zeros and Negatives left blank; its dates after today and before 1900 go to What stands out only.
+
+**Patterns** - folded: the three most common shapes of each text column, each with its Count, its % of the non-null values and the first value of that shape in the file. A shape turns every letter into `A` and every digit into `9` and keeps the rest as written - `E10001` is `A99999`, `2026-01-12` is `9999-99-99`, `Finance & Control` is `AAAAAAA & AAAAAAA` - and Collapsed folds the runs, `A+9+`, `9+-9+-9+`, `A+ & A+`, so `CC-220` and `CC-1100` read as one. On the sample `emp_id` is `A99999` on all 3,000 rows; `first_name` is `AAAAA` on 1,243 (41.43%), `AAAA` on 999 and `AAAAAA` on 596, and the note above says a fourth shape exists.
+
+**Dependencies** - folded, two tables. First the functional dependencies: X → Y when every value of X goes with one value of Y, found by counting - X determines Y when X alone and X with Y have the same number of distinct values, a null counting as a value. The columns are Determines, Determined, Kind (`many-to-one`, or `one-to-one` when it holds the other way round too - listed once, the column that comes first in the table first) and Distinct, the values of X. Tried as X: every column that is neither unique, nor nearly unique (99% of the filled rows), nor constant - those determine everything and say nothing - the fewest values first, at most 40; any other non-constant column can be Y. Payroll's `Dept → CostCenter` is one, many-to-one with 11 distinct values. Then the correlated number columns: Pearson's r for every pair of the first 30 number columns, keeping the pairs with |r| ≥ 0.7, the strongest first - Column A, Column B, r. Where either cap cut columns, What stands out says so.
+
+**Value frequencies** - one fold per column, labelled *emp_id - text · 3,000 distinct · 0.0% null*, with the 10 most and the 10 least frequent values side by side.
 
 The profile goes when another table is loaded; measured under other null tokens or another *Trim whitespace* setting than the page's (both set under *How values are read* on the Compare page, and they apply here too), it says so (*This profile is from earlier settings - run it again to refresh*). Compare is untouched: switch back and the sides, the column table, the result and the Log are where they were.
 
@@ -404,7 +478,8 @@ HR_compare_Payroll__columns.csv      the column sheet: column, name_a, name_b, r
                                      how the pair was made (name, similar name, guess - check, data, you, file),
                                      blank on a one-sided column
 HR_compare_Payroll__profile.csv      when a profile ran: column, side, rows, nulls, null_pct, distinct,
-                                     distinct_pct, min, max, mean, avg_length
+                                     distinct_pct (of the filled rows), distinct_pct_rows (of all rows),
+                                     top_value, top_pct, min, max, mean, avg_length, min_length, max_length
 HR_compare_Payroll__summary.csv      one row: schema_version, run_id, started_at, pair, left, right, mode, keys,
                                      rows_left_read, rows_right_read, rows_left, rows_right, matched_rows,
                                      only_left, only_right, diff_rows, cell_diffs, duplicate_keys_left,
@@ -516,8 +591,9 @@ tablecmp/
   values.py           transform steps, null folding, types, canonical text, registration, type check
   sniff.py            what a text column's values look like - the looks-like suggestions
   columns.py          the column table: pairing, normalisation, specs, roles and chips, mapping JSON, match by data
-  keys.py             key uniqueness, overlap, reasons, Desbordante / DuckDB suggestion
+  keys.py             key uniqueness, overlap, reasons, Desbordante / DuckDB suggestion - for a pair or one table
   profile.py          statistics and value frequencies, of a pair or of one table; what the key search reads from them
+  observe.py          what stands out in one table: duplicates, the key, dependencies, correlations, outliers, patterns, the notes
   compare.py          running a comparison (engine, position, hash), filters, and reading it back
   outputs.py          the run folder: pair name, verdict, summary / columns / profile writers, Parquet copies, zip, saves, sweep
   report.py           the HTML report
@@ -529,7 +605,7 @@ tablecmp/
   ui_keys.py          Suggest keys, Check key, hash / position without a key
   ui_results.py       the verdict and the four result tabs
   ui_log.py           the run disc and the Log panel - every long run reports to one place
-  ui_profile.py       the Profiling page: one table, its statistics and value frequencies
+  ui_profile.py       the Profiling page: one table - keys, what stands out, statistics, outliers, patterns, dependencies, frequencies
 ```
 
 The engine is a black box to the app: it receives two DuckDB tables named `src_a` and `src_b` with the common column names and canonical values already applied, and the app reads back its counts and its CSV outputs. Only the `ui_*.py` modules, `compare_app.py` and `state.py` touch Streamlit; everything else is plain Python over DuckDB and pandas, which is what makes the headless tests below possible.
@@ -552,7 +628,7 @@ Matching strategies: `key` (join on one or more business-key columns, recommende
 Small, verified steps. Before handing over a change:
 
 1. `python -m py_compile compare_app.py tablecmp/*.py` - everything must compile.
-2. `python -m pytest tests -q` - the suite (181 tests, about two minutes): units for every module - the start-up settings, connections and URIs, the dialects and the read-only guard, the read-only switches passed to a stub driver, the fetch against a fake cursor and DuckDB end to end, the column table with its roles and chips, the looks-like sniff, keys and reasons, the profile of one table, the outputs and the sweep, the report, the run disc and the Log - and the whole app headless through Streamlit's `AppTest`: the file flow and the database flow on the sample pair, asserting the counts in `docs/superpowers/plans/COUNTS.md` and grepping every output for the fake password, the Summary tab's Key block, and the Profiling page from a file and from the sample database. The database tests set `COMPARE_CONNECTIONS` to a temp file, so your own connections are never read or written.
+2. `python -m pytest tests -q` - the suite (206 tests, about two minutes): units for every module - the start-up settings, connections and URIs, the dialects and the read-only guard, the read-only switches passed to a stub driver, the fetch against a fake cursor and DuckDB end to end, the column table with its roles and chips, the looks-like sniff, keys and reasons for a pair and for one table, the profile of one table and what stands out in it, the outputs and the sweep, the report, the run disc and the Log - and the whole app headless through Streamlit's `AppTest`: the file flow and the database flow on the sample pair, asserting the counts in `docs/superpowers/plans/COUNTS.md` and grepping every output for the fake password, the Summary tab's Key block, and the Profiling page from a file and from the sample database. The database tests set `COMPARE_CONNECTIONS` to a temp file, so your own connections are never read or written.
 3. To drive the app yourself, the same way the tests do - check the numbers, not just that it ran:
 
 ```python
