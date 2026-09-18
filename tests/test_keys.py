@@ -370,11 +370,11 @@ def test_single_counts_null_keys_apart_from_duplicates(tmp_path):
     assert combos[0] == ["code"]
     code = table.iloc[0]
     assert code["Unique"] == "yes" and code["Null keys"] == 0 and "no nulls" in code["Why"]
-    row = table[table["Key columns"].str.startswith("id")].iloc[0]     # id alone is not unique: grown
+    row = table[table["Key columns"] == "id"].iloc[0]     # id is not unique, and code adds nothing to it
     assert row["Null keys"] == 10 and row["Duplicate rows"] == 0 and row["Unique"] == "no"
     # the 10 rows with no id share nothing - they have no key - so the Why does not say they do
-    assert row["Why"] == ("id, code say identifier · 10 nulls · 90 distinct of 100 · "
-                          "adds nothing - code is already unique · grown from the most selective column")
+    assert row["Why"] == ("name says identifier · 10 nulls · 90 distinct of 100 · "
+                          "on its own - adding a column told no more rows apart")
     # every row twice: duplicates, no null keys
     (tmp_path / "dup").mkdir()
     D = _csv_single(tmp_path / "dup", ["id", "code"], [[i // 2, f"C{i // 2}"] for i in range(100)])
@@ -382,6 +382,21 @@ def test_single_counts_null_keys_apart_from_duplicates(tmp_path):
     assert dup_c and all(dup_t["Unique"] == "no") and all(dup_t["Null keys"] == 0)
     assert dup_t.iloc[0]["Distinct"] == 50 and dup_t.iloc[0]["Duplicate rows"] == 50
     assert "50 distinct of 100 · 50 rows share it" in dup_t.iloc[0]["Why"]
+
+
+def test_single_null_seed_stands_on_its_own(tmp_path):
+    """With nulls apart a column that has a null can never be part of a unique key, so growing
+    it only carries columns that tell no more rows apart: the seed is offered on its own, and
+    the combination that is unique without it is found beside it."""
+    rows = [[("" if i == 3 else f"E{i}"), f"a{i % 10}", f"b{i // 10}", f"d{i % 3}"] for i in range(100)]
+    A, = _csv_sides(tmp_path, ["emp_id", "a", "b", "d"], rows, rows)[:1]
+    table, combos, _ = suggest_keys_single(A, [ColSpec(c, c, c) for c in A.columns], "t", OPTS)
+    by = table.set_index("Key columns")
+    assert combos[0] == ["a", "b"] and by.at["a + b", "Unique"] == "yes"
+    assert combos[1] == ["emp_id"]
+    assert by.at["emp_id", "Distinct"] == 99 and by.at["emp_id", "Null keys"] == 1
+    assert by.at["emp_id", "Why"].endswith("99 distinct of 100 · on its own - adding a column told no more rows apart")
+    assert not any(len(c) > 2 for c in combos), combos        # nothing four columns wide
 
 
 def test_single_null_keys_never_make_a_combination_unique(tmp_path):

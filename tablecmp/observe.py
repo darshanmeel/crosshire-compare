@@ -39,6 +39,7 @@ TOP_SHAPES = 3              # shapes kept per text column
 MIN_CORR = 0.7              # |r| from which a pair is listed
 NEAR_UNIQUE = 99.0          # distinct % of filled from which a column is nearly unique
 LETTER = r"\p{L}"           # RE2: a letter in any script
+HUGE = 1e150                # a number from here up is left out of the outliers (see measurable)
 EPOCH = datetime(1970, 1, 1)
 
 
@@ -53,6 +54,8 @@ def num(v) -> str:
     if v is None or (isinstance(v, float) and math.isnan(v)):
         return ""
     v = float(v)
+    if abs(v) >= 1e15:                       # a 150-digit integer says less than 1.00e+150
+        return f"{v:.2e}"
     if v.is_integer():
         return f"{int(v):,}"
     return f"{v:,.2f}" if abs(v) >= 1 else f"{v:.3g}"
@@ -68,15 +71,25 @@ def shape_sql(v: str) -> str:
     return f"regexp_replace(regexp_replace({v}, {lit(LETTER)}, 'A', 'g'), '[0-9]', '9', 'g')"
 
 
-def typed(s: ColSpec) -> str:
-    """The column read as its type, the way the statistics read it - a number only when it
-    is finite: NaN and ±inf are values to the reader, but no quantile, std dev or r can hold
-    them, so they read as null here and `outliers` counts them apart."""
+def measurable(s: ColSpec) -> str:
+    """The typed value, and whether a quantile, std dev or r can hold it: a number only
+    when it is finite and under HUGE (a std dev squares it, and 1e155² is past what a
+    double holds), a date or timestamp only when it is finite - `infinity` is a date to
+    DuckDB and to a Postgres export. Nulls are neither."""
     c = ident(s.canon)
-    if s.kind != "number":
-        return f"try_cast({c} AS {s.kind.upper()})"
-    d = f"try_cast({c} AS DOUBLE)"
-    return f"CASE WHEN isfinite({d}) THEN {d} END"
+    if s.kind == "number":
+        v = f"try_cast({c} AS DOUBLE)"
+        return v, f"isfinite({v}) AND abs({v}) < {HUGE!r}"
+    v = f"try_cast({c} AS {s.kind.upper()})"
+    return v, f"isfinite({v})"
+
+
+def typed(s: ColSpec) -> str:
+    """The column read as its type, the way the statistics read it, with what cannot be
+    measured read as null: NaN, ±inf and astronomically large numbers, infinite dates. They
+    are values to the reader, so `outliers` counts them apart and the notes say so."""
+    v, ok = measurable(s)
+    return f"CASE WHEN {ok} THEN {v} END"
 
 
 def facts_of(stats: pd.DataFrame) -> dict[str, dict]:
@@ -239,10 +252,10 @@ def outliers(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, dict[
     """One row per number / date / timestamp column: quantiles, Tukey's fences (1.5 × IQR),
     the values outside them, the extremes, zeros and negatives. Dates take the same quantiles
     on the typed value with the fences worked out on epoch seconds and shown as dates; their
-    Std dev, Zeros and Negatives are blank. A number that is NaN or infinite is left out (see
-    `typed`) and counted apart. Alongside the table, per column, what the notes need: the
-    counts each side of the fences, the non-finite values, dates after today and before
-    1900."""
+    Std dev, Zeros and Negatives are blank. A value that cannot be measured - NaN, infinite,
+    astronomically large (see `measurable`) - is left out and counted apart. Alongside the
+    table, per column, what the notes need: the counts each side of the fences, the values
+    left out, dates after today and before 1900."""
     rows, facts = [], {}
     qs = "[" + ", ".join(str(q) for q in QUANTILES) + "]"
     for s in specs:
@@ -250,15 +263,16 @@ def outliers(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, dict[
             continue
         numeric = s.kind == "number"
         c = ident(s.canon)
-        # the three counts after the std dev: zeros, negatives and non-finite values for a
-        # number; values after today and before 1900 for a date
-        extra = ("stddev_samp(x), count(*) FILTER (WHERE x = 0), count(*) FILTER (WHERE x < 0), "
-                 f"count(*) FILTER (WHERE NOT isfinite(try_cast({c} AS DOUBLE)))"
+        raw, ok = measurable(s)
+        # the three counts after the std dev: zeros and negatives for a number, values after
+        # today and before 1900 for a date; then what could not be measured (see measurable)
+        extra = ("stddev_samp(x), count(*) FILTER (WHERE x = 0), count(*) FILTER (WHERE x < 0)"
                  if numeric else
                  "NULL, count(*) FILTER (WHERE x > current_date), "
-                 "count(*) FILTER (WHERE x < DATE '1900-01-01'), 0")
+                 "count(*) FILTER (WHERE x < DATE '1900-01-01')")
         q, lo, hi, n, sd, first, second, bad = con.execute(
-            f"SELECT quantile_cont(x, {qs}), min(x), max(x), count(x), {extra} "
+            f"SELECT quantile_cont(x, {qs}), min(x), max(x), count(x), {extra}, "
+            f"count(*) FILTER (WHERE NOT ({ok})) "
             f"FROM (SELECT {typed(s)} AS x, {c} FROM {table})").fetchone()
         zeros, negs = (int(first), int(second)) if numeric else (0, 0)
         future, old = (0, 0) if numeric else (int(first), int(second))
@@ -448,7 +462,9 @@ def column_notes(con, table: str, s: ColSpec, f: dict, top: pd.DataFrame, look: 
         notes.append(f"{c}: {n_of(out['outliers'], 'outlier')}{where} (1.5 × IQR){ends}")
     if out and out.get("non_finite"):
         n = out["non_finite"]
-        notes.append(f"{c}: {n_of(n, 'value')} {'is' if n == 1 else 'are'} NaN or infinite - "
+        what = (f"NaN, infinite or beyond {HUGE:g}".replace("e+", "e") if s.kind == "number"
+                else "infinite")
+        notes.append(f"{c}: {n_of(n, 'value')} {'is' if n == 1 else 'are'} {what} - "
                      "left out of the outliers")
     if out and s.kind == "number" and (out["negatives"] or out["zeros"]):
         bits = ([n_of(out["negatives"], "negative value")] if out["negatives"] else []) \

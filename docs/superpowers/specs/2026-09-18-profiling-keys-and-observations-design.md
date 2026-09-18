@@ -238,8 +238,9 @@ After **Profile**, top to bottom:
 1. **File** - as now, with *First 10 rows*.
 2. **Profile** heading, then the headline as a caption.
 3. **Keys** - the success line (`Key: emp_id - unique on every row. Found by …`) or the
-   warning (`Nothing up to four columns is unique - the closest are below. …`), then the
-   candidate table.
+   warning (`Nothing up to 4 columns is unique - the closest are below. …` - the number is
+   `keys.MAX_KEY_COLS`, the one constant the search depth, the notes and the page share), then
+   the candidate table.
 4. **What stands out** - the notes as a Markdown bullet list; when empty,
    *Nothing stands out - no nulls, no duplicates, no constant columns, no outliers.*
 5. **Statistics** - the stats table, then the download / save row. **Download profile.csv**

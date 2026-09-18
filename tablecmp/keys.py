@@ -109,6 +109,7 @@ def ucc_candidates(con, view: str, columns: list[str], error: float = 0.0,
 
 HOW_SINGLE = "unique by itself"
 HOW_GROWN = "grown from the most selective column"
+HOW_ALONE = "on its own - adding a column told no more rows apart"
 HOW_HYUCC = "found with Desbordante HyUCC"
 HOW_PYRO = "found with Desbordante PyroUCC as almost unique"
 
@@ -204,9 +205,14 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
                     best, best_d, best_score = col, cand, sc
             if best is None:
                 break
+            # with nulls apart a null-key row is never told apart, so a column that raises
+            # the count by nothing is not carried - the seed stands on its own; a pair keeps
+            # growing, as it always has
+            if nulls_apart and best_score <= selectivity(d, totals):
+                break
             cols, d = cols + [best], best_d
             pool.remove(best)
-        offer(cols, d, how)
+        offer(cols, d, HOW_ALONE if nulls_apart and cols == list(seed_cols) and how == HOW_GROWN else how)
 
     pair = len(views) > 1
     if desbordante_available():

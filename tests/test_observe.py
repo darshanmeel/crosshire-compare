@@ -365,10 +365,10 @@ def test_non_finite_numbers_are_left_out_and_said(tmp_path):
     row = out["outliers"].set_index("Column").loc["ratio"]
     assert row["Outliers"] == 0 and row["Std dev"] != "" and row["Median"] == "72"
     assert row["Low fence"] != "" and row["High fence"] != ""
-    assert "ratio: 3 values are NaN or infinite - left out of the outliers" in out["notes"]
+    assert "ratio: 3 values are NaN, infinite or beyond 1e150 - left out of the outliers" in out["notes"]
     one = _measure(_side(_write(tmp_path / "nan.csv", ["id", "amount"],
                                 [[i, i * 1.5] for i in range(1, 50)] + [[50, "NaN"]])))
-    assert "amount: 1 value is NaN or infinite - left out of the outliers" in one["notes"]
+    assert "amount: 1 value is NaN, infinite or beyond 1e150 - left out of the outliers" in one["notes"]
     assert one["outliers"].set_index("Column").loc["amount"]["Outliers"] == 0
     # a NaN cell in one of two correlated columns does not stop corr()
     assert one["corr"].values.tolist() == [["id", "amount", 1.0]]
@@ -377,7 +377,30 @@ def test_non_finite_numbers_are_left_out_and_said(tmp_path):
     allbad = _measure(_side(_write(tmp_path / "allbad.csv", ["v"], [["inf"], ["NaN"], ["-inf"]])))
     row = allbad["outliers"].iloc[0]
     assert row["Outliers"] == 0 and row["Low fence"] == "" and row["Median"] == ""
-    assert "v: 3 values are NaN or infinite - left out of the outliers" in allbad["notes"]
+    assert "v: 3 values are NaN, infinite or beyond 1e150 - left out of the outliers" in allbad["notes"]
+
+
+def test_huge_numbers_and_infinite_dates_are_left_out(tmp_path):
+    """A std dev squares its values, and one 1e200 among ordinary numbers overflows it -
+    DuckDB raises rather than rounding. A number from 1e150 up is left out the way NaN is,
+    and said. A date column can hold `infinity` (a Postgres export of an open-ended date):
+    no quantile holds it either, so it is left out and said in its own words."""
+    rows = [[i, (1e200 if i == 50 else i * 1.5)] for i in range(100)]
+    out = _measure(_side(_write(tmp_path / "huge.csv", ["id", "v"], rows)))
+    row = out["outliers"].set_index("Column").loc["v"]
+    assert row["Outliers"] == 0 and row["Std dev"] == "43.7386" and row["Highest"] == "148.5"
+    assert "v: 1 value is NaN, infinite or beyond 1e150 - left out of the outliers" in out["notes"]
+    assert out["corr"].values.tolist() == [["id", "v", 1.0]]         # corr survives it too
+    # 1e150 itself is out, 1e149 is in - and reads in prose as 1.00e+149, not 150 digits
+    edge = _measure(_side(_write(tmp_path / "edge.csv", ["id", "v"],
+                                 [[i, i] for i in range(99)] + [[99, "1e149"]])))
+    assert "v: 1 outlier - above 148.50 (1.5 × IQR) · highest 1.00e+149" in edge["notes"]
+    rows = [[i, ("infinity" if i % 3 == 0 else f"2024-01-{i % 28 + 1:02d}")] for i in range(100)]
+    out = _measure(_side(_write(tmp_path / "infdate.csv", ["id", "valid_to"], rows)))
+    row = out["outliers"].set_index("Column").loc["valid_to"]
+    assert row["Type"] == "date" and row["Highest"] == "2024-01-28" and row["Outliers"] == 0
+    assert "valid_to: 34 values are infinite - left out of the outliers" in out["notes"]
+    assert not any("after today" in n for n in out["notes"])
 
 
 def test_sentinel_dates_do_not_overflow(tmp_path):
