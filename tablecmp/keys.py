@@ -110,6 +110,7 @@ def ucc_candidates(con, view: str, columns: list[str], error: float = 0.0,
 HOW_SINGLE = "unique by itself"
 HOW_GROWN = "grown from the most selective column"
 HOW_ALONE = "on its own - adding a column told no more rows apart"
+HOW_ONLY = "on its own - no other column to add"
 HOW_HYUCC = "found with Desbordante HyUCC"
 HOW_PYRO = "found with Desbordante PyroUCC as almost unique"
 
@@ -144,11 +145,18 @@ def rank(found: list[tuple[list[str], dict[str, int], str]], totals: dict[str, i
          overlap: dict[tuple, float] | None = None) -> None:
     """Sort the candidates in place: unique first; a combination that only adds columns to a
     key that is already unique adds nothing, whatever the affinity of the extra columns says,
-    so it goes below; then affinity sum, the share of values the other side has when there
-    is one, fewer columns, selectivity."""
+    so it goes below; on a pair, one with no values in common pairs no rows, so it goes
+    below every one that pairs some - a row number each side counts for itself under a
+    name and a date shared by both; then the ones that look like a key (no measure among
+    them); then the ones with an identifier in the name - emp_id above hire_date +
+    first_name + last_name, however key-like a name and a date read; then affinity sum,
+    the share of values the other side has when there is one, fewer columns, selectivity."""
     def key(f):
         cols, d, _ = f
         return (not is_unique(d, totals), any(u < set(cols) for u in unique_sets),
+                overlap is not None and not overlap[tuple(cols)],
+                not all(affinity[c] >= 0 for c in cols),
+                not any(ID_WORDS.search(c) for c in cols),
                 -sum(affinity[c] for c in cols),
                 -round(overlap[tuple(cols)]) if overlap is not None else 0,
                 len(cols), -selectivity(d, totals))
@@ -158,20 +166,31 @@ def rank(found: list[tuple[list[str], dict[str, int], str]], totals: dict[str, i
 def search_keys(con, views, totals: dict[str, int], candidates: list[str],
                 singles: dict[str, dict[str, int]], nulls: dict[str, int],
                 affinity: dict[str, int], max_cols: int, want: int, say,
-                nulls_apart: bool = False
+                nulls_apart: bool = False, pairs=None
                 ) -> tuple[list[tuple[list[str], dict[str, int], str]], list[frozenset], str]:
     """The candidate search, over any number of side views on one connection - a pair, or a
     table on its own: every column unique by itself, then combinations grown from the most
     selective columns (affinity-ranked, up to `max_cols`), or Desbordante's HyUCC / PyroUCC
-    on the first UCC_SAMPLE rows when it is installed, verified on every row. Returns each
-    candidate as (columns, distinct per view, how it was found), ranked; the column sets
-    that are unique, so a superset can say it adds nothing; and the note on how they were
-    found. A column with one value (or none) on every view can never tell rows apart, so it
-    is never a candidate. With `nulls_apart` a combination's distinct count leaves out the
-    rows where any of its columns is null, as key_uniqueness does - they identify nothing -
-    so it is unique only with no null keys and no duplicates, the way the one-table
-    candidate table reads Unique; a single column's count leaves them out either way. A
-    pair counts null as a value, as it always has."""
+    on the first UCC_SAMPLE rows when it is installed, verified on every row. Every
+    combination grown is minimal: nothing is grown onto a key that works already, and one
+    that is grown is cut back to the fewest columns that tell as many rows apart. The
+    columns that look like a key are tried before a measure, and a measure is tried only
+    while no key has been found at all - as a seed, as a column added, and in a second
+    growth with every column competing on selectivity alone when the key-like columns fill
+    a combination without making it unique: a key with an amount in it beats no key, and is
+    a coincidence beside one. `want` keys end the search. On a pair `pairs(cols)` says
+    whether a unique combination has any value in common with the other side: one with
+    none is unique but no key - it pairs no rows - so it neither ends the search nor keeps
+    a measure or a lone seed from being offered, though a superset of it still adds
+    nothing. Returns each candidate as (columns, distinct per view, how it was found),
+    ranked; the column sets that are unique, so a superset can say it adds nothing; and the
+    note on how they were found. A column with one value (or none) on every view can never
+    tell rows apart, so it is never a candidate. With `nulls_apart` a combination's distinct
+    count leaves out the rows where any of its columns is null, as key_uniqueness does -
+    they identify nothing - so it is unique only with no null keys and no duplicates, the
+    way the one-table candidate table reads Unique, and a column with a null can never
+    complete a key; a single column's count leaves them out either way. A pair counts null
+    as a value, as it always has."""
     candidates = [c for c in candidates if not all(singles[c][v] <= 1 for v in views)]
     order = {c: i for i, c in enumerate(candidates)}
     ranked = sorted(candidates, key=lambda c: (-affinity[c], nulls.get(c, 0) > 0,
@@ -187,22 +206,69 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
 
     found: list[tuple[list[str], dict[str, int], str]] = []
     seen: set[frozenset] = set()
+    uniques: list[frozenset] = []          # the column sets found unique, as they are found
+    keys: list[frozenset] = []             # the ones that pair rows - all of them on one table
 
     def offer(cols, d, how):
         if cols and frozenset(cols) not in seen:
             seen.add(frozenset(cols))
             found.append((cols, d, how))
+            if is_unique(d, totals):
+                uniques.append(frozenset(cols))
+                if pairs is None or pairs(cols):
+                    keys.append(frozenset(cols))
 
-    def grow(seed_cols, d, how=HOW_GROWN):
-        cols = list(seed_cols)
-        pool = [c for c in ranked if c not in cols]
+    def adds_nothing(cols: list[str]) -> bool:
+        """Holds more than a set that is unique already - columns added to a key that works.
+        The set itself is not that: reached again it is offered again, and dropped as seen."""
+        return any(u < set(cols) for u in uniques)
+
+    def shrink(cols, d):
+        """A combination cut back to a minimal one: a column that can go without the rest
+        telling fewer rows apart goes, the least key-like first, until none can - a key
+        stays a key, and the closest stays as close with fewer columns."""
+        while len(cols) > 1:
+            for col in sorted(cols, key=lambda c: affinity[c]):
+                rest = [c for c in cols if c != col]
+                rd = distinct(rest)
+                if all(rd[v] >= d[v] for v in totals):
+                    cols, d = rest, rd
+                    break
+            else:
+                break
+        return cols, d
+
+    def tier(c: str) -> tuple[bool, bool]:
+        """The order columns are tried in: the ones that look like a key before a measure,
+        and with nulls apart the ones without a null first - a null-key row is never told
+        apart, so a column with a null can never complete a key."""
+        return affinity[c] < 0, nulls_apart and nulls.get(c, 0) > 0
+
+    def climb(seed_cols, seed_d, tiered: bool):
+        """Columns added to the seed one at a time, the one that tells most rows apart each
+        time, until the combination is unique or full. Tiered, the columns of a better tier
+        are tried first and a worse tier only when none of them tells more rows apart;
+        untiered, every column competes on selectivity alone."""
+        cols, d = list(seed_cols), seed_d
+        # a column that would only be added to a key that works already is never carried -
+        # the combination would add nothing - and a measure is never added beside a key
+        pool = [c for c in ranked if c not in cols and not adds_nothing(cols + [c])
+                and not (keys and affinity[c] < 0)]
+        if not tiered and nulls_apart:
+            # this growth is after a key, and a column with a null can never complete one
+            pool = [c for c in pool if not nulls.get(c)]
         while not is_unique(d, totals) and len(cols) < max_cols and pool:
             best, best_d, best_score = None, None, -1.0
-            for col in pool[:12]:
-                cand = distinct(cols + [col])
-                sc = selectivity(cand, totals)
-                if sc > best_score:
-                    best, best_d, best_score = col, cand, sc
+            tiers = ([[c for c in pool if tier(c) == t] for t in sorted({tier(c) for c in pool})]
+                     if tiered else [pool])
+            for cands in tiers:
+                for col in cands[:12]:
+                    cand = distinct(cols + [col])
+                    sc = selectivity(cand, totals)
+                    if sc > best_score:
+                        best, best_d, best_score = col, cand, sc
+                if best is not None and best_score > selectivity(d, totals):
+                    break
             if best is None:
                 break
             # with nulls apart a null-key row is never told apart, so a column that raises
@@ -211,8 +277,29 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
             if nulls_apart and best_score <= selectivity(d, totals):
                 break
             cols, d = cols + [best], best_d
-            pool.remove(best)
-        offer(cols, d, HOW_ALONE if nulls_apart and cols == list(seed_cols) and how == HOW_GROWN else how)
+            pool = [c for c in pool if c != best and not adds_nothing(cols + [c])]
+        return cols, d
+
+    def grow(seed_cols, seed_d, how=HOW_GROWN):
+        others = [c for c in ranked if c not in seed_cols and not adds_nothing(list(seed_cols) + [c])]
+        cols, d = climb(seed_cols, seed_d, tiered=True)
+        # the columns that look like a key can fill the combination without making it
+        # unique while a measure would have - then, while no key has been found at all,
+        # the measure is taken, every column competing on selectivity alone: a key with an
+        # amount in it beats no key, and is a coincidence beside one
+        if not is_unique(d, totals) and not keys and any(affinity[c] < 0 for c in others):
+            alt, alt_d = climb(seed_cols, seed_d, tiered=False)
+            if is_unique(alt_d, totals):
+                cols, d = alt, alt_d
+        # a combination is cut back to the fewest columns that tell as many rows apart, so
+        # every key offered is minimal - and the closest is not a key that is not, padded
+        if len(cols) > 1:
+            cols, d = shrink(cols, d)
+        if len(cols) == 1 and how == HOW_GROWN:
+            if keys and not nulls_apart:
+                return      # a pair's column that nothing could be added to says nothing beside a key
+            how = HOW_ONLY if not others else HOW_ALONE
+        offer(cols, d, how)
 
     pair = len(views) > 1
     if desbordante_available():
@@ -249,9 +336,18 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
         for col in ranked:
             if is_unique(singles[col], totals):
                 offer([col], singles[col], HOW_SINGLE)
-        for seed in ranked[:4]:
-            if len(found) >= want:
-                break
+        # the seeds are the best four columns that are not keys on their own - one that is
+        # has been offered, and nothing grown from it could add anything; with nulls apart
+        # a column with a null can only stand on its own, so it is grown without using up
+        # one of the four that could grow a key; a measure is no seed beside a key
+        taken = {False: 0, True: 0}
+        for seed in [c for c in ranked if not is_unique(singles[c], totals)]:
+            if len(keys) >= want:
+                break       # only keys count towards the cut - the closest never end the search
+            null_seed = nulls_apart and nulls.get(seed, 0) > 0
+            if taken[null_seed] >= 4 or (affinity[seed] < 0 and keys):
+                continue
+            taken[null_seed] += 1
             grow([seed], singles[seed])
 
     unique_sets = [frozenset(cols) for cols, d, _ in found if is_unique(d, totals)]
@@ -344,22 +440,29 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
             nulls[c] = p["nulls_a"] + p["nulls_b"]
     affinity = {s.canon: key_affinity(s.canon, A.schema.get(s.a_src, ""),
                                       B.schema.get(s.b_src, "")) for s in specs}
-    found, unique_sets, note = search_keys(con, views, totals, candidates, singles, nulls,
-                                           affinity, max_cols, want, say)
-    if used_profile:
-        note += " - single-column figures from the profile"
+    ov: dict[tuple, float] = {}
 
     def overlap(cols: list[str]) -> float:
-        """Share of A's distinct key values also present in B."""
-        k = combo(cols)
-        n, m = con.execute(f"SELECT count(DISTINCT {k}), count(DISTINCT {k}) FILTER "
-                           f"(WHERE {k} IN (SELECT {k} FROM probe_b)) FROM probe_a").fetchone()
-        return m / n * 100 if n else 0.0
+        """Share of A's distinct key values also present in B - measured once per combination."""
+        if tuple(cols) not in ov:
+            k = combo(cols)
+            n, m = con.execute(f"SELECT count(DISTINCT {k}), count(DISTINCT {k}) FILTER "
+                               f"(WHERE {k} IN (SELECT {k} FROM probe_b)) FROM probe_a").fetchone()
+            ov[tuple(cols)] = m / n * 100 if n else 0.0
+        return ov[tuple(cols)]
+
+    # a key with no values in common pairs no rows, so it is no key to the search
+    found, unique_sets, note = search_keys(con, views, totals, candidates, singles, nulls,
+                                           affinity, max_cols, want, say,
+                                           pairs=lambda cols: overlap(cols) > 0)
+    if used_profile:
+        note += " - single-column figures from the profile"
 
     n_found = len(found)
     found = found[:want * 2]                       # the overlap is measured on the best of them
     say(f"Overlap between the sides for {len(found)} candidate(s)…")
-    ov = {tuple(cols): overlap(cols) for cols, _, _ in found}
+    for cols, _, _ in found:
+        overlap(cols)
     rank(found, totals, affinity, unique_sets, ov)
     found = found[:want]
     note = cut_said(note, want, n_found)
@@ -381,11 +484,13 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
 
 
 def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOptions,
-                        progress=None, max_cols: int = MAX_KEY_COLS, want: int = 8,
+                        progress=None, max_cols: int = MAX_KEY_COLS, want: int = 3,
                         con=None, view: str | None = None, stats: pd.DataFrame | None = None
                         ) -> tuple[pd.DataFrame, list[list[str]], str]:
     """Candidate keys of a table on its own, best first - the Profiling page - each with the
-    reasons for its place, plus a note on how they were found. `con` and `view` are a
+    reasons for its place, plus a note on how they were found. The best `want` are listed:
+    when anything is unique, only the keys - each minimal, no two the same - and when
+    nothing is, the closest. `con` and `view` are a
     connection where the table is already registered (the profile's), so it is not read
     again; without them it is read here. `stats` is the profile's statistics table
     (Column, Distinct, Nulls) of the same columns: when given, the single-column figures
@@ -417,6 +522,10 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
                                            affinity, max_cols, want, say, nulls_apart=True)
     if used_profile:
         note += " - single-column figures from the profile"
+    # beside a key only keys are listed; a combination that is not unique is the closest
+    # there is only when nothing is
+    keys = [f for f in found if is_unique(f[1], totals)]
+    found = keys or found
     note = cut_said(note, want, len(found))
     found = found[:want]
 

@@ -181,8 +181,10 @@ def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions
         chosen = good[0] if good else combos[0]
         cmap.loc[cmap["Common name"].isin(chosen), "Key"] = True
         i = combos.index(chosen)
-        # the runner-up is a real alternative, not the chosen key with a column added
-        runner = next((j for j, c in enumerate(combos) if j != i and not set(chosen) < set(c)), None)
+        # the runner-up is a real alternative: another key unique on both sides when the
+        # chosen one is, else the next closest - never the chosen key with a column added
+        runner = next((j for j, c in enumerate(combos) if j != i and not set(chosen) < set(c)
+                       and (not good or c in good)), None)
         notes.append(f"key: {' + '.join(chosen)}"
                      + ("" if good else " - NOT unique on both sides; the closest found. "
                                          "Rows sharing it are paired in file order")

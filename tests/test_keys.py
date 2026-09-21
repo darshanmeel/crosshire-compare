@@ -80,18 +80,16 @@ def test_reasons_and_overlap(tmp_path):
     assert row["Why"].startswith("amount: a measure, decimal - never a key") and "measure" in row["Why"]
 
 
-def test_superset_of_a_unique_key_ranks_below_it():
-    """emp_id + hire_date is unique too, but adds nothing - the minimal key wins whatever
-    the affinity sum says, and the superset says so."""
+def test_nothing_is_grown_onto_a_unique_key():
+    """emp_id + hire_date would be unique too, but adds nothing - nothing is grown onto a key
+    that works, so no candidate holds emp_id and another column, and none says so."""
     A, B, specs = _sides()
     specs.append(ColSpec(canon="hire_date", a_src="hire_date", b_src="HireDate", kind="date",
                          b_steps=[{"op": "to date", "params": {"fmt": "%d/%m/%Y"}}]))
     table, combos, _ = suggest_keys(A, B, specs, "hr", "payroll", OPTS)
     assert combos[0] == ["emp_id"]
-    sup = table[table["Key columns"].str.contains("hire_date") & table["Key columns"].str.contains("emp_id")]
-    assert len(sup) and "adds nothing - emp_id is already unique" in sup.iloc[0]["Why"]
-    assert "emp_id says identifier" in sup.iloc[0]["Why"]       # a hire date is not an identifier
-    assert "say identifier" not in sup.iloc[0]["Why"]
+    assert not any("emp_id" in c and len(c) > 1 for c in combos), combos
+    assert not any("adds nothing" in w for w in table["Why"])
 
 
 def test_names_and_dates_are_not_called_identifiers():
@@ -121,40 +119,227 @@ def test_disjoint_ids_rank_below_shared(tmp_path):
     A, B = _csv_sides(tmp_path, ["row_id", "code", "v"], rows[1], rows[5000])
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("row_id", "code", "v")]
     table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
-    assert combos[0] == ["code"]                          # unique on both AND shared
-    row = table[table["Key columns"] == "row_id"].iloc[0]
+    assert combos == [["code"], ["row_id"]]               # unique on both AND shared first;
+    row = table[table["Key columns"] == "row_id"].iloc[0]  # v, beside two keys, says nothing
     assert row["Overlap %"] == 0 and "no values in common" in row["Why"]
     assert row["Unique on both"] == "yes"
     assert "number their rows" not in row["Why"]           # a guess the figures cannot back
 
 
+def test_a_key_that_pairs_nothing_ranks_below_one_that_does(tmp_path):
+    """Each side numbers its own rows: row_id is unique on both and looks like a key, but
+    shares nothing, so the natural key name + date - unique, 100% shared - comes first
+    and Auto would pair rows with it."""
+    rows = {start: [[start + i, f"N{i % 40}", f"2024-01-{i // 40 + 1:02d}"] for i in range(200)]
+            for start in (1000, 5000)}
+    A, B = _csv_sides(tmp_path, ["row_id", "name", "date"], rows[1000], rows[5000])
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("row_id", "name", "date")]
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert [sorted(c) for c in combos] == [["date", "name"], ["row_id"]]
+    assert list(table["Unique on both"]) == ["yes", "yes"]
+    assert list(table["Overlap %"]) == [100.0, 0.0]
+    assert "no values in common" in table.iloc[1]["Why"]
+
+
+def test_a_pair_with_one_column_to_try_still_offers_it(tmp_path):
+    """The only column that varies is not unique: it is the closest there is, so it is
+    listed - on its own, with nothing to add - rather than nothing at all."""
+    rows = [["" if i == 3 else i, "x"] for i in range(20)]
+    A, B = _csv_sides(tmp_path, ["x_id", "k"], rows, rows)
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("x_id", "k")]
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos == [["x_id"]]
+    row = table.iloc[0]
+    assert row["Unique on both"] == "no" and row["Why"].endswith("on its own - no other column to add")
+    only = [ColSpec(canon="x_id", a_src="x_id", b_src="x_id", kind="text")]
+    _, combos, _ = suggest_keys(A, B, only, "a", "b", OPTS)
+    assert combos == [["x_id"]]
+
+
+def test_a_grown_key_is_cut_back_to_minimal(tmp_path):
+    """grp_id grows to grp_id + b + a, unique - and grp_id can go without losing that, so
+    the key listed is a + b alone, on one table and on a pair alike; the seeds a and b
+    reach the same set and are dropped as seen."""
+    rows = [[i % 5, i % 10, i // 10] for i in range(100)]
+    header = ["grp_id", "a", "b"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
+    P = _csv_single(tmp_path, header, rows)
+    table, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
+    assert [sorted(c) for c in combos] == [["a", "b"]]
+    assert table.iloc[0]["Unique"] == "yes" and "adds nothing" not in table.iloc[0]["Why"]
+    A, B = _csv_sides(tmp_path, header, rows, rows)
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert [sorted(c) for c in combos] == [["a", "b"]]
+    assert table.iloc[0]["Unique on both"] == "yes"
+
+
+def test_a_measure_completes_the_key_the_key_like_columns_cannot(tmp_path):
+    """order_id + k1_code + k2_code + k3_code fills the combination without being unique;
+    order_id + amount is. The key-like columns are tried first, but with no key found at
+    all the measure is taken - on one table, on a pair, and so by Auto."""
+    from tablecmp.auto import auto_configure
+    rows = [[i // 2, f"{(i % 2) * 1.5:.1f}", (i % 2) if i < 50 else 0, (i % 2) if 50 <= i < 75 else 0,
+             (i % 2) if 75 <= i < 88 else 0] for i in range(100)]
+    header = ["order_id", "amount", "k1_code", "k2_code", "k3_code"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="number" if c == "amount" else "text")
+             for c in header]
+    P = _csv_single(tmp_path, header, rows)
+    table, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
+    assert combos == [["order_id", "amount"]] and table.iloc[0]["Unique"] == "yes"
+    A, B = _csv_sides(tmp_path, header, rows, rows)
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos[0] == ["order_id", "amount"] and table.iloc[0]["Unique on both"] == "yes"
+    A.name, B.name = "a", "b"
+    _, _, chosen, _ = auto_configure(A, B, "a", "b", OPTS, lambda m: None)
+    assert chosen == ["order_id", "amount"]
+    # beside a key that makes sense a measure is never taken: hr lists emp_id and the
+    # natural key, not department + salary, unique though it is
+    P, hspecs = _single()
+    _, combos, _ = suggest_keys_single(P, hspecs, "hr", OPTS)
+    assert not any("salary" in c for c in combos), combos
+
+
+def test_the_closest_never_end_the_search(tmp_path):
+    """Id columns with a null each are the best seeds and stand on their own - not keys;
+    three must not use up the three the page lists, and four must not use up the four
+    seeds, before alpha + beta, the key, is grown - with nulls apart a column with a null
+    can never complete a key, so it is not one of the four seeds that could."""
+    for n_ids in (3, 4):
+        ids = [f"{c}_id" for c in "abcd"[:n_ids]]
+        rows = [[("" if i == 3 + 2 * j else i) for j in range(n_ids)] + [i // 10, i % 10]
+                for i in range(100)]
+        header = ids + ["alpha", "beta"]
+        specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
+        (tmp_path / str(n_ids)).mkdir()
+        P = _csv_single(tmp_path / str(n_ids), header, rows)
+        table, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
+        assert combos == [["alpha", "beta"]] and table.iloc[0]["Unique"] == "yes", n_ids
+
+
+def test_a_unique_column_uses_up_no_seed(tmp_path):
+    """A column unique on its own is a key already and nothing grown from it could add
+    anything, so it is no seed: four unique id columns leave the four seeds to alpha and
+    beta, and the natural key is grown beside them - on a pair, and on one table where
+    two unique ids leave room for it among the three listed."""
+    rows = [[f"a{i}", f"b{i}", f"c{i}", f"d{i}", i // 10, i % 10] for i in range(100)]
+    header = ["a_id", "b_id", "c_id", "d_id", "alpha", "beta"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
+    A, B = _csv_sides(tmp_path, header, rows, rows)
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos == [["a_id"], ["b_id"], ["c_id"], ["d_id"], ["alpha", "beta"]], combos
+    assert list(table["Unique on both"]) == ["yes"] * 5
+    P = _csv_single(tmp_path, header[:2] + header[4:], [r[:2] + r[4:] for r in rows])
+    table, combos, _ = suggest_keys_single(P, specs[:2] + specs[4:], "t", OPTS)
+    assert combos == [["a_id"], ["b_id"], ["alpha", "beta"]], combos
+    assert list(table["Unique"]) == ["yes"] * 3
+
+
+def test_a_measure_is_never_taken_beside_a_key(tmp_path):
+    """department + salary is unique on hr, but emp_id is the key: a measure is no seed
+    and is added to nothing while a key exists, on one table and on the pair alike."""
+    P, = _read(Side(name="hr", label="hr_employees.csv", csv_path=str(EX / "hr_employees.csv")))
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="number" if c == "salary" else "text")
+             for c in ("emp_id", "department", "salary")]
+    _, combos, _ = suggest_keys_single(P, specs, "hr", OPTS)
+    assert combos == [["emp_id"]]
+    A, B, specs = _sides()
+    _, combos, _ = suggest_keys(A, B, specs, "hr", "payroll", OPTS)
+    assert combos[0] == ["emp_id"] and not any("salary" in c for c in combos), combos
+    rows = [[i // 2, f"{(i % 2) * 1.5:.1f}", i] for i in range(100)]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="number" if c == "amount" else "text")
+             for c in ("order_id", "amount", "row_no")]
+    P = _csv_single(tmp_path, ["order_id", "amount", "row_no"], rows)
+    _, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
+    assert combos == [["row_no"]]
+
+
+def test_rank_puts_a_measure_key_under_a_clean_one():
+    """A key with a measure in it ranks under one without, whatever else the names say -
+    order_id + amount under alpha + beta, on one table and on a pair."""
+    from tablecmp.keys import rank
+    tot = {"probe": 100}
+    aff = {"order_id": 3, "amount": -7, "alpha": 0, "beta": 0}
+    found = [(["order_id", "amount"], {"probe": 100}, "how"), (["alpha", "beta"], {"probe": 100}, "how")]
+    rank(found, tot, aff, [frozenset(c) for c, _, _ in found])
+    assert [c for c, _, _ in found] == [["alpha", "beta"], ["order_id", "amount"]]
+    ov = {("order_id", "amount"): 100.0, ("alpha", "beta"): 90.0}
+    rank(found, tot, aff, [frozenset(c) for c, _, _ in found], ov)
+    assert [c for c, _, _ in found] == [["alpha", "beta"], ["order_id", "amount"]]
+
+
+def test_the_second_growth_leaves_null_columns_out(tmp_path):
+    """x_id fills up with key-like columns without a key; the growth on selectivity alone
+    that follows leaves n_id out - a column with a null can never complete a key, and it
+    would win on selectivity - so x_id + y + amount is found."""
+    rows = [[i // 10, "" if i == 3 else f"N{i}", i // 25, i // 50, i % 5, f"{(i % 2) * 1.5:.1f}"]
+            for i in range(100)]
+    header = ["x_id", "n_id", "z1_code", "z2_code", "y", "amount"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="number" if c == "amount" else "text")
+             for c in header]
+    P = _csv_single(tmp_path, header, rows)
+    table, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
+    assert combos == [["x_id", "y", "amount"]] and table.iloc[0]["Unique"] == "yes"
+
+
+def test_shrink_lets_the_least_key_like_column_go_first(tmp_path):
+    """grp_id + x + amount is unique, and so are grp_id + amount and x + amount: the least
+    key-like column goes first, so the key kept is grp_id + amount."""
+    rows = [[i // 10, i % 5, (i // 10 + 3 * (i % 10)) % 25] for i in range(100)]
+    header = ["grp_id", "x", "amount"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
+    P = _csv_single(tmp_path, header, rows)
+    _, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
+    assert combos == [["grp_id", "amount"]]
+
+
+def test_a_key_that_pairs_nothing_does_not_end_the_search(tmp_path):
+    """row_id is unique on both sides and shares nothing: no key to the search, so the
+    measure that completes order_id is still taken, the key found ranks above row_id, and
+    Auto pairs rows with it."""
+    from tablecmp.auto import auto_configure
+
+    def rows(start):
+        return [[start + i, i // 2, f"{(i % 2) * 1.5:.1f}", (i % 2) if i < 50 else 0,
+                 (i % 2) if 50 <= i < 75 else 0, (i % 2) if 75 <= i < 88 else 0] for i in range(100)]
+    header = ["row_id", "order_id", "amount", "k1_code", "k2_code", "k3_code"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="number" if c == "amount" else "text")
+             for c in header]
+    A, B = _csv_sides(tmp_path, header, rows(1), rows(5000))
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos[:2] == [["order_id", "amount"], ["row_id"]]
+    assert list(table["Overlap %"][:2]) == [100.0, 0.0]
+    A.name, B.name = "a", "b"
+    _, _, chosen, _ = auto_configure(A, B, "a", "b", OPTS, lambda m: None)
+    assert chosen == ["order_id", "amount"]
+
+
 def test_zero_overlap_names_the_column_to_blame(tmp_path):
     """id is shared 100% and name is spelt differently on each side: the combination
-    name + id shares nothing, and the Why says name is the reason - not the ids."""
-    rows_a = [[i, f"N{i % 50}", i % 7] for i in range(200)]
-    rows_b = [[i, f"M{i % 50}", i % 7] for i in range(200)]
+    id + name shares nothing, and the Why says name is the reason - not the ids."""
+    rows_a = [[i // 2, f"N{i % 2}", i % 7] for i in range(200)]      # id twice; id + name and id + v unique
+    rows_b = [[i // 2, f"M{i % 2}", i % 7] for i in range(200)]
     A, B = _csv_sides(tmp_path, ["id", "name", "v"], rows_a, rows_b)
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("id", "name", "v")]
     table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
-    assert combos[0] == ["id"] and table.iloc[0]["Overlap %"] == 100
-    row = table[table["Key columns"] == "name + id"].iloc[0]
-    assert row["Overlap %"] == 0
+    by = {frozenset(k.split(" + ")): r for k, r in table.set_index("Key columns").iterrows()}
+    row = by[frozenset(("id", "name"))]
+    assert row["Unique on both"] == "yes" and row["Overlap %"] == 0
     assert "no values in common - none of a's name values found in b" in row["Why"]
     assert "number their rows" not in row["Why"]
-    assert "adds nothing - id is already unique" in row["Why"]
-    with_v = table[table["Key columns"] == "v + id"].iloc[0]
+    with_v = by[frozenset(("id", "v"))]
     assert with_v["Overlap %"] == 100 and "100.0% of a's values found in b" in with_v["Why"]
 
 
 def test_zero_overlap_of_shared_columns_blames_the_combination(tmp_path):
     """Every column alone is shared, only the pairing differs - no column is named."""
-    rows_a = [[i % 20, f"C{i}"] for i in range(200)]
-    rows_b = [[(i + 1) % 20, f"C{i}"] for i in range(200)]
+    rows_a = [[i % 20, f"C{i // 2}"] for i in range(200)]          # neither column unique alone
+    rows_b = [[(i + 2) % 20, f"C{i // 2}"] for i in range(200)]
     A, B = _csv_sides(tmp_path, ["id", "code"], rows_a, rows_b)
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("id", "code")]
-    table, _, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
-    row = table[table["Key columns"] == "id + code"].iloc[0]
-    assert row["Overlap %"] == 0
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert sorted(combos[0]) == ["code", "id"]
+    row = table.iloc[0]
+    assert row["Unique on both"] == "yes" and row["Overlap %"] == 0
     assert "no values in common, though every column alone shares some" in row["Why"]
     assert "none of" not in row["Why"] and "number their rows" not in row["Why"]
 
@@ -172,13 +357,16 @@ def test_non_unique_key_says_how_many_share_it(tmp_path):
 
 
 def test_nulls_are_counted(tmp_path):
-    rows = [[i if i % 10 else "", f"C{i}"] for i in range(100)]   # 10 empty ids
+    rows = [[i if i % 10 else "", f"C{i // 2}"] for i in range(100)]   # 10 empty ids, every code twice
     A, B = _csv_sides(tmp_path, ["id", "code"], rows, rows)
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("id", "code")]
-    table, _, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
-    row = table[table["Key columns"].str.contains("id")].iloc[0]     # id alone is not unique: grown
-    assert "20 nulls" in row["Why"]
-    assert "no nulls" in table[table["Key columns"] == "code"].iloc[0]["Why"]
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert sorted(combos[0]) == ["code", "id"]                 # neither alone: grown
+    assert "20 nulls" in table.iloc[0]["Why"]                  # 10 on each side
+    (tmp_path / "full").mkdir()
+    full = [[i, f"C{i // 2}"] for i in range(100)]
+    table, combos, _ = suggest_keys(*_csv_sides(tmp_path / "full", ["id", "code"], full, full), specs, "a", "b", OPTS)
+    assert combos[0] == ["id"] and "no nulls" in table.iloc[0]["Why"]
 
 
 def test_key_uniqueness_counts_null_keys_apart_from_duplicates(tmp_path):
@@ -261,7 +449,7 @@ def test_auto_configure_returns_profile_and_reasons():
     assert any(m.startswith("Profiling both sides") for m in said)
     key_note = next(n for n in notes if n.startswith("key: emp_id"))
     assert "identifier" in key_note and "no nulls" in key_note
-    assert "Runner-up:" not in key_note                    # every other candidate only adds to emp_id
+    assert "Runner-up:" not in key_note                    # nothing else is unique on both sides
     assert any(n.startswith("key search:") for n in notes)
     assert any(n.startswith("last_name:") and "distinct values" in n for n in notes)   # a profile note
     cmap2, notes2, chosen2, prof2 = auto_configure(A, B, "hr", "payroll", OPTS, said.append, profile=prof)
@@ -309,10 +497,14 @@ def test_single_table_key_and_reasons():
     assert "3,000 distinct of 3,000" in top["Why"] and top["Why"].endswith("unique by itself")
     assert " in hr" not in top["Why"] and "found in" not in top["Why"]     # one table: no side names, no overlap
     assert "growing" in note and "profile" not in note.lower()
-    sup = table[table["Key columns"] == "hire_date + emp_id"]
-    assert len(sup) and sup.iloc[0]["Unique"] == "yes"
-    assert "adds nothing - emp_id is already unique" in sup.iloc[0]["Why"] and "grown" in sup.iloc[0]["Why"]
-    assert "emp_id says identifier" in sup.iloc[0]["Why"]
+    # beside a key only keys are listed, each minimal and none holding emp_id with more:
+    # the natural key of a name and a date is the other one, ranked under the identifier
+    assert len(table) <= 3 and all(table["Unique"] == "yes")
+    assert not any("emp_id" in c and len(c) > 1 for c in combos), combos
+    assert not any("adds nothing" in w for w in table["Why"])
+    natural = table[table["Key columns"] == "hire_date + first_name + last_name"]
+    assert len(natural) and natural.iloc[0]["Why"].startswith("a name, not an identifier")
+    assert natural.iloc[0]["Why"].endswith("grown from the most selective column")
 
 
 def test_single_measure_column_in_the_only_key(tmp_path):
@@ -351,11 +543,14 @@ def test_single_takes_the_profile_figures_and_connection():
     bare_t, _, bare_note = suggest_keys_single(P, specs, "hr", OPTS, con=con, view="prof", stats=bare)
     assert bare_t.to_dict("records") == plain.to_dict("records") and bare_note == note3
     # the figures are taken from the profile, not measured: told emp_id has a null and 2,999
-    # distinct, the search no longer offers it by itself and grows past it
+    # distinct, the search no longer offers it by itself and grows past it - the columns
+    # without a null first, so the natural key is grown from hire_date and emp_id is a seed
     told = pd.DataFrame({"Column": ["emp_id"], "Distinct": [2999], "Nulls": [1]})
     grown, combos4, _ = suggest_keys_single(P, specs, "hr", OPTS, con=con, view="prof", stats=told)
-    assert ["emp_id"] not in combos4 and all("emp_id" in c for c in combos4)
-    assert "1 nulls" in grown.iloc[0]["Why"] and "grown" in grown.iloc[0]["Why"]
+    assert ["emp_id"] not in combos4 and ["emp_id", "hire_date"] in combos4
+    assert ["hire_date", "first_name", "last_name"] in combos4
+    with_id = grown[grown["Key columns"] == "emp_id + hire_date"].iloc[0]
+    assert "1 nulls" in with_id["Why"] and "grown" in with_id["Why"]
 
 
 def test_single_grows_a_combination_when_no_column_is_unique(tmp_path):
@@ -375,10 +570,15 @@ def test_single_counts_null_keys_apart_from_duplicates(tmp_path):
     P = _csv_single(tmp_path, ["id", "code"], rows)
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("id", "code")]
     table, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
-    assert combos[0] == ["code"]
+    assert combos == [["code"]]         # the key, and the only row: id with its null keys is no key beside it
     code = table.iloc[0]
     assert code["Unique"] == "yes" and code["Null keys"] == 0 and "no nulls" in code["Why"]
-    row = table[table["Key columns"] == "id"].iloc[0]     # id is not unique, and code adds nothing to it
+    # with code no key either, id is listed on its own: its null keys apart from duplicates
+    (tmp_path / "nokey").mkdir()
+    N = _csv_single(tmp_path / "nokey", ["id", "code"], [[i if i % 10 else "", f"C{i // 2}"] for i in range(100)])
+    table, combos, _ = suggest_keys_single(N, specs, "t", OPTS)
+    assert all(table["Unique"] == "no")
+    row = table[table["Key columns"] == "id"].iloc[0]
     assert row["Null keys"] == 10 and row["Duplicate rows"] == 0 and row["Unique"] == "no"
     # the 10 rows with no id share nothing - they have no key - so the Why does not say they do
     assert row["Why"] == ("name says identifier · 10 nulls · 90 distinct of 100 · "
@@ -394,14 +594,20 @@ def test_single_counts_null_keys_apart_from_duplicates(tmp_path):
 
 def test_single_null_seed_stands_on_its_own(tmp_path):
     """With nulls apart a column that has a null can never be part of a unique key, so growing
-    it only carries columns that tell no more rows apart: the seed is offered on its own, and
-    the combination that is unique without it is found beside it."""
+    it only carries columns that tell no more rows apart: the seed is offered on its own. When
+    a combination without it is unique, that is the key and the only row listed."""
     rows = [[("" if i == 3 else f"E{i}"), f"a{i % 10}", f"b{i // 10}", f"d{i % 3}"] for i in range(100)]
     A, = _csv_sides(tmp_path, ["emp_id", "a", "b", "d"], rows, rows)[:1]
-    table, combos, _ = suggest_keys_single(A, [ColSpec(c, c, c) for c in A.columns], "t", OPTS)
+    specs = [ColSpec(c, c, c) for c in A.columns]
+    table, combos, _ = suggest_keys_single(A, specs, "t", OPTS)
+    assert combos == [["a", "b"]] and table.iloc[0]["Unique"] == "yes"
+    # nothing unique - a + b tells only 50 rows apart: emp_id stands on its own, first
+    rows = [[("" if i == 3 else f"E{i}"), f"a{i % 10}", f"b{i // 10 % 5}", f"d{i % 2}"] for i in range(100)]
+    (tmp_path / "nokey").mkdir()
+    N, = _csv_sides(tmp_path / "nokey", ["emp_id", "a", "b", "d"], rows, rows)[:1]
+    table, combos, _ = suggest_keys_single(N, specs, "t", OPTS)
     by = table.set_index("Key columns")
-    assert combos[0] == ["a", "b"] and by.at["a + b", "Unique"] == "yes"
-    assert combos[1] == ["emp_id"]
+    assert combos[0] == ["emp_id"] and all(table["Unique"] == "no")
     assert by.at["emp_id", "Distinct"] == 99 and by.at["emp_id", "Null keys"] == 1
     assert by.at["emp_id", "Why"].endswith("99 distinct of 100 · on its own - adding a column told no more rows apart")
     assert not any(len(c) > 2 for c in combos), combos        # nothing four columns wide
@@ -435,7 +641,8 @@ def test_single_null_keys_never_make_a_combination_unique(tmp_path):
 
 def test_single_unique_column_outranks_a_combination_with_null_keys(tmp_path):
     """line_no + order_id is 100 distinct only when the row with no order_id counts as a
-    value; hash is unique on every row, so hash is the key - first, and Unique = yes."""
+    value; hash is unique on every row, so hash is the key - and beside a key nothing that
+    is not one is listed."""
     rows = [["" if i == 3 else f"O{i:03d}", i % 5 + 1, f"{i * 2654435761 % 2**32:08x}"] for i in range(100)]
     P = _csv_single(tmp_path, ["order_id", "line_no", "hash"], rows)
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("order_id", "line_no", "hash")]
@@ -444,26 +651,20 @@ def test_single_unique_column_outranks_a_combination_with_null_keys(tmp_path):
     top = table.iloc[0]
     assert top["Unique"] == "yes" and top["Distinct"] == 100 and top["Null keys"] == 0
     assert top["Why"].endswith("unique by itself")
-    with_order = table[table["Key columns"].str.contains("order_id")]
-    assert len(with_order) and all(with_order["Unique"] == "no")
-    assert all(with_order["Distinct"] == 99) and all(with_order["Null keys"] == 1)
-    # the only set anything is said to add nothing to is hash
-    said_unique = [w.split("adds nothing - ")[1].split(" is already unique")[0]
-                   for w in table["Why"] if "adds nothing - " in w]
-    assert said_unique and all(s == "hash" for s in said_unique)
+    assert combos == [["hash"]] and not any("order_id" in k for k in table["Key columns"])
 
 
 def test_the_cut_to_the_best_candidates_is_said(tmp_path):
-    """Ten columns unique by themselves, eight rows shown: the note says so - on one table
-    and on a pair alike."""
+    """Ten columns unique by themselves: three rows shown on one table, eight on a pair -
+    the note says so either way."""
     header = [f"k{j}_id" for j in range(10)]
     rows = [[f"{j}-{i}" for j in range(10)] for i in range(30)]
     P = _csv_single(tmp_path, header, rows)
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
     table, combos, note = suggest_keys_single(P, specs, "t", OPTS)
-    assert len(table) == len(combos) == 8 and all(table["Unique"] == "yes")
-    assert note.endswith(" - the best 8 of 10 candidates are listed")
-    assert "the best" not in suggest_keys_single(P, specs[:8], "t", OPTS)[2]
+    assert len(table) == len(combos) == 3 and all(table["Unique"] == "yes")
+    assert note.endswith(" - the best 3 of 10 candidates are listed")
+    assert "the best" not in suggest_keys_single(P, specs[:3], "t", OPTS)[2]
     (tmp_path / "pair").mkdir()
     A, B = _csv_sides(tmp_path / "pair", header, rows, rows)
     two, combos2, note2 = suggest_keys(A, B, specs, "a", "b", OPTS)

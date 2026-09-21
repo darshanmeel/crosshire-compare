@@ -71,7 +71,7 @@ the code rather than copying it:
 
 ```python
 def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOptions,
-                        progress=None, max_cols: int = 4, want: int = 8,
+                        progress=None, max_cols: int = 4, want: int = 3,
                         con=None, view: str | None = None, stats: pd.DataFrame | None = None
                         ) -> tuple[pd.DataFrame, list[list[str]], str]:
 ```
@@ -84,18 +84,44 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
 - The search is the one `suggest_keys` runs: every column that is unique by itself, then
   combinations grown from the most selective columns (affinity-ranked, up to `max_cols`),
   Desbordante HyUCC / PyroUCC on the first 200,000 rows when installed and verified on
-  every row. A column with one value (or none) is never a candidate. A combination that only
-  adds columns to a key that is already unique ranks below it and says so.
-- No overlap (there is no other side). Ranking: unique first, non-redundant first, affinity
-  sum, fewer columns, selectivity.
+  every row. A column with one value (or none) is never a candidate. Every key grown is
+  minimal: nothing is grown onto a key that is already unique (the pool leaves out any column
+  that would make a proper superset of one), and every combination grown is cut back to the
+  fewest columns that tell as many rows apart (leave one out, the least key-like first,
+  while the count holds) - a key stays a key, the closest stays as close. The columns that
+  look like a key are tried before a measure at every step, and with nulls apart the ones
+  without a null before the ones with one (a null-key row is never told apart, so a column
+  with a null can never complete a key) - `hire_date + first_name + last_name` before
+  `hire_date + salary`. A measure is tried only while no key has been found at all - as a
+  seed, as a column added, and in a second growth: when the key-like columns fill a
+  combination without making it unique, the growth is run again with every column
+  competing on selectivity alone (with nulls apart the columns with a null left out - they
+  cannot complete a key and would win on selectivity), so `order_id + amount` is found when
+  it is the only key - a key with an amount in it beats no key, and is a coincidence beside
+  one. The seeds are the best four columns that are not keys on their own, and with nulls
+  apart a column with a null - which can only stand on its own - is grown without using up
+  one of the four; only keys count towards `want`, so the closest never end the search
+  before the seed that grows the key. A seed nothing could be added to is offered on its
+  own (*on its own - adding a column told no more rows apart*, or *no other column to add*)
+  - on a pair only when no key was found, since beside a key it says nothing. On a pair a
+  unique combination with no values in common pairs no rows, so it is no key to the search
+  (`pairs`): it neither ends the search nor keeps a measure or a lone seed out, though a
+  superset of it still adds nothing. `emp_id` is never followed by `hire_date + emp_id`.
+  The same search serves the pair.
+- The table lists the best `want` = 3: when anything is unique, only the keys; when nothing
+  is, the closest. No overlap (there is no other side). Ranking: unique first,
+  non-redundant first, no measure among the columns first, an identifier among them first
+  (`emp_id` above a name and a date), affinity sum, fewer columns, selectivity. The pair
+  ranks a key with no values in common - a row number each side counts for itself - under
+  every key that pairs something, right after unique.
 - Table columns: `Key columns · Distinct · Unique · Duplicate rows · Null keys · Looks like a key · Why`.
   `Distinct` is the distinct count of the combination; `Duplicate rows` = rows − null-key
   rows − distinct; `Null keys` = rows where any key column is null; `Unique` = yes when both
   are 0.
 - `Why` reads as on the Compare page, for one table:
   `name says identifier · no nulls · 3,000 distinct of 3,000 · unique by itself`,
-  `salary: a measure, decimal - never a key · …`, `2 nulls · 2,998 distinct of 3,000 · 2 rows share it · grown from the most selective column`,
-  `adds nothing - emp_id is already unique`.
+  `salary: a measure, decimal - never a key · …`, `2 nulls · 2,996 distinct of 3,000 · 2 rows share it · grown from the most selective column`,
+  `on its own - adding a column told no more rows apart`.
   `key_reasons` is generalised (one or two sides) rather than duplicated; the two-side
   wording is unchanged, byte for byte, so `test_keys.py` passes as is.
 
