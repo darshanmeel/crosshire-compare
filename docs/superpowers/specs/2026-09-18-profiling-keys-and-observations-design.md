@@ -116,10 +116,17 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
   tightest first - a designed key partitions the rows about once, a coincidence of
   high-cardinality columns many times over - every pair, and the `MAX_TRIED` = 300
   tightest combinations of three and of four, `columns_a_statement` of them a
-  statement. Over `KEY_SAMPLE` = 200,000 rows a level is counted on the first 200,000
-  rows first (a temp table of the pool's columns per view) - a duplicate there is a
-  duplicate on every row - and only the combinations unique on the sample are counted on
-  every row. On a pair a unique combination with no values in common pairs no rows, so
+  statement. Over `KEY_SAMPLE` = 5,000 rows a level is counted on a random sample of
+  5,000 rows first (a table of the pool's columns per view, `USING SAMPLE
+  reservoir(5000 ROWS) REPEATABLE (1)` - the same rows each run - drawn from the file
+  before the steps and the types run, `register(…, sample=n)` through the `sampler`
+  the callers pass, so a view over a big file types 5,000 rows for it and not every
+  row) - a duplicate there is
+  a duplicate on every row, and a count there is a couple of milliseconds - and only the
+  combinations unique on the sample are verified on every row, the tightest first, a
+  statement's worth at a time; a statement that verified a key ends the level, so the
+  tightest key costs one statement and the coincidences behind it are never counted in
+  full. On a pair a unique combination with no values in common pairs no rows, so
   it is no key to the search (`pairs`): it ends no level, though a superset of it still
   adds nothing. Nothing unique at all, and the closest are listed: the `want` most
   selective combinations counted, each cut back to the fewest columns that tell as many
@@ -129,10 +136,11 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
   column told no more rows apart* for a combination cut back to one column. The note
   says what was tried: *Found by measuring every column - a column unique by itself is
   the key, so no combination was tried*, *… then every pair of the 24 most key-like
-  columns, then the 300 tightest combinations of 3 - on the first 200,000 rows first,
-  the ones unique there on every row*. The same search serves the pair. On a wide table
-  with no single unique column it takes minutes - some 50 ms a combination on 200,000
-  rows - and the page and the README say so.
+  columns, then the 300 tightest combinations of 3 - on a random sample of 5,000 rows
+  first, the ones unique there verified on every row - the tightest first, a key ending
+  the level*. The same search serves the pair. On a wide table with no single unique
+  column the verifying is where the minutes go - a full count a combination the sample
+  let through - and the page and the README say so.
 - A checksum of the row is unique by construction and says nothing about which row it is:
   a column named as one (`HASH_WORDS`: hash, hk, checksum, md5, sha…, crc, digest,
   fingerprint, etag) or whose first 200 filled values are all hex of one digest length

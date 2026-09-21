@@ -307,19 +307,24 @@ def column_exprs(side: Side, spec: ColSpec, which: str, opts: ReadOptions) -> tu
 
 
 def register(con: duckdb.DuckDBPyConnection, side: Side, name: str, specs: list[ColSpec],
-             which: str, opts: ReadOptions, materialize: bool = False) -> str:
+             which: str, opts: ReadOptions, materialize: bool = False, sample: int = 0) -> str:
     """Expose one side under the shared column names, canonical values applied.
 
     A view streams from the file every time it is read; a table is read once,
-    which is what the comparison and the key search want.
+    which is what the comparison and the key search want. With `sample`, a random
+    sample of that many rows (reservoir, the same rows each time): drawn from the file
+    before the steps and the types, which then run on the sample alone - a sample of
+    the finished view would run them on every row first.
     """
     # two layers: steps and null folding once per value, then the type on that result,
     # so an expression that mentions the value several times does not redo the work
     inner = [f"{folded_text(side, s, which, opts)} AS {ident('__' + s.canon)}" for s in specs]
     outer = [f"{typed_exprs(ident('__' + s.canon), s.kind, '', opts.trim)[1]} AS {ident(s.canon)}"
              for s in specs]
-    sql = (f"SELECT {', '.join(outer)} FROM (SELECT {', '.join(inner)} FROM {source_expr(side)})"
-           if specs else f"SELECT 1 AS __none FROM {source_expr(side)}")
+    src = source_expr(side) + (f" USING SAMPLE reservoir({int(sample)} ROWS) REPEATABLE (1)"
+                               if sample else "")
+    sql = (f"SELECT {', '.join(outer)} FROM (SELECT {', '.join(inner)} FROM {src})"
+           if specs else f"SELECT 1 AS __none FROM {src}")
     what = "TABLE" if materialize else "VIEW"
     con.execute(f"CREATE OR REPLACE {what} {ident(name)} AS {sql}")
     return name

@@ -264,6 +264,34 @@ def test_a_level_with_a_key_ends_the_search(tmp_path):
     assert "the pairs of the 4 most key-like columns - none could be unique, so none was counted" in note
 
 
+def test_over_the_sample_a_level_is_cut_on_a_random_sample_then_verified(tmp_path):
+    """Over KEY_SAMPLE rows a level is counted on a random sample of KEY_SAMPLE rows first
+    and only the combinations unique there are verified on every row - so a combination
+    with a few duplicates somewhere in the table is no key, whatever the sample saw, the
+    one unique on every row is, and the note says where the counting was done."""
+    from tablecmp.keys import KEY_SAMPLE
+
+    def near(i):            # unique but for a few rows a group: some repeat a row of the same
+        if i % 100 < 90:    # group, some a row of the one before, tag alike - so no pair
+            return i        # with it is unique, whichever column comes with it
+        return i - 4 if i % 100 < 95 else (i - 100 if i >= 100 else i)
+    n = KEY_SAMPLE * 2 + 2000
+    rows = [[i // 100, i % 100, near(i), i % 2] for i in range(n)]
+    header = ["grp_id", "seq_no", "near", "tag"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
+    P = _csv_single(tmp_path, header, rows)
+    table, combos, note = suggest_keys_single(P, specs, "t", OPTS)
+    assert combos == [["grp_id", "seq_no"]], combos
+    assert f"on a random sample of {KEY_SAMPLE:,} rows first, the ones unique there verified on every row" in note, note
+    assert "combinations of 3" not in note
+    # the same on a pair: a sample a side, each drawn from its own file
+    (tmp_path / "pair").mkdir()
+    A, B = _csv_sides(tmp_path / "pair", header, rows, rows[::-1])
+    table, combos, note = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos[0] == ["grp_id", "seq_no"] and all(table["Unique on both"] == "yes"), combos
+    assert f"on a random sample of {KEY_SAMPLE:,} rows first" in note
+
+
 def test_a_measure_is_never_taken_beside_a_key(tmp_path):
     """department + salary is unique on hr, but emp_id is the key: a measure is no seed
     and is added to nothing while a key exists, on one table and on the pair alike."""

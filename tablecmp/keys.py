@@ -11,7 +11,7 @@ import pandas as pd
 from .profile import profile_singles
 from .sources import Side, work_dir
 from .sql import columns_a_statement, ident, lit, scratch
-from .values import ColSpec, ReadOptions, hold
+from .values import ColSpec, ReadOptions, hold, register
 
 DATE_TYPES = ("DATE", "TIMESTAMP", "DATETIME")
 ID_WORDS = re.compile(r"(^|_)(id|key|code|ref|no|num|nbr|isin|sedol|cusip|symbol|sym|ticker|"
@@ -29,7 +29,7 @@ HASH_SAMPLE = 200           # filled values looked at to say a column's values a
 HASH_LENGTHS = (32, 40, 64, 128)     # hex digits in an MD5, SHA-1, SHA-256, SHA-512
 FLOATY = ("DOUBLE", "FLOAT", "DECIMAL", "REAL")
 UCC_SAMPLE = 200_000
-KEY_SAMPLE = 200_000        # rows a level is counted on first - a duplicate there is one on every row
+KEY_SAMPLE = 5_000          # rows of the random sample a level is counted on first - a duplicate there is one on every row
 POOL_COLS = 24              # columns that take part in combinations: the most key-like, in table order
 POOL_MEASURES = 8           # measures added to them when the key-like columns found no key
 MAX_TRIED = 300             # combinations counted a level, the tightest first
@@ -223,7 +223,7 @@ def rank(found: list[tuple[list[str], dict[str, int], str]], totals: dict[str, i
 def search_keys(con, views, totals: dict[str, int], candidates: list[str],
                 singles: dict[str, dict[str, int]], nulls: dict[str, int],
                 affinity: dict[str, int], max_cols: int, want: int, say,
-                nulls_apart: bool = False, pairs=None
+                nulls_apart: bool = False, pairs=None, sampler=None
                 ) -> tuple[list[tuple[list[str], dict[str, int], str]], list[frozenset], str]:
     """The candidate search, over any number of side views on one connection - a pair, or a
     table on its own - a level at a time: every column on its own first; when none is
@@ -244,9 +244,15 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
     counted in order of that product, the tightest first - a designed key partitions the
     rows about once, a coincidence of high-cardinality columns many times over - every
     pair, and the MAX_TRIED tightest combinations of three and of four, a few a
-    statement. Over KEY_SAMPLE rows a level is counted on the first KEY_SAMPLE rows first
-    - a duplicate there is a duplicate on every row - and only the combinations unique on
-    the sample are counted on every row. On a pair `pairs(cols)` says whether a unique
+    statement. Over KEY_SAMPLE rows a level is counted on a random sample of KEY_SAMPLE
+    rows first (reservoir, the same rows each run; `sampler(view, name, cols, n)` makes
+    it as a table `name`, drawn from the file before the values are typed - without one
+    it is drawn from the view, which types every row first) - a duplicate there is a
+    duplicate on every row, and a count there is a couple of milliseconds - and only the combinations
+    unique on the sample are verified on every row, the tightest first, a statement's
+    worth at a time; a statement that verified a key ends the level, so the tightest key
+    is verified in one and the coincidences behind it are never counted on every row.
+    On a pair `pairs(cols)` says whether a unique
     combination has any value in common with the other side: one with none is unique but
     no key - it pairs no rows - so it does not end the level, though a superset of it
     still adds nothing. Nothing unique at all, and the closest are listed: the most
@@ -403,7 +409,7 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
         out.sort(key=lambda cols: (product(cols, first), tuple(order[c] for c in cols)))
         return out[:MAX_TRIED]
 
-    # the sample of each view over KEY_SAMPLE rows, made when a level needs it, dropped at the end
+    # the random sample of each view over KEY_SAMPLE rows, made when a level needs it, dropped at the end
     sample: dict[str, tuple[str, int]] = {}
     sampled = False
 
@@ -416,16 +422,22 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
         for i, v in enumerate(views):
             if totals[v] > KEY_SAMPLE:
                 name = f"__keys_{i}"
-                con.execute(f"CREATE OR REPLACE TEMP TABLE {name} AS SELECT {picks} FROM {v} "
-                            f"LIMIT {KEY_SAMPLE}")
+                if sampler is not None:
+                    sampler(v, name, pool + measures, KEY_SAMPLE)
+                else:
+                    con.execute(f"CREATE OR REPLACE TEMP TABLE {name} AS SELECT {picks} FROM {v} "
+                                f"USING SAMPLE reservoir({KEY_SAMPLE} ROWS) REPEATABLE (1)")
                 sample[v] = (name, int(con.execute(f"SELECT count(*) FROM {name}").fetchone()[0]))
 
     counted: dict[tuple, dict[str, int]] = {}      # every combination counted: distinct per view,
     on_sample: set[tuple] = set()                   # on the sample where it was cut there
 
     def try_level(combos: list[tuple]) -> None:
-        """Count the combinations - on the samples first, then the ones unique there on every
-        row of every view - and offer the unique ones."""
+        """Count the combinations on the samples first, then verify the ones unique there on
+        every row of every view, the tightest first, a statement's worth at a time - a
+        full count each - and offer the unique ones; a statement that verified a key ends
+        the level, so a designed key is verified in one and a wide table's coincidences
+        are not verified at all."""
         ensure_samples()
         alive = list(combos)
         for v in views:
@@ -437,13 +449,18 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
                 alive = [cols for cols in alive if counted[cols][v] == n]
         if sample and alive:
             say(f"Verifying {len(alive)} on every row…")
-        for v in views:
-            for cols, d in zip(alive, count_many(v, alive, totals[v]) if alive else []):
-                counted.setdefault(cols, {})[v] = d
-        for cols in alive:
-            on_sample.discard(cols)
-            if is_unique(counted[cols], totals):
-                offer(list(cols), counted[cols], HOW_LEVEL.get(len(cols), HOW_LEVEL[4]))
+        per = min(columns_a_statement(totals[v]) for v in views)
+        for i in range(0, len(alive), per):
+            batch = alive[i:i + per]
+            for v in views:
+                for cols, d in zip(batch, count_many(v, batch, totals[v])):
+                    counted.setdefault(cols, {})[v] = d
+            for cols in batch:
+                on_sample.discard(cols)
+                if is_unique(counted[cols], totals):
+                    offer(list(cols), counted[cols], HOW_LEVEL.get(len(cols), HOW_LEVEL[4]))
+            if keys:
+                break
 
     tried = {size: 0 for size in range(2, max_cols + 1)}
     with_measures = False
@@ -492,11 +509,12 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
     for size in range(3, max_cols + 1):
         if tried[size]:
             steps.append(f"the {tried[size]:,} tightest combinations of {size}")
-    where = (f" - on the first {KEY_SAMPLE:,} rows first, the ones unique there on every row"
+    where = (f" - on a random sample of {KEY_SAMPLE:,} rows first, the ones unique there verified on every row"
              if sample else "")
     if keys:
         note = (f"Found by measuring every column, then {', then '.join(steps)}"
-                + where + (" - a measure only once the key-like columns had no key" if with_measures else ""))
+                + where + " - the tightest first, a key ending the level"
+                + (" - a measure only once the key-like columns had no key" if with_measures else ""))
     else:
         note = (f"Nothing up to {max_cols} columns is unique - every column, {', '.join(steps)}"
                 + (" and the measures" if with_measures else "") + where)
@@ -609,10 +627,19 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
             ov[tuple(cols)] = m / n * 100 if n else 0.0
         return ov[tuple(cols)]
 
+    sides = {"probe_a": (A, "A"), "probe_b": (B, "B")}
+
+    def sampler(v: str, name: str, cols: list[str], n: int) -> None:
+        """A random n-row sample of a side as a table `name`: the rows drawn from the file,
+        the steps and types on those alone."""
+        side, which = sides[v]
+        register(con, side, name, [s for s in specs if s.canon in cols], which, opts,
+                 materialize=True, sample=n)
+
     # a key with no values in common pairs no rows, so it is no key to the search
     found, unique_sets, note = search_keys(con, views, totals, candidates, singles, nulls,
                                            affinity, max_cols, want, say,
-                                           pairs=lambda cols: overlap(cols) > 0)
+                                           pairs=lambda cols: overlap(cols) > 0, sampler=sampler)
     if used_profile:
         note += " - single-column figures from the profile"
 
@@ -679,8 +706,15 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
     # nothing, so they are neither distinct nor duplicates, and a combination is unique only
     # with none - the way the table reads Unique, so the rank, the unique sets and the
     # 'adds nothing' agree with it
+    def sampler(v: str, name: str, cols: list[str], n: int) -> None:
+        """A random n-row sample of the table as `name`: the rows drawn from the file, the
+        steps and types on those alone."""
+        register(con, P, name, [s for s in specs if s.canon in cols], "A", opts,
+                 materialize=True, sample=n)
+
     found, unique_sets, note = search_keys(con, views, totals, candidates, singles, nulls,
-                                           affinity, max_cols, want, say, nulls_apart=True)
+                                           affinity, max_cols, want, say, nulls_apart=True,
+                                           sampler=sampler)
     if used_profile:
         note += " - single-column figures from the profile"
     # beside a key only keys are listed; a combination that is not unique is the closest

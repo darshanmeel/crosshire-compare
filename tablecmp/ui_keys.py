@@ -44,8 +44,10 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
                           help="Counts distinct key values against rows on each side.")
     st.caption("Suggest keys measures every column and, when none is unique on both sides, every "
                "pair of the most key-like columns, then combinations of three and of four - each "
-               "level only when the one before found no key, on the first 200,000 rows first. On a "
-               "wide or big pair that takes minutes.")
+               "level only when the one before found no key. Over 5,000 rows a level is counted on a "
+               "random sample of 5,000 rows first and only the combinations unique there are "
+               "verified on every row - a full count each, which is where the time goes on a wide "
+               "or big pair with no obvious key: minutes.")
     if suggest:                                   # under the row, so the disc has the width
         try:
             with ui_log.running("Looking for keys…", "Key search", here=True) as box:
