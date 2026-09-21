@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import time
+from itertools import combinations
 
 import pandas as pd
 
@@ -28,6 +29,10 @@ HASH_SAMPLE = 200           # filled values looked at to say a column's values a
 HASH_LENGTHS = (32, 40, 64, 128)     # hex digits in an MD5, SHA-1, SHA-256, SHA-512
 FLOATY = ("DOUBLE", "FLOAT", "DECIMAL", "REAL")
 UCC_SAMPLE = 200_000
+KEY_SAMPLE = 200_000        # rows a level is counted on first - a duplicate there is one on every row
+POOL_COLS = 24              # columns that take part in combinations: the most key-like, in table order
+POOL_MEASURES = 8           # measures added to them when the key-like columns found no key
+MAX_TRIED = 300             # combinations counted a level, the tightest first
 MAX_KEY_COLS = 4            # how many columns a combination may grow to - the page and the notes say it
 KEY_COLS = ["Key columns", "Distinct", "Unique", "Duplicate rows", "Null keys",
             "Looks like a key", "Why"]              # a table on its own, one row per candidate
@@ -150,9 +155,14 @@ def ucc_candidates(con, view: str, columns: list[str], error: float = 0.0,
 
 
 HOW_SINGLE = "unique by itself"
-HOW_GROWN = "grown from the most selective column"
+HOW_LEVEL = {2: "unique as a pair - no single column is",
+             3: "unique as three - no single column or pair is",
+             4: "unique as four - nothing shorter is"}
+HOW_CLOSEST = "the closest - no combination up to {n} columns is unique"
 HOW_ALONE = "on its own - adding a column told no more rows apart"
 HOW_ONLY = "on its own - no other column to add"
+HOW_NULL = "on its own - with a null it can complete no key"
+HOW_NO_COMBO = "on its own - no combination with it is unique"
 HOW_HYUCC = "found with Desbordante HyUCC"
 HOW_PYRO = "found with Desbordante PyroUCC as almost unique"
 
@@ -196,7 +206,8 @@ def rank(found: list[tuple[list[str], dict[str, int], str]], totals: dict[str, i
     name and a date shared by both; then the ones that look like a key (no measure among
     them); then the ones with an identifier in the name - emp_id above hire_date +
     first_name + last_name, however key-like a name and a date read; then affinity sum,
-    the share of values the other side has when there is one, fewer columns, selectivity."""
+    the share of values the other side has when there is one, how close - distinct values
+    per row, the same for every key - then fewer columns."""
     def key(f):
         cols, d, _ = f
         return (not is_unique(d, totals), any(u < set(cols) for u in unique_sets),
@@ -205,7 +216,7 @@ def rank(found: list[tuple[list[str], dict[str, int], str]], totals: dict[str, i
                 not any(ID_WORDS.search(c) for c in cols),
                 -sum(affinity[c] for c in cols),
                 -round(overlap[tuple(cols)]) if overlap is not None else 0,
-                len(cols), -selectivity(d, totals))
+                -selectivity(d, totals), len(cols))
     found.sort(key=key)
 
 
@@ -215,41 +226,41 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
                 nulls_apart: bool = False, pairs=None
                 ) -> tuple[list[tuple[list[str], dict[str, int], str]], list[frozenset], str]:
     """The candidate search, over any number of side views on one connection - a pair, or a
-    table on its own: every column unique by itself, then combinations grown from the most
-    selective columns (affinity-ranked, up to `max_cols`), or Desbordante's HyUCC / PyroUCC
-    on the first UCC_SAMPLE rows when it is installed, verified on every row. Every
-    combination grown is minimal: nothing is grown onto a key that works already, and one
-    that is grown is cut back to the fewest columns that tell as many rows apart. The
-    columns that look like a key are tried before a measure, and a measure is tried only
-    while no key has been found at all - as a seed, as a column added, and in a second
-    growth with every column competing on selectivity alone when the key-like columns fill
-    a combination without making it unique: a key with an amount in it beats no key, and is
-    a coincidence beside one. `want` keys end the search. On a pair `pairs(cols)` says
-    whether a unique combination has any value in common with the other side: one with
-    none is unique but no key - it pairs no rows - so it neither ends the search nor keeps
-    a measure or a lone seed from being offered, though a superset of it still adds
-    nothing. Returns each candidate as (columns, distinct per view, how it was found),
-    ranked; the column sets that are unique, so a superset can say it adds nothing; and the
-    note on how they were found. A column with one value (or none) on every view can never
-    tell rows apart, so it is never a candidate. With `nulls_apart` a combination's distinct
-    count leaves out the rows where any of its columns is null, as key_uniqueness does -
-    they identify nothing - so it is unique only with no null keys and no duplicates, the
-    way the one-table candidate table reads Unique, and a column with a null can never
-    complete a key; a single column's count leaves them out either way. A pair counts null
-    as a value, as it always has."""
-    candidates = [c for c in candidates if not all(singles[c][v] <= 1 for v in views)]
+    table on its own - a level at a time: every column on its own first; when none is
+    unique, every pair; when no pair is, combinations of three; then of four (`max_cols`).
+    A level that finds a key ends the search, so nothing is ever combined with a column
+    or a pair that is a key already, no key found holds a shorter one, and every key is
+    minimal by construction. Or Desbordante's HyUCC / PyroUCC on the first UCC_SAMPLE
+    rows when it is installed, verified on every row, the shortest first, and the same
+    level rule on what it found.
+
+    The columns that take part in a combination are the pool: the POOL_COLS most key-like
+    columns in table order - the ones with an identifier, a name or a date in the name
+    first, then the rest, a measure only in a second pass when the key-like ones found no
+    key at all (a key with an amount in it beats no key, and is a coincidence beside one)
+    - never a column unique by itself or constant, and with `nulls_apart` never one with
+    a null, which can complete no key. A combination whose columns' distinct counts
+    multiply to fewer than the rows cannot be unique and is not counted; the rest are
+    counted in order of that product, the tightest first - a designed key partitions the
+    rows about once, a coincidence of high-cardinality columns many times over - every
+    pair, and the MAX_TRIED tightest combinations of three and of four, a few a
+    statement. Over KEY_SAMPLE rows a level is counted on the first KEY_SAMPLE rows first
+    - a duplicate there is a duplicate on every row - and only the combinations unique on
+    the sample are counted on every row. On a pair `pairs(cols)` says whether a unique
+    combination has any value in common with the other side: one with none is unique but
+    no key - it pairs no rows - so it does not end the level, though a superset of it
+    still adds nothing. Nothing unique at all, and the closest are listed: the most
+    selective combinations counted, each cut back to the fewest columns that tell as many
+    rows apart, and the most selective single columns. Returns each candidate as
+    (columns, distinct per view, how it was found), ranked; the column sets that are
+    unique, so a superset can say it adds nothing; and the note on how they were found.
+    With `nulls_apart` a combination's distinct count leaves out the rows where any of
+    its columns is null, as key_uniqueness does - they identify nothing - so it is unique
+    only with no null keys and no duplicates, the way the one-table candidate table reads
+    Unique; a single column's count leaves them out either way. A pair counts null as a
+    value, as it always has."""
     order = {c: i for i, c in enumerate(candidates)}
-    ranked = sorted(candidates, key=lambda c: (-affinity[c], nulls.get(c, 0) > 0,
-                                               -selectivity(singles[c], totals)))
-
-    def distinct(cols: list[str]) -> dict[str, int]:
-        if len(cols) == 1:
-            return singles[cols[0]]
-        count = f"count(DISTINCT {combo(cols)})"
-        if nulls_apart:
-            count += f" FILTER (WHERE NOT ({any_null(cols)}))"
-        return {v: con.execute(f"SELECT {count} FROM {v}").fetchone()[0] for v in views}
-
+    live = [c for c in candidates if not all(singles[c][v] <= 1 for v in views)]
     found: list[tuple[list[str], dict[str, int], str]] = []
     seen: set[frozenset] = set()
     uniques: list[frozenset] = []          # the column sets found unique, as they are found
@@ -258,21 +269,41 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
     def offer(cols, d, how):
         if cols and frozenset(cols) not in seen:
             seen.add(frozenset(cols))
-            found.append((cols, d, how))
+            found.append((list(cols), d, how))
             if is_unique(d, totals):
                 uniques.append(frozenset(cols))
-                if pairs is None or pairs(cols):
+                if pairs is None or pairs(list(cols)):
                     keys.append(frozenset(cols))
 
-    def adds_nothing(cols: list[str]) -> bool:
-        """Holds more than a set that is unique already - columns added to a key that works.
-        The set itself is not that: reached again it is offered again, and dropped as seen."""
+    def adds_nothing(cols) -> bool:
+        """Holds more than a set that is unique already - columns added to a key that works."""
         return any(u < set(cols) for u in uniques)
+
+    def count_sql(cols) -> str:
+        sql = f"count(DISTINCT {combo(list(cols))})"
+        if nulls_apart:
+            sql += f" FILTER (WHERE NOT ({any_null(list(cols))}))"
+        return sql
+
+    def count_many(table: str, combos: list[tuple], rows: int) -> list[int]:
+        """The distinct count of each combination on `table`, a few a statement - each is a
+        hash table (sql.columns_a_statement)."""
+        per = columns_a_statement(rows)
+        out: list[int] = []
+        for i in range(0, len(combos), per):
+            picks = ", ".join(count_sql(cols) for cols in combos[i:i + per])
+            out += [int(n) for n in con.execute(f"SELECT {picks} FROM {table}").fetchone()]
+        return out
+
+    def distinct(cols) -> dict[str, int]:
+        if len(cols) == 1:
+            return singles[cols[0]]
+        return {v: count_many(v, [tuple(cols)], totals[v])[0] for v in views}
 
     def shrink(cols, d):
         """A combination cut back to a minimal one: a column that can go without the rest
-        telling fewer rows apart goes, the least key-like first, until none can - a key
-        stays a key, and the closest stays as close with fewer columns."""
+        telling fewer rows apart goes, the least key-like first, until none can - the
+        closest stays as close with fewer columns."""
         while len(cols) > 1:
             for col in sorted(cols, key=lambda c: affinity[c]):
                 rest = [c for c in cols if c != col]
@@ -284,118 +315,192 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
                 break
         return cols, d
 
-    def tier(c: str) -> tuple[bool, bool]:
-        """The order columns are tried in: the ones that look like a key before a measure,
-        and with nulls apart the ones without a null first - a null-key row is never told
-        apart, so a column with a null can never complete a key."""
-        return affinity[c] < 0, nulls_apart and nulls.get(c, 0) > 0
-
-    def climb(seed_cols, seed_d, tiered: bool):
-        """Columns added to the seed one at a time, the one that tells most rows apart each
-        time, until the combination is unique or full. Tiered, the columns of a better tier
-        are tried first and a worse tier only when none of them tells more rows apart;
-        untiered, every column competes on selectivity alone."""
-        cols, d = list(seed_cols), seed_d
-        # a column that would only be added to a key that works already is never carried -
-        # the combination would add nothing - and a measure is never added beside a key
-        pool = [c for c in ranked if c not in cols and not adds_nothing(cols + [c])
-                and not (keys and affinity[c] < 0)]
-        if not tiered and nulls_apart:
-            # this growth is after a key, and a column with a null can never complete one
-            pool = [c for c in pool if not nulls.get(c)]
-        while not is_unique(d, totals) and len(cols) < max_cols and pool:
-            best, best_d, best_score = None, None, -1.0
-            tiers = ([[c for c in pool if tier(c) == t] for t in sorted({tier(c) for c in pool})]
-                     if tiered else [pool])
-            for cands in tiers:
-                for col in cands[:12]:
-                    cand = distinct(cols + [col])
-                    sc = selectivity(cand, totals)
-                    if sc > best_score:
-                        best, best_d, best_score = col, cand, sc
-                if best is not None and best_score > selectivity(d, totals):
-                    break
-            if best is None:
-                break
-            # with nulls apart a null-key row is never told apart, so a column that raises
-            # the count by nothing is not carried - the seed stands on its own; a pair keeps
-            # growing, as it always has
-            if nulls_apart and best_score <= selectivity(d, totals):
-                break
-            cols, d = cols + [best], best_d
-            pool = [c for c in pool if c != best and not adds_nothing(cols + [c])]
-        return cols, d
-
-    def grow(seed_cols, seed_d, how=HOW_GROWN):
-        others = [c for c in ranked if c not in seed_cols and not adds_nothing(list(seed_cols) + [c])]
-        cols, d = climb(seed_cols, seed_d, tiered=True)
-        # the columns that look like a key can fill the combination without making it
-        # unique while a measure would have - then, while no key has been found at all,
-        # the measure is taken, every column competing on selectivity alone: a key with an
-        # amount in it beats no key, and is a coincidence beside one
-        if not is_unique(d, totals) and not keys and any(affinity[c] < 0 for c in others):
-            alt, alt_d = climb(seed_cols, seed_d, tiered=False)
-            if is_unique(alt_d, totals):
-                cols, d = alt, alt_d
-        # a combination is cut back to the fewest columns that tell as many rows apart, so
-        # every key offered is minimal - and the closest is not a key that is not, padded
-        if len(cols) > 1:
-            cols, d = shrink(cols, d)
-        if len(cols) == 1 and how == HOW_GROWN:
-            if keys and not nulls_apart:
-                return      # a pair's column that nothing could be added to says nothing beside a key
-            how = HOW_ONLY if not others else HOW_ALONE
-        offer(cols, d, how)
-
+    # ---- level 1: every column on its own
+    for c in live:
+        if is_unique(singles[c], totals):
+            offer([c], singles[c], HOW_SINGLE)
     pair = len(views) > 1
+    hint = "`pip install desbordante` for exact key discovery (HyUCC / PyroUCC)"
+
     if desbordante_available():
         n = min(UCC_SAMPLE, max(totals.values()))
         note = (f"Found with Desbordante HyUCC on the first {n:,} rows"
                 + (" of each side and verified on every row of both" if pair
-                   else " and verified on every row"))
-        say("Desbordante: minimal unique column combinations" + (" on each side…" if pair else "…"))
-        cands: set[frozenset] = set()
-        for v in views:
-            cands.update(frozenset(c) for c in ucc_candidates(con, v, candidates, max_lhs=max_cols))
-        say(f"Verifying {len(cands)} candidate(s) on every row…")
-        for c in sorted(cands, key=lambda c: (len(c), -sum(affinity[x] for x in c)))[:30]:
-            cols = sorted(c, key=order.get)
-            offer(cols, distinct(cols), HOW_HYUCC)
-        if not any(is_unique(d, totals) for _, d, _ in found):
-            say("Nothing exactly unique - PyroUCC, almost-unique combinations…")
-            note += "; nothing was exactly unique, so PyroUCC's almost-unique combinations " \
-                    "(≤1% of rows in the way) were added and grown"
-            approx: set[frozenset] = set()
+                   else " and verified on every row")
+                + " - the shortest combinations first, and a length that holds a key ends the search")
+        if keys:
+            note = "Found by measuring every column - a column unique by itself is the key, so no combination was tried"
+        else:
+            say("Desbordante: minimal unique column combinations" + (" on each side…" if pair else "…"))
+            cands: set[frozenset] = set()
             for v in views:
-                approx.update(frozenset(c) for c in ucc_candidates(con, v, candidates, error=0.01,
-                                                                   max_lhs=max_cols))
-            for c in sorted(approx, key=lambda c: (len(c), -sum(affinity[x] for x in c)))[:12]:
-                cols = sorted(c, key=order.get)
-                d = distinct(cols)
-                offer(cols, d, HOW_PYRO)
-                if not is_unique(d, totals):
-                    grow(cols, d, HOW_GROWN + " on top of a PyroUCC combination")
-    else:
-        note = ("Found by measuring every column and growing the most selective ones - "
-                "`pip install desbordante` for exact key discovery (HyUCC / PyroUCC)")
-        say("Growing the most selective columns…")
-        for col in ranked:
-            if is_unique(singles[col], totals):
-                offer([col], singles[col], HOW_SINGLE)
-        # the seeds are the best four columns that are not keys on their own - one that is
-        # has been offered, and nothing grown from it could add anything; with nulls apart
-        # a column with a null can only stand on its own, so it is grown without using up
-        # one of the four that could grow a key; a measure is no seed beside a key
-        taken = {False: 0, True: 0}
-        for seed in [c for c in ranked if not is_unique(singles[c], totals)]:
-            if len(keys) >= want:
-                break       # only keys count towards the cut - the closest never end the search
-            null_seed = nulls_apart and nulls.get(seed, 0) > 0
-            if taken[null_seed] >= 4 or (affinity[seed] < 0 and keys):
-                continue
-            taken[null_seed] += 1
-            grow([seed], singles[seed])
+                cands.update(frozenset(c) for c in ucc_candidates(con, v, live, max_lhs=max_cols))
+            ordered = sorted(cands, key=lambda c: (len(c), -sum(affinity[x] for x in c)))[:30]
+            say(f"Verifying {len(ordered)} candidate(s) on every row…")
+            for size in range(2, max_cols + 1):
+                for c in [c for c in ordered if len(c) == size]:
+                    cols = sorted(c, key=order.get)
+                    if not adds_nothing(cols):
+                        offer(cols, distinct(cols), HOW_HYUCC)
+                if keys:
+                    break
+            if not any(is_unique(d, totals) for _, d, _ in found):
+                say("Nothing exactly unique - PyroUCC, almost-unique combinations…")
+                note += "; nothing was exactly unique, so PyroUCC's almost-unique combinations " \
+                        "(≤1% of rows in the way) were added"
+                approx: set[frozenset] = set()
+                for v in views:
+                    approx.update(frozenset(c) for c in ucc_candidates(con, v, live, error=0.01,
+                                                                       max_lhs=max_cols))
+                for c in sorted(approx, key=lambda c: (len(c), -sum(affinity[x] for x in c)))[:12]:
+                    cols = sorted(c, key=order.get)
+                    d = distinct(cols)
+                    offer(*shrink(cols, d), HOW_PYRO)
+        unique_sets = [frozenset(cols) for cols, d, _ in found if is_unique(d, totals)]
+        rank(found, totals, affinity, unique_sets)
+        return found, unique_sets, note
 
+    if keys:
+        unique_sets = [frozenset(cols) for cols, d, _ in found if is_unique(d, totals)]
+        rank(found, totals, affinity, unique_sets)
+        return found, unique_sets, ("Found by measuring every column - a column unique by itself "
+                                    "is the key, so no combination was tried - " + hint)
+
+    # ---- the pool: the most key-like columns in table order, a measure only in the second pass
+    able = [c for c in live if not is_unique(singles[c], totals)
+            and not (nulls_apart and nulls.get(c, 0))]
+    pool = sorted([c for c in able if affinity[c] >= 0],
+                  key=lambda c: (affinity[c] < 3, order[c]))[:POOL_COLS]
+    measures = [c for c in able if affinity[c] < 0][:POOL_MEASURES]
+    pool.sort(key=order.get)
+
+    def values(c: str, v: str) -> int:
+        """Distinct values of the column as a combination counts them: null one value on a
+        pair; with nulls apart no pool column has any."""
+        return singles[c][v] + (1 if nulls.get(c, 0) and not nulls_apart else 0)
+
+    def product(cols, v: str) -> int:
+        out = 1
+        for c in cols:
+            out *= values(c, v)
+        return out
+
+    def fits(cols) -> bool:
+        """Could be unique: the distinct counts multiply to at least the rows, on every view."""
+        return all(product(cols, v) >= totals[v] for v in views)
+
+    def level_combos(cols_pool: list[str], size: int, must: set[str] | None) -> list[tuple]:
+        """The combinations of `size` pool columns worth counting, the tightest first -
+        with `must`, only the ones holding one of those columns (the measures pass)."""
+        out = []
+        for cols in combinations(cols_pool, size):
+            if must is not None and not any(c in must for c in cols):
+                continue
+            if adds_nothing(cols) or not fits(cols):
+                continue
+            out.append(cols)
+        first = views[0]
+        out.sort(key=lambda cols: (product(cols, first), tuple(order[c] for c in cols)))
+        return out[:MAX_TRIED]
+
+    # the sample of each view over KEY_SAMPLE rows, made when a level needs it, dropped at the end
+    sample: dict[str, tuple[str, int]] = {}
+    sampled = False
+
+    def ensure_samples():
+        nonlocal sampled
+        if sampled:
+            return
+        sampled = True
+        picks = ", ".join(ident(c) for c in pool + measures)
+        for i, v in enumerate(views):
+            if totals[v] > KEY_SAMPLE:
+                name = f"__keys_{i}"
+                con.execute(f"CREATE OR REPLACE TEMP TABLE {name} AS SELECT {picks} FROM {v} "
+                            f"LIMIT {KEY_SAMPLE}")
+                sample[v] = (name, int(con.execute(f"SELECT count(*) FROM {name}").fetchone()[0]))
+
+    counted: dict[tuple, dict[str, int]] = {}      # every combination counted: distinct per view,
+    on_sample: set[tuple] = set()                   # on the sample where it was cut there
+
+    def try_level(combos: list[tuple]) -> None:
+        """Count the combinations - on the samples first, then the ones unique there on every
+        row of every view - and offer the unique ones."""
+        ensure_samples()
+        alive = list(combos)
+        for v in views:
+            if v in sample and alive:
+                name, n = sample[v]
+                for cols, d in zip(alive, count_many(name, alive, n)):
+                    counted.setdefault(cols, {})[v] = d
+                    on_sample.add(cols)
+                alive = [cols for cols in alive if counted[cols][v] == n]
+        if sample and alive:
+            say(f"Verifying {len(alive)} on every row…")
+        for v in views:
+            for cols, d in zip(alive, count_many(v, alive, totals[v]) if alive else []):
+                counted.setdefault(cols, {})[v] = d
+        for cols in alive:
+            on_sample.discard(cols)
+            if is_unique(counted[cols], totals):
+                offer(list(cols), counted[cols], HOW_LEVEL.get(len(cols), HOW_LEVEL[4]))
+
+    tried = {size: 0 for size in range(2, max_cols + 1)}
+    with_measures = False
+    for must in (None, set(measures)):
+        if must is not None:
+            if not measures:
+                break
+            with_measures = True
+            say("No key among the key-like columns - the measures too…")
+        cols_pool = pool if must is None else sorted(pool + measures, key=order.get)
+        for size in range(2, max_cols + 1):
+            combos = level_combos(cols_pool, size, must)
+            if not combos:
+                continue
+            tried[size] += len(combos)
+            say(f"{'Pairs' if size == 2 else f'Combinations of {size}'}: {len(combos):,}…")
+            try_level(combos)
+            if keys:
+                break
+        if keys:
+            break
+
+    if not keys:
+        # the closest: the most selective combinations counted - the ones cut on the sample
+        # counted on every row first - cut back to minimal, and the most selective columns
+        def closeness(cols) -> float:
+            """Distinct per row on the rows it was counted on, the lowest view."""
+            return min(d / max(sample[v][1] if v in sample and cols in on_sample else totals[v], 1)
+                       for v, d in counted[cols].items())
+        best = sorted(counted, key=lambda cols: -closeness(cols))[:want]
+        for cols in best:
+            d = distinct(list(cols)) if cols in on_sample else counted[cols]
+            cols, d = shrink(list(cols), d)
+            offer(cols, d, HOW_ALONE if len(cols) == 1 else HOW_CLOSEST.format(n=max_cols))
+        others = [c for c in live if not is_unique(singles[c], totals)]
+        for c in sorted(others, key=lambda c: -selectivity(singles[c], totals))[:want]:
+            how = (HOW_NULL if nulls_apart and nulls.get(c, 0)
+                   else HOW_ONLY if len(pool + measures) <= 1 else HOW_NO_COMBO)
+            offer([c], singles[c], how)
+    for name, _ in sample.values():
+        con.execute(f"DROP TABLE IF EXISTS {name}")
+
+    n_pool = len(pool) + (len(measures) if with_measures else 0)
+    steps = [f"every pair of the {n_pool} most key-like columns" if tried[2] else
+             f"the pairs of the {n_pool} most key-like columns - none could be unique, so none was counted"]
+    for size in range(3, max_cols + 1):
+        if tried[size]:
+            steps.append(f"the {tried[size]:,} tightest combinations of {size}")
+    where = (f" - on the first {KEY_SAMPLE:,} rows first, the ones unique there on every row"
+             if sample else "")
+    if keys:
+        note = (f"Found by measuring every column, then {', then '.join(steps)}"
+                + where + (" - a measure only once the key-like columns had no key" if with_measures else ""))
+    else:
+        note = (f"Nothing up to {max_cols} columns is unique - every column, {', '.join(steps)}"
+                + (" and the measures" if with_measures else "") + where)
+    note += " - " + hint
     unique_sets = [frozenset(cols) for cols, d, _ in found if is_unique(d, totals)]
     rank(found, totals, affinity, unique_sets)
     return found, unique_sets, note

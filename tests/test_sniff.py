@@ -159,3 +159,32 @@ def test_app_shows_the_cells_and_leaves_the_type_alone(monkeypatch, tmp_path):
     at = _ok(at.run())
     assert at.session_state["looks_like"] is looks
     assert at.session_state["cmap"].set_index("B column").at["IsActive", "Type"] == "text"
+
+
+def test_a_wide_table_is_sniffed_a_few_columns_a_statement(tmp_path):
+    """Seventy text columns are decided in three statements of at most 32 branches, and
+    every column gets the suggestion its own values earn."""
+    import csv
+    import duckdb
+    header = [f"c{i}" for i in range(70)]
+    with open(tmp_path / "wide.csv", "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(header)
+        w.writerows([[("Y" if i % 2 else "N") if j % 3 == 0 else f"{i},5" if j % 3 == 1 else f"v{i}"
+                      for j in range(70)] for i in range(20)])
+    side = _side(tmp_path / "wide.csv")
+    sent = []
+    real = duckdb.DuckDBPyConnection.execute
+
+    def counting(self, sql, *a, **k):
+        sent.append(sql)
+        return real(self, sql, *a, **k)
+    duckdb.DuckDBPyConnection.execute = counting
+    try:
+        out = looks_like(side, side.columns, opts=ReadOptions(tokens=("NULL", ""), trim=True))
+    finally:
+        duckdb.DuckDBPyConnection.execute = real
+    decisions = [q for q in sent if "try_strptime" in q]
+    assert len(decisions) == 3 and max(q.count("UNION ALL") for q in decisions) == 31
+    assert out["c0"] == "boolean · Y/N" and out["c1"].startswith("number · ") and out["c2"] == ""
+    assert out["c69"].startswith("boolean") and out["c67"].startswith("number · ")

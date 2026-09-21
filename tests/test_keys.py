@@ -200,10 +200,9 @@ def test_a_measure_completes_the_key_the_key_like_columns_cannot(tmp_path):
 
 
 def test_the_closest_never_end_the_search(tmp_path):
-    """Id columns with a null each are the best seeds and stand on their own - not keys;
-    three must not use up the three the page lists, and four must not use up the four
-    seeds, before alpha + beta, the key, is grown - with nulls apart a column with a null
-    can never complete a key, so it is not one of the four seeds that could."""
+    """Id columns with a null each are the most selective columns and stand on their own -
+    not keys, and with nulls apart never part of one; three or four of them must not use
+    up the rows the page lists before alpha + beta, the key, is found among the pairs."""
     for n_ids in (3, 4):
         ids = [f"{c}_id" for c in "abcd"[:n_ids]]
         rows = [[("" if i == 3 + 2 * j else i) for j in range(n_ids)] + [i // 10, i % 10]
@@ -216,22 +215,53 @@ def test_the_closest_never_end_the_search(tmp_path):
         assert combos == [["alpha", "beta"]] and table.iloc[0]["Unique"] == "yes", n_ids
 
 
-def test_a_unique_column_uses_up_no_seed(tmp_path):
-    """A column unique on its own is a key already and nothing grown from it could add
-    anything, so it is no seed: four unique id columns leave the four seeds to alpha and
-    beta, and the natural key is grown beside them - on a pair, and on one table where
-    two unique ids leave room for it among the three listed."""
+def test_a_unique_column_ends_the_search(tmp_path):
+    """A column unique on its own is the key and no combination is tried - not with it,
+    not beside it: four unique id columns are the four candidates, alpha + beta is never
+    counted, and the note says so - on a pair, and on one table. Without the ids, no
+    single column is unique, so the pairs are tried and alpha + beta is the key."""
     rows = [[f"a{i}", f"b{i}", f"c{i}", f"d{i}", i // 10, i % 10] for i in range(100)]
     header = ["a_id", "b_id", "c_id", "d_id", "alpha", "beta"]
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
     A, B = _csv_sides(tmp_path, header, rows, rows)
-    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
-    assert combos == [["a_id"], ["b_id"], ["c_id"], ["d_id"], ["alpha", "beta"]], combos
-    assert list(table["Unique on both"]) == ["yes"] * 5
+    table, combos, note = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos == [["a_id"], ["b_id"], ["c_id"], ["d_id"]], combos
+    assert list(table["Unique on both"]) == ["yes"] * 4
+    assert note.startswith("Found by measuring every column - a column unique by itself is the key, "
+                           "so no combination was tried")
     P = _csv_single(tmp_path, header[:2] + header[4:], [r[:2] + r[4:] for r in rows])
     table, combos, _ = suggest_keys_single(P, specs[:2] + specs[4:], "t", OPTS)
-    assert combos == [["a_id"], ["b_id"], ["alpha", "beta"]], combos
-    assert list(table["Unique"]) == ["yes"] * 3
+    assert combos == [["a_id"], ["b_id"]], combos
+    assert list(table["Unique"]) == ["yes"] * 2
+    (tmp_path / "noid").mkdir()
+    N = _csv_single(tmp_path / "noid", header[4:], [r[4:] for r in rows])
+    table, combos, note = suggest_keys_single(N, specs[4:], "t", OPTS)
+    assert combos == [["alpha", "beta"]] and table.iloc[0]["Unique"] == "yes"
+    assert table.iloc[0]["Why"].endswith("unique as a pair - no single column is")
+    assert note.startswith("Found by measuring every column, then every pair of the 2 most key-like columns")
+
+
+def test_a_level_with_a_key_ends_the_search(tmp_path):
+    """Every pair is tried before any combination of three, and a pair that is a key ends
+    the search: grp_id + seq_no is the key, and the three-column combination a + b + c,
+    unique too, is never counted - nor is anything beside a unique pair. With grp_id gone
+    no pair is unique, so the combinations of three are tried and a + b + c is found."""
+    rows = [[i // 10, i % 10, i // 25, (i // 5) % 5, i % 5] for i in range(100)]
+    header = ["grp_id", "seq_no", "a", "b", "c"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
+    P = _csv_single(tmp_path, header, rows)
+    table, combos, note = suggest_keys_single(P, specs, "t", OPTS)
+    assert combos == [["grp_id", "seq_no"]], combos
+    assert "combinations of 3" not in note
+    (tmp_path / "three").mkdir()
+    N = _csv_single(tmp_path / "three", header[1:], [r[1:] for r in rows])
+    table, combos, note = suggest_keys_single(N, specs[1:], "t", OPTS)
+    assert ["a", "b", "c"] in combos and all(len(c) == 3 for c in combos), combos
+    assert all(table["Unique"] == "yes")
+    assert table.iloc[0]["Why"].endswith("unique as three - no single column or pair is")
+    assert "then the 4 tightest combinations of 3" in note, note
+    # a pair whose distinct counts multiply to fewer than the rows is never counted
+    assert "the pairs of the 4 most key-like columns - none could be unique, so none was counted" in note
 
 
 def test_a_measure_is_never_taken_beside_a_key(tmp_path):
@@ -268,9 +298,9 @@ def test_rank_puts_a_measure_key_under_a_clean_one():
 
 
 def test_the_second_growth_leaves_null_columns_out(tmp_path):
-    """x_id fills up with key-like columns without a key; the growth on selectivity alone
-    that follows leaves n_id out - a column with a null can never complete a key, and it
-    would win on selectivity - so x_id + y + amount is found."""
+    """The key-like columns make no key at any level; the pass with the measures that
+    follows leaves n_id out - a column with a null can never complete a key, and it would
+    win on selectivity - so x_id + y + amount is found."""
     rows = [[i // 10, "" if i == 3 else f"N{i}", i // 25, i // 50, i % 5, f"{(i % 2) * 1.5:.1f}"]
             for i in range(100)]
     header = ["x_id", "n_id", "z1_code", "z2_code", "y", "amount"]
@@ -281,15 +311,34 @@ def test_the_second_growth_leaves_null_columns_out(tmp_path):
     assert combos == [["x_id", "y", "amount"]] and table.iloc[0]["Unique"] == "yes"
 
 
-def test_shrink_lets_the_least_key_like_column_go_first(tmp_path):
-    """grp_id + x + amount is unique, and so are grp_id + amount and x + amount: the least
-    key-like column goes first, so the key kept is grp_id + amount."""
+def test_every_unique_pair_is_listed_the_key_like_first(tmp_path):
+    """grp_id + amount and x + amount are both unique, and grp_id + x + amount is never
+    counted - a level with a key ends the search; both pairs are listed, the one with an
+    identifier first, and the measure in each is said."""
     rows = [[i // 10, i % 5, (i // 10 + 3 * (i % 10)) % 25] for i in range(100)]
     header = ["grp_id", "x", "amount"]
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
     P = _csv_single(tmp_path, header, rows)
-    _, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
-    assert combos == [["grp_id", "amount"]]
+    table, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
+    assert combos == [["grp_id", "amount"], ["x", "amount"]], combos
+    assert list(table["Unique"]) == ["yes", "yes"]
+    assert all(w.startswith("amount: a measure - never a key") for w in table["Why"])
+
+
+def test_the_closest_is_cut_back_to_minimal(tmp_path):
+    """Nothing is unique: a + b + d tells 50 rows apart and so does a + b, so the closest
+    listed is a + b - the column that told no more rows apart is let go, the least
+    key-like first."""
+    rows = [[f"a{i % 10}", f"b{i // 10 % 5}", f"d{i % 2}"] for i in range(100)]
+    header = ["a", "b", "d"]
+    specs = [ColSpec(c, c, c) for c in header]
+    P = _csv_single(tmp_path, header, rows)
+    table, combos, note = suggest_keys_single(P, specs, "t", OPTS)
+    assert all(table["Unique"] == "no") and combos[0] == ["a", "b"], combos   # closer than a alone
+    row = table.iloc[0]
+    assert row["Distinct"] == 50 and row["Why"].endswith("the closest - no combination up to 4 columns is unique")
+    assert not any(len(c) > 2 for c in combos), combos
+    assert note.startswith("Nothing up to 4 columns is unique - every column, ")
 
 
 def test_a_key_that_pairs_nothing_does_not_end_the_search(tmp_path):
@@ -496,15 +545,11 @@ def test_single_table_key_and_reasons():
     assert top["Why"].startswith("name says identifier") and "no nulls" in top["Why"]
     assert "3,000 distinct of 3,000" in top["Why"] and top["Why"].endswith("unique by itself")
     assert " in hr" not in top["Why"] and "found in" not in top["Why"]     # one table: no side names, no overlap
-    assert "growing" in note and "profile" not in note.lower()
-    # beside a key only keys are listed, each minimal and none holding emp_id with more:
-    # the natural key of a name and a date is the other one, ranked under the identifier
-    assert len(table) <= 3 and all(table["Unique"] == "yes")
-    assert not any("emp_id" in c and len(c) > 1 for c in combos), combos
+    assert "no combination was tried" in note and "profile" not in note.lower()
+    # a column unique by itself is the key and the search ends there: nothing is combined
+    # with it or tried beside it - the natural key of a name and a date is never counted
+    assert combos == [["emp_id"]] and all(table["Unique"] == "yes")
     assert not any("adds nothing" in w for w in table["Why"])
-    natural = table[table["Key columns"] == "hire_date + first_name + last_name"]
-    assert len(natural) and natural.iloc[0]["Why"].startswith("a name, not an identifier")
-    assert natural.iloc[0]["Why"].endswith("grown from the most selective column")
 
 
 def test_single_measure_column_in_the_only_key(tmp_path):
@@ -543,14 +588,17 @@ def test_single_takes_the_profile_figures_and_connection():
     bare_t, _, bare_note = suggest_keys_single(P, specs, "hr", OPTS, con=con, view="prof", stats=bare)
     assert bare_t.to_dict("records") == plain.to_dict("records") and bare_note == note3
     # the figures are taken from the profile, not measured: told emp_id has a null and 2,999
-    # distinct, the search no longer offers it by itself and grows past it - the columns
-    # without a null first, so the natural key is grown from hire_date and emp_id is a seed
+    # distinct, the search no longer offers it by itself - and a column with a null can
+    # complete no key, so it is in no combination either: no pair is unique, and the
+    # natural key of a name and a date is found among the combinations of three
     told = pd.DataFrame({"Column": ["emp_id"], "Distinct": [2999], "Nulls": [1]})
-    grown, combos4, _ = suggest_keys_single(P, specs, "hr", OPTS, con=con, view="prof", stats=told)
-    assert ["emp_id"] not in combos4 and ["emp_id", "hire_date"] in combos4
-    assert ["hire_date", "first_name", "last_name"] in combos4
-    with_id = grown[grown["Key columns"] == "emp_id + hire_date"].iloc[0]
-    assert "1 nulls" in with_id["Why"] and "grown" in with_id["Why"]
+    grown, combos4, note4 = suggest_keys_single(P, specs, "hr", OPTS, con=con, view="prof", stats=told)
+    assert ["emp_id"] not in combos4 and not any("emp_id" in c for c in combos4), combos4
+    assert ["first_name", "last_name", "hire_date"] in combos4, combos4
+    natural = grown[grown["Key columns"] == "first_name + last_name + hire_date"].iloc[0]
+    assert natural["Unique"] == "yes" and natural["Why"].startswith("a name, not an identifier")
+    assert natural["Why"].endswith("unique as three - no single column or pair is")
+    assert "then every pair of the" in note4 and "tightest combinations of 3" in note4
 
 
 def test_single_grows_a_combination_when_no_column_is_unique(tmp_path):
@@ -562,7 +610,7 @@ def test_single_grows_a_combination_when_no_column_is_unique(tmp_path):
     assert row["Unique"] == "yes" and row["Distinct"] == 25
     assert row["Duplicate rows"] == 0 and row["Null keys"] == 0
     assert row["Why"] == ("no identifier in the name · no nulls · 25 distinct of 25 · "
-                          "grown from the most selective column")
+                          "unique as a pair - no single column is")
 
 
 def test_single_counts_null_keys_apart_from_duplicates(tmp_path):
@@ -580,9 +628,10 @@ def test_single_counts_null_keys_apart_from_duplicates(tmp_path):
     assert all(table["Unique"] == "no")
     row = table[table["Key columns"] == "id"].iloc[0]
     assert row["Null keys"] == 10 and row["Duplicate rows"] == 0 and row["Unique"] == "no"
-    # the 10 rows with no id share nothing - they have no key - so the Why does not say they do
+    # the 10 rows with no id share nothing - they have no key - so the Why does not say they
+    # do; and with a null the column was in no combination, which the Why says too
     assert row["Why"] == ("name says identifier · 10 nulls · 90 distinct of 100 · "
-                          "on its own - adding a column told no more rows apart")
+                          "on its own - with a null it can complete no key")
     # every row twice: duplicates, no null keys
     (tmp_path / "dup").mkdir()
     D = _csv_single(tmp_path / "dup", ["id", "code"], [[i // 2, f"C{i // 2}"] for i in range(100)])
@@ -593,9 +642,9 @@ def test_single_counts_null_keys_apart_from_duplicates(tmp_path):
 
 
 def test_single_null_seed_stands_on_its_own(tmp_path):
-    """With nulls apart a column that has a null can never be part of a unique key, so growing
-    it only carries columns that tell no more rows apart: the seed is offered on its own. When
-    a combination without it is unique, that is the key and the only row listed."""
+    """With nulls apart a column that has a null can never be part of a unique key, so it is
+    in no combination and is offered on its own, the closest. When a combination without
+    it is unique, that is the key and the only row listed."""
     rows = [[("" if i == 3 else f"E{i}"), f"a{i % 10}", f"b{i // 10}", f"d{i % 3}"] for i in range(100)]
     A, = _csv_sides(tmp_path, ["emp_id", "a", "b", "d"], rows, rows)[:1]
     specs = [ColSpec(c, c, c) for c in A.columns]
@@ -609,8 +658,8 @@ def test_single_null_seed_stands_on_its_own(tmp_path):
     by = table.set_index("Key columns")
     assert combos[0] == ["emp_id"] and all(table["Unique"] == "no")
     assert by.at["emp_id", "Distinct"] == 99 and by.at["emp_id", "Null keys"] == 1
-    assert by.at["emp_id", "Why"].endswith("99 distinct of 100 · on its own - adding a column told no more rows apart")
-    assert not any(len(c) > 2 for c in combos), combos        # nothing four columns wide
+    assert by.at["emp_id", "Why"].endswith("99 distinct of 100 · on its own - with a null it can complete no key")
+    assert not any(len(c) > 2 for c in combos), combos        # a + b + d cut back to a + b
 
 
 def test_single_null_keys_never_make_a_combination_unique(tmp_path):

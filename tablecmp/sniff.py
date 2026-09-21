@@ -9,7 +9,7 @@ from __future__ import annotations
 import duckdb
 
 from .sources import Side, source_expr
-from .sql import ident, lit, scratch
+from .sql import COLUMNS_A_STATEMENT, ident, lit, scratch
 from .values import DATE_TYPES, FORMAT_PRESETS, NUMERIC_TYPES, ReadOptions, raw_text
 
 SAMPLE_ROWS = 50_000        # the rows the distinct values are taken from
@@ -41,7 +41,9 @@ def looks_like(side: Side, cols: list[str], n: int = 2000,
 
     Up to n distinct non-null trimmed values from the first SAMPLE_ROWS rows, null
     tokens and empty strings skipped; the sample is read once, then one query per
-    column decides in this order: boolean, number, date or timestamp.
+    column decides in this order: boolean, number, date or timestamp - the columns'
+    queries run a few at a time as one statement (COLUMNS_A_STATEMENT branches), so a
+    wide table's are decided in parallel and not one after the other.
     """
     opts = opts or ReadOptions()
     out = {c: "" for c in cols}
@@ -52,17 +54,21 @@ def looks_like(side: Side, cols: list[str], n: int = 2000,
     sel = ", ".join(f"{raw_text(side, c)} AS {ident(c)}" for c in picked)
     con.execute(f"CREATE TEMP TABLE vals AS SELECT row_number() OVER () AS __rn, {sel} "
                 f"FROM (SELECT * FROM {source_expr(side)} LIMIT {SAMPLE_ROWS})")
-    for c in picked:
-        out[c] = _decide(con, c, n, opts)
+    for i in range(0, len(picked), COLUMNS_A_STATEMENT):
+        part = picked[i:i + COLUMNS_A_STATEMENT]
+        rows = con.execute(" UNION ALL ".join(_decide_sql(c, n, opts) for c in part)).fetchall()
+        for row in rows:
+            out[row[0]] = _decide(row[1:])
     return out
 
 
-def _decide(con: duckdb.DuckDBPyConnection, col: str, n: int, opts: ReadOptions) -> str:
-    """One query over the column's distinct values, every check as an aggregate."""
+def _decide_sql(col: str, n: int, opts: ReadOptions) -> str:
+    """One query over the column's distinct values, every check as an aggregate, the
+    column's name first."""
     tokens = ", ".join(lit(t.upper()) for t in opts.tokens) or lit("")
     words = ", ".join(lit(w) for w in BOOL_WORDS)
     fmts = list(FORMAT_PRESETS.values())
-    aggs = ["count(*)",
+    aggs = [f"{lit(col)} AS col", "count(*)",
             f"count(*) FILTER (WHERE lower(v) IN ({words}))",
             f"list(v ORDER BY rn) FILTER (WHERE lower(v) IN ({words}))",
             "count(try_cast(replace(v, ',', '') AS DOUBLE))",
@@ -76,11 +82,15 @@ def _decide(con: duckdb.DuckDBPyConnection, col: str, n: int, opts: ReadOptions)
     for f in fmts:
         aggs += [f"count(try_strptime(v, {lit(f)}))",
                  f"arg_min(v, rn) FILTER (WHERE try_strptime(v, {lit(f)}) IS NOT NULL)"]
-    row = con.execute(
-        f"SELECT {', '.join(aggs)} FROM (SELECT v, min(__rn) AS rn "
-        f"FROM (SELECT trim({ident(col)}) AS v, __rn FROM vals) "
-        f"WHERE v IS NOT NULL AND v <> '' AND upper(v) NOT IN ({tokens}) "
-        f"GROUP BY v ORDER BY rn LIMIT {int(n)})").fetchone()
+    return (f"SELECT {', '.join(aggs)} FROM (SELECT v, min(__rn) AS rn "
+            f"FROM (SELECT trim({ident(col)}) AS v, __rn FROM vals) "
+            f"WHERE v IS NOT NULL AND v <> '' AND upper(v) NOT IN ({tokens}) "
+            f"GROUP BY v ORDER BY rn LIMIT {int(n)})")
+
+
+def _decide(row: tuple) -> str:
+    """The suggestion from one column's row of _decide_sql figures."""
+    fmts = list(FORMAT_PRESETS.values())
     total, bools, bool_seen, nums, comma, iso, iso_ex, timed = row[:8]
     if not total:
         return ""

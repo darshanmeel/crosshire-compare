@@ -35,12 +35,17 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
                        "when both files are sorted identically.")
     with k2:
         suggest = st.button("Suggest keys", width="stretch", key="sugg_btn",
-                            help="Finds the column combinations that identify a row on both sides - "
-                                 "with Desbordante (HyUCC / PyroUCC) when it is installed. Only runs "
-                                 "when pressed.")
+                            help="Finds the column combinations that identify a row on both sides, "
+                                 "a level at a time - every column, then every pair, then three, "
+                                 "then four - with Desbordante (HyUCC / PyroUCC) when it is "
+                                 "installed. Minutes on a wide or big pair. Only runs when pressed.")
     with k3:
         check = st.button("Check key", width="stretch", disabled=not keys, key="check_btn",
                           help="Counts distinct key values against rows on each side.")
+    st.caption("Suggest keys measures every column and, when none is unique on both sides, every "
+               "pair of the most key-like columns, then combinations of three and of four - each "
+               "level only when the one before found no key, on the first 200,000 rows first. On a "
+               "wide or big pair that takes minutes.")
     if suggest:                                   # under the row, so the disc has the width
         try:
             with ui_log.running("Looking for keys…", "Key search", here=True) as box:

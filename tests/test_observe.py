@@ -541,3 +541,84 @@ def test_duplicate_rows_are_exact_and_nulls_equal(tmp_path):
     out = _measure(_side(_write(tmp_path / "dup.csv", ["k", "n", "v"], rows)))
     assert out["duplicates"] == 3                       # one of the a's, two of the b's
     assert any(n.startswith("3 exact duplicate rows") for n in out["notes"]), out["notes"]
+
+
+class _Counting:
+    """A connection whose statements are kept, for what a measure ran and did not run."""
+    def __init__(self, con):
+        self.con, self.sent = con, []
+
+    def execute(self, sql, *a, **k):
+        self.sent.append(sql)
+        return self.con.execute(sql, *a, **k)
+
+    def __getattr__(self, name):
+        return getattr(self.con, name)
+
+
+def _held(side: Side):
+    looks = looks_like(side, side.columns, opts=OPTS)
+    specs = single_specs(side, looks)
+    con = scratch()
+    register(con, side, "prof", specs, "A", OPTS, materialize=True)
+    stats = stats_table(con, "prof", specs)
+    freq = {s.canon: freq_tables(con, "prof", s.canon) for s in specs}
+    return _Counting(con), specs, stats, freq, looks
+
+
+def test_a_column_with_more_values_than_the_determinant_is_never_tried(tmp_path):
+    """x has 5 values and y 10: every y belongs to a group of x, so x cannot determine y
+    and no pass grouped by x reads y; y (10 values) → x (5) is tried and holds; z, with as
+    many values as x, is tried both ways and is one-to-one with it."""
+    from tablecmp.observe import dependencies, facts_of
+    rows = [[i, i % 5, i % 10, (i % 5) * 7] for i in range(100)]
+    con, specs, stats, freq, looks = _held(_side(_write(tmp_path / "card.csv", ["id", "x", "y", "z"], rows)))
+    facts = facts_of(stats)
+    deps, _ = dependencies(con, "prof", [s.canon for s in specs], facts, 100)
+    pairs = {(r["Determines"], r["Determined"]): r["Kind"] for _, r in deps.iterrows()}
+    assert pairs == {("x", "z"): "one-to-one", ("y", "x"): "many-to-one", ("y", "z"): "many-to-one"}, pairs
+    by_x = [q for q in con.sent if 'GROUP BY 1' in q and 'SELECT "x", count(*)' in q]
+    assert by_x and not any('"y"' in q for q in by_x), by_x       # y never read under x
+    assert not any('"id"' in q for q in by_x)                     # nor the unique id
+
+
+def test_the_key_and_the_duplicates_are_known_when_the_search_found_a_key(tmp_path):
+    """The key search's own table says id is unique on every row: the key line takes its
+    word - no count - and a unique key leaves no two rows alike, so the duplicates are
+    0 without a count either. Without a key both are counted, as before."""
+    from tablecmp.keys import suggest_keys_single
+    rows = [[i, i % 3, "x"] for i in range(50)]
+    side = _side(_write(tmp_path / "keyed.csv", ["id", "grp", "k"], rows))
+    con, specs, stats, freq, looks = _held(side)
+    keys = suggest_keys_single(side, specs, "t", OPTS, con=con, view="prof", stats=stats)
+    assert keys[1][0] == ["id"] and keys[0].iloc[0]["Unique"] == "yes"
+    con.sent.clear()
+    out = observe(con, "prof", side, specs, stats, freq, OPTS, looks, keys)
+    assert out["duplicates"] == 0 and any(n == "key: id - unique on every row" for n in out["notes"])
+    assert not any("md5_number" in q for q in con.sent)
+    assert not any('count(DISTINCT concat_ws' in q and 'FILTER' in q for q in con.sent)
+    # every row twice: no key, and both are counted
+    dup = [[i // 2, (i // 2) % 3, "x"] for i in range(50)]
+    side2 = _side(_write(tmp_path / "dup.csv", ["id", "grp", "k"], dup))
+    con2, specs2, stats2, freq2, looks2 = _held(side2)
+    keys2 = suggest_keys_single(side2, specs2, "t", OPTS, con=con2, view="prof", stats=stats2)
+    con2.sent.clear()
+    out2 = observe(con2, "prof", side2, specs2, stats2, freq2, OPTS, looks2, keys2)
+    assert out2["duplicates"] == 25 and any("closest" in n for n in out2["notes"])
+    assert any("md5_number" in q for q in con2.sent)
+
+
+def test_patterns_are_shaped_once_per_distinct_value(tmp_path):
+    """The shapes, counts, example and odd values of a column read the same whether every
+    row or every distinct value is shaped - and the statement groups the values first."""
+    from tablecmp.observe import patterns
+    rows = [[f"AB-{i % 7:03d}" if i % 50 else f"x{i}", f"{i % 4}"] for i in range(200)]
+    con, specs, stats, freq, looks = _held(_side(_write(tmp_path / "shape.csv", ["code", "n"], rows)))
+    pat, facts = patterns(con, "prof", specs)
+    top = pat[pat["Column"] == "code"]
+    assert list(top["Pattern"]) == ["AA-999", "A999", "A9"] and list(top["Count"]) == [196, 2, 1]
+    assert top.iloc[0]["Example"] == "AB-000"
+    assert facts["code"]["shapes"] == 4 and facts["code"]["others"] == 4
+    assert facts["code"]["examples"] == ["x0", "x100", "x150"] and facts["code"]["more"] is True
+    sent = [q for q in con.sent if "regexp_replace" in q and '"code"' in q]
+    assert len(sent) == 1 and "GROUP BY 1" in sent[0] and "MATERIALIZED" in sent[0]

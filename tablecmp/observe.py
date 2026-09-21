@@ -124,26 +124,29 @@ def duplicate_rows(con, table: str, cols: list[str]) -> int:
     return int(n - d)
 
 
-def key_line(con, table: str, cols: list[str], rows: int, keys) -> tuple[str, str]:
-    """(the note, the headline part) for the best candidate the key search found: unique on
-    every row, or the closest with its distinct count. Measured here on the same table, so
-    it holds whatever the search's own table says."""
+def key_line(con, table: str, cols: list[str], rows: int, keys) -> tuple[str, str, bool]:
+    """(the note, the headline part, whether it is a key) for the best candidate the key
+    search found: unique on every row, or the closest with its distinct count. A key the
+    search's own table reads as unique was counted on this table already and is not
+    counted again; the closest is, so the note holds whatever that table says."""
     if keys is None or rows == 0:
-        return "", ""
+        return "", "", False
     best = [c for c in (keys[1][0] if keys[1] else []) if c in cols]
     if not best:
         return (f"no single column or combination up to {MAX_KEY_COLS} is unique",
-                f"no key up to {MAX_KEY_COLS} columns")
+                f"no key up to {MAX_KEY_COLS} columns", False)
+    name = " + ".join(best)
+    if len(keys[0]) and keys[0].iloc[0]["Unique"] == "yes" and best == list(keys[1][0]):
+        return f"key: {name} - unique on every row", f"key: {name}", True
     missing = " OR ".join(f"{ident(k)} IS NULL" for k in best)
     d, nulls = con.execute(
         f"SELECT count(DISTINCT {combo(best)}) FILTER (WHERE NOT ({missing})), "
         f"count(*) FILTER (WHERE {missing}) FROM {table}").fetchone()
-    name = " + ".join(best)
     if not nulls and rows - d == 0:
-        return f"key: {name} - unique on every row", f"key: {name}"
+        return f"key: {name} - unique on every row", f"key: {name}", True
     return (f"no single column or combination up to {MAX_KEY_COLS} is unique - "
             f"closest: {name} ({d:,} distinct of {rows:,})",
-            f"no key up to {MAX_KEY_COLS} columns")
+            f"no key up to {MAX_KEY_COLS} columns", False)
 
 
 def determined(con, table: str, x: str, ys: list[str], groups: int) -> list[str]:
@@ -171,7 +174,11 @@ def dependencies(con, table: str, cols: list[str], facts: dict[str, dict], rows:
     X holds one value of Y (null one value). Determinants are the columns that are neither
     unique nor constant nor nearly unique - those determine anything and say nothing - the
     fewest values first, at most MAX_DETERMINANTS; one pass per determinant, grouped by it,
-    over every other live column. On a table over SAMPLE_ROWS rows the pass runs first on
+    over every other live column with no more values than it has - every value of Y
+    belongs to a group of X, so X → Y needs at least as many groups as Y has values, a
+    null one value each, and Y → X as well only with as many - so a determinant with
+    twenty values is tried on the columns with twenty or fewer, not on every column.
+    On a table over SAMPLE_ROWS rows the pass runs first on
     a sample - the first SAMPLE_ROWS rows, fewer when that many would not fit in memory,
     held as a table of their own so the forty passes read it and not the file: a
     dependency that fails there fails on the whole table, so only the ones that hold on
@@ -192,7 +199,12 @@ def dependencies(con, table: str, cols: list[str], facts: dict[str, dict], rows:
                     f"{', '.join(ident(c) for c in live)} FROM {table} LIMIT {n_sample}")
         sample = "__sample"
 
+    def values(c: str) -> int:
+        """The values a column takes, a null one of them."""
+        return facts[c]["distinct"] + (1 if facts[c]["nulls"] else 0)
+
     def holds(x: str, ys: list[str]) -> list[str]:
+        ys = [y for y in ys if values(y) <= values(x)]
         if sample and ys:
             ys = determined(con, sample, x, ys, min(facts[x]["distinct"], n_sample))
         return determined(con, table, x, ys, facts[x]["distinct"]) if ys else []
@@ -283,52 +295,84 @@ def _from_seconds(sec: float | None, kind: str):
     return v.date() if kind == "date" else v
 
 
-def outliers(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, dict[str, dict]]:
+def outliers(con, table: str, specs: list[ColSpec], rows: int = 0
+             ) -> tuple[pd.DataFrame, dict[str, dict]]:
     """One row per number / date / timestamp column: quantiles, Tukey's fences (1.5 × IQR),
     the values outside them, the extremes, zeros and negatives. Dates take the same quantiles
     on the typed value with the fences worked out on epoch seconds and shown as dates; their
     Std dev, Zeros and Negatives are blank. A value that cannot be measured - NaN, infinite,
     astronomically large (see `measurable`) - is left out and counted apart. Alongside the
     table, per column, what the notes need: the counts each side of the fences, the values
-    left out, dates after today and before 1900."""
-    rows, facts = [], {}
+    left out, dates after today and before 1900. Two passes, each a few columns a statement
+    (sql.columns_a_statement of `rows`, counted when not given - a quantile holds every
+    value of its column): the quantiles and extremes, then the counts outside the fences
+    the quantiles gave."""
+    picked = [s for s in specs if s.kind in ("number", "date", "timestamp")]
+    if not picked:
+        return pd.DataFrame(columns=OUTLIER_COLS), {}
+    if not rows:
+        rows = int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
+    per = columns_a_statement(rows)
     qs = "[" + ", ".join(str(q) for q in QUANTILES) + "]"
-    for s in specs:
-        if s.kind not in ("number", "date", "timestamp"):
-            continue
-        numeric = s.kind == "number"
-        c = ident(s.canon)
-        raw, ok = measurable(s)
-        # the three counts after the std dev: zeros and negatives for a number, values after
-        # today and before 1900 for a date; then what could not be measured (see measurable)
-        extra = ("stddev_samp(x), count(*) FILTER (WHERE x = 0), count(*) FILTER (WHERE x < 0)"
-                 if numeric else
-                 "NULL, count(*) FILTER (WHERE x > current_date), "
-                 "count(*) FILTER (WHERE x < DATE '1900-01-01')")
-        q, lo, hi, n, sd, first, second, bad = con.execute(
-            f"SELECT quantile_cont(x, {qs}), min(x), max(x), count(x), {extra}, "
-            f"count(*) FILTER (WHERE NOT ({ok})) "
-            f"FROM (SELECT {typed(s)} AS x, {c} FROM {table})").fetchone()
-        zeros, negs = (int(first), int(second)) if numeric else (0, 0)
-        future, old = (0, 0) if numeric else (int(first), int(second))
+    # ---- pass one: quantiles, extremes, the counts a number or a date has apart
+    figures: dict[str, tuple] = {}
+    for i in range(0, len(picked), per):
+        part = picked[i:i + per]
+        aggs, xs = [], []
+        for j, s in enumerate(part):
+            x, ok = f"__x{j}", measurable(s)[1]
+            xs.append(f"{typed(s)} AS {x}, {ident(s.canon)}")
+            # the three counts after the std dev: zeros and negatives for a number, values
+            # after today and before 1900 for a date; then what could not be measured
+            extra = (f"stddev_samp({x}), count(*) FILTER (WHERE {x} = 0), count(*) FILTER (WHERE {x} < 0)"
+                     if s.kind == "number" else
+                     f"NULL, count(*) FILTER (WHERE {x} > current_date), "
+                     f"count(*) FILTER (WHERE {x} < DATE '1900-01-01')")
+            aggs.append(f"quantile_cont({x}, {qs}), min({x}), max({x}), count({x}), {extra}, "
+                        f"count(*) FILTER (WHERE NOT ({ok}))")
+        got = con.execute(f"SELECT {', '.join(aggs)} FROM (SELECT {', '.join(xs)} FROM {table})").fetchone()
+        for j, s in enumerate(part):
+            figures[s.canon] = got[8 * j:8 * j + 8]
+    # ---- pass two: the counts each side of the fences, for the columns that have any
+    fences: dict[str, tuple[float, float, str]] = {}
+    for s in picked:
+        q = figures[s.canon][0]
         q = list(q) if q is not None else [None] * len(QUANTILES)
-        p25, p75, x = (q[2], q[4], "x") if numeric else (_seconds(q[2]), _seconds(q[4]), "epoch(x)")
-        if s.kind == "timestamp":              # shown to the second, the fences from the exact values
-            q = [_whole_second(v) for v in q]
-        below = above = 0
-        fence_lo = fence_hi = None
+        numeric = s.kind == "number"
+        p25, p75 = (q[2], q[4]) if numeric else (_seconds(q[2]), _seconds(q[4]))
         # a float goes into SQL only when it is finite: the quartiles are, or there are no fences
         if p25 is not None and p75 is not None and math.isfinite(p25) and math.isfinite(p75):
             iqr = p75 - p25
-            fence_lo, fence_hi = p25 - 1.5 * iqr, p75 + 1.5 * iqr
-            below, above = con.execute(
-                f"SELECT count(*) FILTER (WHERE {x} < {fence_lo!r}), "
-                f"count(*) FILTER (WHERE {x} > {fence_hi!r}) "
-                f"FROM (SELECT {typed(s)} AS x FROM {table})").fetchone()
+            fences[s.canon] = (p25 - 1.5 * iqr, p75 + 1.5 * iqr, "" if numeric else "epoch")
+    beyond: dict[str, tuple[int, int]] = {}
+    fenced = [s for s in picked if s.canon in fences]
+    for i in range(0, len(fenced), per):
+        part = fenced[i:i + per]
+        aggs, xs = [], []
+        for j, s in enumerate(part):
+            lo, hi, fn = fences[s.canon]
+            x = f"{fn}(__x{j})" if fn else f"__x{j}"
+            xs.append(f"{typed(s)} AS __x{j}")
+            aggs.append(f"count(*) FILTER (WHERE {x} < {lo!r}), count(*) FILTER (WHERE {x} > {hi!r})")
+        got = con.execute(f"SELECT {', '.join(aggs)} FROM (SELECT {', '.join(xs)} FROM {table})").fetchone()
+        for j, s in enumerate(part):
+            beyond[s.canon] = (int(got[2 * j]), int(got[2 * j + 1]))
+    # ---- the rows
+    rows_out, facts = [], {}
+    for s in picked:
+        numeric = s.kind == "number"
+        q, lo, hi, n, sd, first, second, bad = figures[s.canon]
+        zeros, negs = (int(first), int(second)) if numeric else (0, 0)
+        future, old = (0, 0) if numeric else (int(first), int(second))
+        q = list(q) if q is not None else [None] * len(QUANTILES)
+        if s.kind == "timestamp":              # shown to the second, the fences from the exact values
+            q = [_whole_second(v) for v in q]
+        below, above = beyond.get(s.canon, (0, 0))
+        fence_lo, fence_hi = fences[s.canon][:2] if s.canon in fences else (None, None)
         if not numeric:                       # shown as dates again - blank when off the calendar
             fence_lo, fence_hi = (_from_seconds(f, s.kind) for f in (fence_lo, fence_hi))
         out = int(below + above)
-        rows.append({
+        rows_out.append({
             "Column": s.canon, "Type": s.kind,
             **{k: _as_shown(v, s.kind) for k, v in zip(Q_COLS, q)},
             "Std dev": _as_shown(sd, "number") if numeric else "",
@@ -342,7 +386,7 @@ def outliers(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, dict[
             "lo": prose(fence_lo), "hi": prose(fence_hi), "lowest": prose(lo), "highest": prose(hi),
             "zeros": zeros, "negatives": negs, "non_finite": int(bad),
             "future": future, "before_1900": old}
-    df = pd.DataFrame(rows, columns=OUTLIER_COLS)
+    df = pd.DataFrame(rows_out, columns=OUTLIER_COLS)
     for k in COUNT_COLS:                          # whole numbers, blank on a date row
         df[k] = pd.to_numeric(df[k], errors="coerce").astype("Int64")
     df["Outliers"] = df["Outliers"].astype("int64")
@@ -354,33 +398,39 @@ def patterns(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, dict[
     """Per text column the TOP_SHAPES most common shapes of its non-null values, each with
     its count, share and the smallest value of that shape. Alongside, per column, how many
     shapes there are and - when one shape covers nearly every value - up to three of the
-    values that do not fit it."""
+    values that do not fit it. One statement a column: the values are counted first and
+    each distinct value shaped once - two regular expressions over twenty values, not
+    over a million rows of them - and the odd values come from the same shaped values."""
     rows, facts = [], {}
     for s in specs:
         if s.kind != "text":
             continue
         c = ident(s.canon)
         df = con.execute(f"""
-            WITH s AS (SELECT {c} AS v, {shape_sql(c)} AS shape FROM {table}
-                       WHERE {c} IS NOT NULL),
-                 g AS (SELECT shape, count(*) AS n, min(v) AS example FROM s GROUP BY shape)
-            SELECT shape, n, example, count(*) OVER () AS shapes, sum(n) OVER () AS total
-            FROM g ORDER BY n DESC, shape LIMIT {TOP_SHAPES}""").fetchdf()
-        if not len(df):
+            WITH d AS (SELECT {c} AS v, count(*) AS n FROM {table} WHERE {c} IS NOT NULL GROUP BY 1),
+                 s AS MATERIALIZED (SELECT v, n, {shape_sql('v')} AS shape FROM d),
+                 g AS (SELECT shape, sum(n) AS n, min(v) AS example FROM s GROUP BY shape),
+                 t AS (SELECT shape, n, example, count(*) OVER () AS shapes, sum(n) OVER () AS total
+                       FROM g ORDER BY n DESC, shape LIMIT {TOP_SHAPES})
+            SELECT 'shape' AS which, shape, n, example, shapes, total FROM t
+            UNION ALL
+            SELECT 'odd', v, NULL, NULL, NULL, NULL FROM (
+                SELECT DISTINCT v FROM s
+                WHERE shape <> (SELECT shape FROM t ORDER BY n DESC, shape LIMIT 1)
+                ORDER BY v LIMIT 4)""").fetchdf()
+        top_rows = df[df["which"] == "shape"].sort_values(["n", "shape"], ascending=[False, True])
+        if not len(top_rows):
             continue
-        total, shapes = int(df["total"].iloc[0]), int(df["shapes"].iloc[0])
-        top, top_n = str(df["shape"].iloc[0]), int(df["n"].iloc[0])
-        for _, r in df.iterrows():
+        total, shapes = int(top_rows["total"].iloc[0]), int(top_rows["shapes"].iloc[0])
+        top, top_n = str(top_rows["shape"].iloc[0]), int(top_rows["n"].iloc[0])
+        for _, r in top_rows.iterrows():
             rows.append({"Column": s.canon, "Pattern": r["shape"], "Collapsed": collapse(str(r["shape"])),
                          "Count": int(r["n"]), "%": round(int(r["n"]) / total * 100, 2),
                          "Example": str(r["example"])})
         share = top_n / total * 100
         odd = []                    # three distinct values of another shape, a fourth says there are more
         if 90 <= share < 100:
-            odd = [str(v) for (v,) in con.execute(
-                f"SELECT DISTINCT {c} AS v FROM {table} "
-                f"WHERE {c} IS NOT NULL AND {shape_sql(c)} <> {lit(top)} "
-                f"ORDER BY v LIMIT 4").fetchall()]
+            odd = sorted(str(v) for v in df[df["which"] == "odd"]["shape"])
         facts[s.canon] = {"shapes": shapes, "top": top, "share": share, "others": total - top_n,
                           "examples": odd[:3], "more": len(odd) > 3}
     return pd.DataFrame(rows, columns=PATTERN_COLS), facts
@@ -588,14 +638,15 @@ def observe(con, table: str, side: Side, specs: list[ColSpec], stats: pd.DataFra
     rows = facts[cols[0]]["rows"] if cols else 0
 
     say(f"{who}: duplicate rows and the key…")
-    duplicates = duplicate_rows(con, table, cols)
-    key, key_part = key_line(con, table, cols, rows, keys)
+    key, key_part, unique = key_line(con, table, cols, rows, keys)
+    # a key unique on every row leaves no two rows alike: nothing to count
+    duplicates = 0 if unique else duplicate_rows(con, table, cols)
     say(f"{who}: dependencies…")
     deps, cut_deps = dependencies(con, table, cols, facts, rows)
     say(f"{who}: correlations…")
     corr, cut_corr = correlations(con, table, specs)
     say(f"{who}: outliers…")
-    out, out_facts = outliers(con, table, specs)
+    out, out_facts = outliers(con, table, specs, rows)
     say(f"{who}: patterns…")
     pat, pat_facts = patterns(con, table, specs)
     say(f"{who}: leading spaces, case variants, leading zeros…")

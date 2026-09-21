@@ -94,46 +94,58 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
 - `stats`: the statistics table of the same columns; when given, the single-column distinct
   and null counts come from it (`Distinct`, `Nulls`), and the note says
   `- single-column figures from the profile`.
-- The search is the one `suggest_keys` runs: every column that is unique by itself, then
-  combinations grown from the most selective columns (affinity-ranked, up to `max_cols`),
-  Desbordante HyUCC / PyroUCC on the first 200,000 rows when installed and verified on
-  every row. A column with one value (or none) is never a candidate. Every key grown is
-  minimal: nothing is grown onto a key that is already unique (the pool leaves out any column
-  that would make a proper superset of one), and every combination grown is cut back to the
-  fewest columns that tell as many rows apart (leave one out, the least key-like first,
-  while the count holds) - a key stays a key, the closest stays as close. The columns that
-  look like a key are tried before a measure at every step, and with nulls apart the ones
-  without a null before the ones with one (a null-key row is never told apart, so a column
-  with a null can never complete a key) - `hire_date + first_name + last_name` before
-  `hire_date + salary`. A measure is tried only while no key has been found at all - as a
-  seed, as a column added, and in a second growth: when the key-like columns fill a
-  combination without making it unique, the growth is run again with every column
-  competing on selectivity alone (with nulls apart the columns with a null left out - they
-  cannot complete a key and would win on selectivity), so `order_id + amount` is found when
-  it is the only key - a key with an amount in it beats no key, and is a coincidence beside
-  one. The seeds are the best four columns that are not keys on their own, and with nulls
-  apart a column with a null - which can only stand on its own - is grown without using up
-  one of the four; only keys count towards `want`, so the closest never end the search
-  before the seed that grows the key. A seed nothing could be added to is offered on its
-  own (*on its own - adding a column told no more rows apart*, or *no other column to add*)
-  - on a pair only when no key was found, since beside a key it says nothing. On a pair a
-  unique combination with no values in common pairs no rows, so it is no key to the search
-  (`pairs`): it neither ends the search nor keeps a measure or a lone seed out, though a
-  superset of it still adds nothing. `emp_id` is never followed by `hire_date + emp_id`.
-  The same search serves the pair.
+- The search is the one `suggest_keys` runs, a level at a time: every column on its own;
+  when none is unique, every pair; when no pair is, combinations of three; then of four
+  (`max_cols`) - Desbordante HyUCC / PyroUCC on the first 200,000 rows when installed,
+  verified on every row, the shortest first, under the same level rule. A level that
+  finds a key ends the search, so nothing is ever combined with a column or a pair that
+  is a key already, no key found holds a shorter one, and every key is minimal by
+  construction - `emp_id` is never followed by `hire_date + emp_id`, nor by the natural
+  key `first_name + last_name + hire_date`, which is found only once `emp_id` is gone.
+  A column with one value (or none) is never a candidate. The pool - the columns that
+  take part in a combination - is the `POOL_COLS` = 24 most key-like columns in table
+  order: affinity ≥ 3 (an identifier, a name or a date in the name) first, then the rest
+  with affinity ≥ 0, never a column unique by itself, and with nulls apart never one
+  with a null (a null-key row is never told apart, so it can complete no key). The
+  measures (affinity < 0, `POOL_MEASURES` = 8) join in a second pass over the levels only
+  when the key-like columns found no key at all, in combinations holding at least one
+  of them - `order_id + amount` is found when it is the only key: a key with an amount
+  in it beats no key, and is a coincidence beside one. A combination whose columns'
+  distinct counts multiply to fewer than the rows (null one value on a pair) cannot be
+  unique and is not counted; the rest are counted in order of that product, the
+  tightest first - a designed key partitions the rows about once, a coincidence of
+  high-cardinality columns many times over - every pair, and the `MAX_TRIED` = 300
+  tightest combinations of three and of four, `columns_a_statement` of them a
+  statement. Over `KEY_SAMPLE` = 200,000 rows a level is counted on the first 200,000
+  rows first (a temp table of the pool's columns per view) - a duplicate there is a
+  duplicate on every row - and only the combinations unique on the sample are counted on
+  every row. On a pair a unique combination with no values in common pairs no rows, so
+  it is no key to the search (`pairs`): it ends no level, though a superset of it still
+  adds nothing. Nothing unique at all, and the closest are listed: the `want` most
+  selective combinations counted, each cut back to the fewest columns that tell as many
+  rows apart (leave one out, the least key-like first, while the count holds), and the
+  `want` most selective single columns - *on its own - with a null it can complete no
+  key*, *no other column to add*, *no combination with it is unique*, or *adding a
+  column told no more rows apart* for a combination cut back to one column. The note
+  says what was tried: *Found by measuring every column - a column unique by itself is
+  the key, so no combination was tried*, *… then every pair of the 24 most key-like
+  columns, then the 300 tightest combinations of 3 - on the first 200,000 rows first,
+  the ones unique there on every row*. The same search serves the pair. On a wide table
+  with no single unique column it takes minutes - some 50 ms a combination on 200,000
+  rows - and the page and the README say so.
 - A checksum of the row is unique by construction and says nothing about which row it is:
   a column named as one (`HASH_WORDS`: hash, hk, checksum, md5, sha…, crc, digest,
   fingerprint, etag) or whose first 200 filled values are all hex of one digest length
   (32, 40, 64, 128 - `looks_hashed`, tried on the text columns whose min and max length
   are one such length when a statistics table is at hand, on every text column otherwise)
-  gets affinity −5, so it is never a seed or an added column beside a key, ranks under one
+  gets affinity −5, so it is a measure to the pool - tried only when the key-like columns found no key - ranks under one
   however unique it is, reads *Looks like a key: checksum* and *a checksum - unique by
   construction, not a key*, and Auto never takes it beside a key. It is still listed when
   unique: it is. The pair does the same.
 - The table lists the best `want` = 3: when anything is unique, only the keys; when nothing
   is, the closest. No overlap (there is no other side). Ranking: unique first,
   non-redundant first, no measure or checksum among the columns first, an identifier among them first
-  (`emp_id` above a name and a date), affinity sum, fewer columns, selectivity. The pair
+  (`emp_id` above a name and a date), affinity sum, selectivity (the same for every key), fewer columns. The pair
   ranks a key with no values in common - a row number each side counts for itself - under
   every key that pairs something, right after unique.
 - Table columns: `Key columns · Distinct · Unique · Duplicate rows · Null keys · Looks like a key · Why`.
@@ -142,8 +154,8 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
   are 0.
 - `Why` reads as on the Compare page, for one table:
   `name says identifier · no nulls · 3,000 distinct of 3,000 · unique by itself`,
-  `salary: a measure, decimal - never a key · …`, `2 nulls · 2,996 distinct of 3,000 · 2 rows share it · grown from the most selective column`,
-  `on its own - adding a column told no more rows apart`.
+  `salary: a measure, decimal - never a key · …`, `no identifier in the name · no nulls · 25 distinct of 25 · unique as a pair - no single column is`,
+  `2 nulls · 2,996 distinct of 3,000 · 2 rows share it · on its own - with a null it can complete no key`.
   `key_reasons` is generalised (one or two sides) rather than duplicated; the two-side
   wording is unchanged, byte for byte, so `test_keys.py` passes as is.
 
