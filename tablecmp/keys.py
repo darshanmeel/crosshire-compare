@@ -9,8 +9,8 @@ import pandas as pd
 
 from .profile import profile_singles
 from .sources import Side, work_dir
-from .sql import ident, lit, scratch
-from .values import ColSpec, ReadOptions, register
+from .sql import columns_a_statement, ident, lit, scratch
+from .values import ColSpec, ReadOptions, hold
 
 DATE_TYPES = ("DATE", "TIMESTAMP", "DATETIME")
 ID_WORDS = re.compile(r"(^|_)(id|key|code|ref|no|num|nbr|isin|sedol|cusip|symbol|sym|ticker|"
@@ -20,6 +20,12 @@ KEY_WORDS = re.compile(r"(^|_)(name|date|day|time)($|_)", re.I)
 MEASURE_WORDS = re.compile(r"(^|_)(qty|quantity|amount|amt|price|px|value|val|total|sum|count|"
                            r"cnt|rate|pct|percent|weight|volume|vol|balance|bal|cost|fee|"
                            r"nav|return|ret|yield)($|_)", re.I)
+# a checksum of the row is unique by construction and says nothing about which row it is
+HASH_WORDS = re.compile(r"(^|_)(hash|hsh|hk|hashkey|hashdiff|checksum|chksum|cksum|md5|sha|sha1|"
+                        r"sha2|sha256|sha512|crc|crc32|digest|fingerprint|etag)($|_)", re.I)
+HASH_SHAPE = re.compile(r"^(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64}|[0-9a-f]{128})$", re.I)
+HASH_SAMPLE = 200           # filled values looked at to say a column's values are digests
+HASH_LENGTHS = (32, 40, 64, 128)     # hex digits in an MD5, SHA-1, SHA-256, SHA-512
 FLOATY = ("DOUBLE", "FLOAT", "DECIMAL", "REAL")
 UCC_SAMPLE = 200_000
 MAX_KEY_COLS = 4            # how many columns a combination may grow to - the page and the notes say it
@@ -38,10 +44,11 @@ def any_null(cols: list[str]) -> str:
 
 
 def probe(A: Side, B: Side, specs: list[ColSpec], opts: ReadOptions):
-    """A connection with both sides as tables under the shared names - one read each."""
+    """A connection with both sides under the shared names - a table each when it fits in
+    memory, else a view over the file (values.hold)."""
     con = scratch()
-    register(con, A, "probe_a", specs, "A", opts, materialize=True)
-    register(con, B, "probe_b", specs, "B", opts, materialize=True)
+    hold(con, A, "probe_a", specs, "A", opts)
+    hold(con, B, "probe_b", specs, "B", opts)
     return con
 
 
@@ -63,14 +70,49 @@ def key_uniqueness(A: Side, B: Side, specs: list[ColSpec], keys: list[str],
     return pd.DataFrame(rows)
 
 
-def key_affinity(col: str, type_a: str, type_b: str = "") -> int:
+def looks_like(cols: list[str], affinity: dict[str, int], hashed: set[str] | frozenset[str]) -> str:
+    """The Looks like a key cell: yes, or what among the columns says otherwise."""
+    if any(HASH_WORDS.search(c) or c in hashed for c in cols):
+        return "checksum"
+    return "yes" if all(affinity[c] >= 0 for c in cols) else "measure columns"
+
+
+def could_be_hashed(specs: list[ColSpec], stats: list[pd.DataFrame]) -> list[str]:
+    """The text columns worth a look for digests: with a statistics table of the columns,
+    only the ones whose every filled value has one digest length; without, every text
+    column - a look is one small read of the column (looks_hashed)."""
+    keep = {s.canon for s in specs if s.kind == "text"}
+    for table in stats:
+        if "Min length" not in table.columns:          # (Column, Distinct, Nulls) says nothing here
+            continue
+        lens = {r["Column"]: (r["Min length"], r["Max length"]) for _, r in table.iterrows()}
+        keep = {c for c in keep if c not in lens
+                or (pd.notna(lens[c][0]) and lens[c][0] == lens[c][1] and int(lens[c][0]) in HASH_LENGTHS)}
+    return [s.canon for s in specs if s.canon in keep]
+
+
+def looks_hashed(con, view: str, col: str) -> bool:
+    """Whether the column's values are digests: the first HASH_SAMPLE filled values are all
+    hex of one digest length - 32 (MD5), 40 (SHA-1), 64 (SHA-256) or 128 (SHA-512) - and
+    not all of them digits, which a long number would be."""
+    vals = [str(v) for (v,) in con.execute(
+        f"SELECT {ident(col)} FROM {view} WHERE {ident(col)} IS NOT NULL LIMIT {HASH_SAMPLE}").fetchall()]
+    return (bool(vals) and all(HASH_SHAPE.match(v) for v in vals)
+            and any(re.search(r"[a-f]", v, re.I) for v in vals))
+
+
+def key_affinity(col: str, type_a: str, type_b: str = "", hashed: bool = False) -> int:
     """How much a column looks like part of a business key rather than a measure - from its
-    name and the type detected on each side (a table on its own has only `type_a`)."""
+    name and the type detected on each side (a table on its own has only `type_a`), and
+    whether its values are digests (looks_hashed): a checksum of the row is unique by
+    construction and no key, so it ranks under one however key-like its name reads."""
     score = 0
     if ID_WORDS.search(col) or KEY_WORDS.search(col):
         score += 3
     if MEASURE_WORDS.search(col):
         score -= 3
+    if HASH_WORDS.search(col) or hashed:
+        score -= 5
     if any(t in type_a.upper() for t in FLOATY) or any(t in type_b.upper() for t in FLOATY):
         score -= 4
     if any(t in type_a.upper() for t in DATE_TYPES):
@@ -125,18 +167,22 @@ def selectivity(d: dict[str, int], totals: dict[str, int]) -> float:
     return min(d[v] / max(totals[v], 1) for v in totals)
 
 
-def single_figures(con, views, cols: list[str]) -> tuple[dict[str, dict[str, int]], dict[str, int]]:
-    """Each column on its own: distinct count per view, and nulls over every view - one
-    query per view."""
+def single_figures(con, views, cols: list[str], totals: dict[str, int] | None = None
+                   ) -> tuple[dict[str, dict[str, int]], dict[str, int]]:
+    """Each column on its own: distinct count per view, and nulls over every view - a few
+    columns a statement per view (sql.columns_a_statement: a count(DISTINCT) per column
+    holds a hash table each, and hundreds at once run DuckDB out of memory)."""
     singles: dict[str, dict[str, int]] = {c: {} for c in cols}
     nulls: dict[str, int] = {}
-    if cols:
-        for v in views:
-            picks = ", ".join(f"count(DISTINCT {ident(c)}), count(*) - count({ident(c)})" for c in cols)
+    for v in views:
+        per = columns_a_statement((totals or {}).get(v, 0))
+        for i in range(0, len(cols), per):
+            part = cols[i:i + per]
+            picks = ", ".join(f"count(DISTINCT {ident(c)}), count(*) - count({ident(c)})" for c in part)
             row = con.execute(f"SELECT {picks} FROM {v}").fetchone()
-            for i, c in enumerate(cols):
-                singles[c][v] = row[2 * i]
-                nulls[c] = nulls.get(c, 0) + row[2 * i + 1]
+            for j, c in enumerate(part):
+                singles[c][v] = row[2 * j]
+                nulls[c] = nulls.get(c, 0) + row[2 * j + 1]
     return singles, nulls
 
 
@@ -364,7 +410,7 @@ def cut_said(note: str, want: int, n: int) -> str:
 def key_reasons(cols: list[str], d: dict[str, int], totals: dict[str, int], affinity: dict[str, int],
                 nulls: dict[str, int], overlap: float | None, unique_sets: list[frozenset], how: str,
                 name_a: str, name_b: str | None = None, single_ov: dict[str, float] | None = None,
-                null_keys: int = 0) -> str:
+                null_keys: int = 0, hashed: frozenset[str] | set[str] = frozenset()) -> str:
     """Why a candidate ranks where it does, as one line of plain reasons. `d` and `totals`
     are keyed by side view - two for a pair, one for a table on its own: then `name_b` is
     None, the figures name no side and there is no overlap to speak of. `single_ov` is the
@@ -374,18 +420,22 @@ def key_reasons(cols: list[str], d: dict[str, int], totals: dict[str, int], affi
     share a key - the pair does not pass it, and reads rows less distinct as it always has."""
     bits = []
     idish = [c for c in cols if ID_WORDS.search(c)]
-    measures = [c for c in cols if MEASURE_WORDS.search(c) or affinity[c] <= -4]
+    hashes = [c for c in cols if HASH_WORDS.search(c) or c in hashed]
+    measures = [c for c in cols if c not in hashes and (MEASURE_WORDS.search(c) or affinity[c] <= -4)]
+    if hashes:
+        bits.append(f"{', '.join(hashes)}: a checksum - unique by construction, not a key")
     if measures:
         bits.append(f"{', '.join(measures)}: a measure"
                     + (", decimal" if any(affinity[c] <= -4 for c in measures) else "") + " - never a key")
-    elif idish:
-        bits.append("name says identifier" if len(cols) == 1
-                    else f"{idish[0]} says identifier" if len(idish) == 1
-                    else f"{', '.join(idish)} say identifier")
-    else:
-        bits.append("a name, not an identifier" if any(re.search(r"name", c, re.I) for c in cols)
-                    else "a date, not an identifier" if any(KEY_WORDS.search(c) for c in cols)
-                    else "no identifier in the name")
+    if not hashes and not measures:
+        if idish:
+            bits.append("name says identifier" if len(cols) == 1
+                        else f"{idish[0]} says identifier" if len(idish) == 1
+                        else f"{', '.join(idish)} say identifier")
+        else:
+            bits.append("a name, not an identifier" if any(re.search(r"name", c, re.I) for c in cols)
+                        else "a date, not an identifier" if any(KEY_WORDS.search(c) for c in cols)
+                        else "no identifier in the name")
     n_null = sum(nulls.get(c, 0) for c in cols)
     bits.append("no nulls" if not n_null else f"{n_null:,} nulls")
     # the figures per side, the side named on a pair: "3,000 distinct of 3,000 in hr, 2,985
@@ -433,13 +483,16 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
     measure = [c for c in candidates if from_profile[c] is None]
     used_profile = len(measure) < len(candidates)
     say("Reading the profile…" if used_profile else "Measuring every column…")
-    singles, nulls = single_figures(con, views, measure)
+    singles, nulls = single_figures(con, views, measure, totals)
     for c, p in from_profile.items():
         if p is not None:
             singles[c] = {"probe_a": p["probe_a"], "probe_b": p["probe_b"]}
             nulls[c] = p["nulls_a"] + p["nulls_b"]
+    stats = [profile["stats"][w] for w in ("A", "B")
+             if profile and isinstance(profile.get("stats"), dict) and w in profile["stats"]]
+    hashed = {c for c in could_be_hashed(specs, stats) if any(looks_hashed(con, v, c) for v in views)}
     affinity = {s.canon: key_affinity(s.canon, A.schema.get(s.a_src, ""),
-                                      B.schema.get(s.b_src, "")) for s in specs}
+                                      B.schema.get(s.b_src, ""), s.canon in hashed) for s in specs}
     ov: dict[tuple, float] = {}
 
     def overlap(cols: list[str]) -> float:
@@ -476,9 +529,9 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
         "Unique on both": "yes" if is_unique(d, totals) else "no",
         "Duplicate rows": (totals["probe_a"] - d["probe_a"]) + (totals["probe_b"] - d["probe_b"]),
         "Overlap %": round(ov[tuple(cols)], 1),
-        "Looks like a key": "yes" if all(affinity[c] >= 0 for c in cols) else "measure columns",
+        "Looks like a key": looks_like(cols, affinity, hashed),
         "Why": key_reasons(cols, d, totals, affinity, nulls, ov[tuple(cols)], unique_sets, how,
-                           name_a, name_b, single_ov),
+                           name_a, name_b, single_ov, hashed=hashed),
     } for cols, d, how in found])
     return table, [cols for cols, _, _ in found], note
 
@@ -500,7 +553,7 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
     if con is None:
         say(f"Reading {name} ({len(candidates)} columns)…")
         con, view = scratch(), "probe"
-        register(con, P, view, specs, "A", opts, materialize=True)
+        hold(con, P, view, specs, "A", opts)
     views = (view,)
     totals = {view: con.execute(f"SELECT count(*) FROM {view}").fetchone()[0]}
 
@@ -509,11 +562,14 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
     measure = [c for c in candidates if c not in known]
     used_profile = len(measure) < len(candidates)
     say("Reading the profile…" if used_profile else "Measuring every column…")
-    singles, nulls = single_figures(con, views, measure)
+    singles, nulls = single_figures(con, views, measure, totals)
     for c in candidates:
         if c in known:
             singles[c], nulls[c] = {view: known[c][0]}, known[c][1]
-    affinity = {s.canon: key_affinity(s.canon, P.schema.get(s.a_src, "")) for s in specs}
+    hashed = {c for c in could_be_hashed(specs, [stats] if stats is not None else [])
+              if looks_hashed(con, view, c)}
+    affinity = {s.canon: key_affinity(s.canon, P.schema.get(s.a_src, ""), hashed=s.canon in hashed)
+                for s in specs}
     # the search keeps the rows with a null key apart, as key_uniqueness does: they identify
     # nothing, so they are neither distinct nor duplicates, and a combination is unique only
     # with none - the way the table reads Unique, so the rank, the unique sets and the
@@ -548,8 +604,8 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
             "Unique": "yes" if not dup and not nk else "no",
             "Duplicate rows": dup,
             "Null keys": nk,
-            "Looks like a key": "yes" if all(affinity[c] >= 0 for c in cols) else "measure columns",
+            "Looks like a key": looks_like(cols, affinity, hashed),
             "Why": key_reasons(cols, d, totals, affinity, nulls, None, unique_sets, how, name,
-                               null_keys=nk),
+                               null_keys=nk, hashed=hashed),
         })
     return pd.DataFrame(table, columns=KEY_COLS), [cols for cols, _, _ in found], note

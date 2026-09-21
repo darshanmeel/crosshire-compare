@@ -18,8 +18,8 @@ import pandas as pd
 from .keys import ID_WORDS, MAX_KEY_COLS, combo          # MAX_KEY_COLS: how far the key search grows
 from .profile import show
 from .sources import Side, source_expr
-from .sql import ident, lit
-from .values import ColSpec, ReadOptions, fold_nulls, raw_text
+from .sql import columns_a_statement, ident, lit, memory_limit_bytes
+from .values import BYTES_A_CELL, HOLD_SHARE, ColSpec, ReadOptions, fold_nulls, raw_text
 
 OUTLIER_COLS = ["Column", "Type", "P1", "P5", "P25", "Median", "P75", "P95", "P99", "Std dev",
                 "Low fence", "High fence", "Outliers", "Outlier %", "Lowest", "Highest",
@@ -31,6 +31,7 @@ CORR_COLS = ["Column A", "Column B", "r"]
 QUANTILES = (0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99)
 Q_COLS = ("P1", "P5", "P25", "Median", "P75", "P95", "P99")     # OUTLIER_COLS[2:9], one per quantile
 MAX_DETERMINANTS = 40       # columns tried as a determinant, the fewest values first
+SAMPLE_ROWS = 200_000       # rows a dependency is tried on first - one that fails there fails on all
 MAX_CORR_COLS = 30          # number columns compared pairwise, the first in table order
 MAX_DEP_LINES = 10          # dependency lines in the notes before "… and n more"
 MAX_CORR_LINES = 5
@@ -113,10 +114,13 @@ def facts_of(stats: pd.DataFrame) -> dict[str, dict]:
 
 # ---- the measures -------------------------------------------------------------------------
 def duplicate_rows(con, table: str, cols: list[str]) -> int:
-    """Rows that repeat another one in every column, nulls equal."""
+    """Rows that repeat another one in every column, nulls equal. The rows are told apart
+    by the MD5 of the row's values joined (keys.combo), 16 bytes a row, not by the values
+    themselves: two hundred text columns of a million rows are no hash table to hold."""
     if not cols:
         return 0
-    n, d = con.execute(f"SELECT count(*), count(DISTINCT {combo(cols)}) FROM {table}").fetchone()
+    n, d = con.execute(f"SELECT count(*), count(DISTINCT md5_number({combo(cols)})) "
+                       f"FROM {table}").fetchone()
     return int(n - d)
 
 
@@ -142,44 +146,75 @@ def key_line(con, table: str, cols: list[str], rows: int, keys) -> tuple[str, st
             f"no key up to {MAX_KEY_COLS} columns")
 
 
-def dependencies(con, table: str, cols: list[str], facts: dict[str, dict]
+def determined(con, table: str, x: str, ys: list[str], groups: int) -> list[str]:
+    """The columns among `ys` that `x` determines on `table`: within every group of x the
+    column holds one value (null one value). One pass grouped by x, the min, max and
+    count of each y - no hash table per column, as count(DISTINCT) would keep - a few
+    columns at a time when x has many groups."""
+    out = []
+    per = columns_a_statement(groups)
+    for i in range(0, len(ys), per):
+        part = ys[i:i + per]
+        inner = ", ".join(f"min({ident(y)}) AS __mn{j}, max({ident(y)}) AS __mx{j}, "
+                          f"count({ident(y)}) AS __c{j}" for j, y in enumerate(part))
+        outer = ", ".join(f"bool_and(__mn{j} IS NOT DISTINCT FROM __mx{j} AND (__c{j} = 0 OR __c{j} = __n))"
+                          for j in range(len(part)))
+        found = con.execute(f"SELECT {outer} FROM (SELECT {ident(x)}, count(*) AS __n, {inner} "
+                            f"FROM {table} GROUP BY 1)").fetchone()
+        out += [y for y, ok in zip(part, found) if ok]
+    return out
+
+
+def dependencies(con, table: str, cols: list[str], facts: dict[str, dict], rows: int = 0
                  ) -> tuple[pd.DataFrame, list[str]]:
-    """Functional dependencies X → Y among the columns: X determines Y when X and (X, Y) have
-    as many distinct values (nulls one value, through keys.combo). Determinants are the
-    columns that are neither unique nor constant nor nearly unique - those determine anything
-    and say nothing - the fewest values first, at most MAX_DETERMINANTS; one query per
-    determinant counts every other live column. A pair that holds both ways is one-to-one and
+    """Functional dependencies X → Y among the columns: X determines Y when every group of
+    X holds one value of Y (null one value). Determinants are the columns that are neither
+    unique nor constant nor nearly unique - those determine anything and say nothing - the
+    fewest values first, at most MAX_DETERMINANTS; one pass per determinant, grouped by it,
+    over every other live column. On a table over SAMPLE_ROWS rows the pass runs first on
+    a sample - the first SAMPLE_ROWS rows, fewer when that many would not fit in memory,
+    held as a table of their own so the forty passes read it and not the file: a
+    dependency that fails there fails on the whole table, so only the ones that hold on
+    the sample are tried on every row. A pair that holds both ways is one-to-one and
     listed once, the column first in table order first. Returns the table and the
     determinants the cap left out."""
     order = {c: i for i, c in enumerate(cols)}
     live = [c for c in cols if facts[c]["distinct"] > 1]         # neither constant nor empty
-    # count(DISTINCT combo) counts a null as a value, which Distinct does not
-    dn = {c: facts[c]["distinct"] + (1 if facts[c]["nulls"] else 0) for c in live}
     cands = sorted((c for c in live
                     if not facts[c]["unique"] and facts[c]["share_filled"] < NEAR_UNIQUE),
                    key=lambda c: (facts[c]["distinct"], order[c]))
     cut, cands = cands[MAX_DETERMINANTS:], cands[:MAX_DETERMINANTS]
-    rows, seen = [], set()
-    for x in cands:
-        ys = [y for y in live if y != x]
-        if not ys:
-            continue
-        picks = ", ".join([f"count(DISTINCT {combo([x])})"]
-                          + [f"count(DISTINCT {combo([x, y])})" for y in ys])
-        found = con.execute(f"SELECT {picks} FROM {table}").fetchone()
-        dx = found[0]
-        for y, dxy in zip(ys, found[1:]):
-            if dxy != dx:
-                continue
-            both = dn[y] == dxy                                  # Y → X holds as well
+    sample, n_sample = None, 0
+    if rows > SAMPLE_ROWS and cands:
+        fits = int(memory_limit_bytes(con) * HOLD_SHARE / BYTES_A_CELL) // max(len(live), 1)
+        n_sample = max(1000, min(SAMPLE_ROWS, fits))
+        con.execute(f"CREATE OR REPLACE TEMP TABLE __sample AS SELECT "
+                    f"{', '.join(ident(c) for c in live)} FROM {table} LIMIT {n_sample}")
+        sample = "__sample"
+
+    def holds(x: str, ys: list[str]) -> list[str]:
+        if sample and ys:
+            ys = determined(con, sample, x, ys, min(facts[x]["distinct"], n_sample))
+        return determined(con, table, x, ys, facts[x]["distinct"]) if ys else []
+
+    held = {x: holds(x, [y for y in live if y != x]) for x in cands}     # x -> the ys it determines
+    # the other way round, for the pairs that hold: Y -> X makes a pair one-to-one
+    back = {y: set(holds(y, [x for x, ys in held.items() if y in ys]))
+            for y in {y for ys in held.values() for y in ys}}
+    if sample:
+        con.execute("DROP TABLE __sample")
+    out, seen = [], set()
+    for x, ys in held.items():
+        for y in ys:
+            both = x in back.get(y, ())
             a, b = sorted((x, y), key=order.get) if both else (x, y)
             if both and (a, b) in seen:
                 continue
             seen.add((a, b))
-            rows.append({"Determines": a, "Determined": b,
-                         "Kind": "one-to-one" if both else "many-to-one",
-                         "Distinct": facts[a]["distinct"]})
-    return pd.DataFrame(rows, columns=DEP_COLS), cut
+            out.append({"Determines": a, "Determined": b,
+                        "Kind": "one-to-one" if both else "many-to-one",
+                        "Distinct": facts[a]["distinct"]})
+    return pd.DataFrame(out, columns=DEP_COLS), cut
 
 
 def correlations(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, list[str]]:
@@ -317,21 +352,20 @@ def outliers(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, dict[
 
 def patterns(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, dict[str, dict]]:
     """Per text column the TOP_SHAPES most common shapes of its non-null values, each with
-    its count, share and the first value of that shape in table order. Alongside, per column,
-    how many shapes there are and - when one shape covers nearly every value - up to three
-    of the values that do not fit it."""
+    its count, share and the smallest value of that shape. Alongside, per column, how many
+    shapes there are and - when one shape covers nearly every value - up to three of the
+    values that do not fit it."""
     rows, facts = [], {}
     for s in specs:
         if s.kind != "text":
             continue
         c = ident(s.canon)
         df = con.execute(f"""
-            WITH s AS (SELECT {c} AS v, {shape_sql(c)} AS shape, rowid AS rn FROM {table}
+            WITH s AS (SELECT {c} AS v, {shape_sql(c)} AS shape FROM {table}
                        WHERE {c} IS NOT NULL),
-                 g AS (SELECT shape, count(*) AS n, arg_min(v, rn) AS example, min(rn) AS first
-                       FROM s GROUP BY shape)
+                 g AS (SELECT shape, count(*) AS n, min(v) AS example FROM s GROUP BY shape)
             SELECT shape, n, example, count(*) OVER () AS shapes, sum(n) OVER () AS total
-            FROM g ORDER BY n DESC, first LIMIT {TOP_SHAPES}""").fetchdf()
+            FROM g ORDER BY n DESC, shape LIMIT {TOP_SHAPES}""").fetchdf()
         if not len(df):
             continue
         total, shapes = int(df["total"].iloc[0]), int(df["shapes"].iloc[0])
@@ -344,18 +378,20 @@ def patterns(con, table: str, specs: list[ColSpec]) -> tuple[pd.DataFrame, dict[
         odd = []                    # three distinct values of another shape, a fourth says there are more
         if 90 <= share < 100:
             odd = [str(v) for (v,) in con.execute(
-                f"SELECT v FROM (SELECT {c} AS v, min(rowid) AS rn FROM {table} "
-                f"WHERE {c} IS NOT NULL AND {shape_sql(c)} <> {lit(top)} GROUP BY 1) "
-                f"ORDER BY rn LIMIT 4").fetchall()]
+                f"SELECT DISTINCT {c} AS v FROM {table} "
+                f"WHERE {c} IS NOT NULL AND {shape_sql(c)} <> {lit(top)} "
+                f"ORDER BY v LIMIT 4").fetchall()]
         facts[s.canon] = {"shapes": shapes, "top": top, "share": share, "others": total - top_n,
                           "examples": odd[:3], "more": len(odd) > 3}
     return pd.DataFrame(rows, columns=PATTERN_COLS), facts
 
 
-def raw_checks(con, side: Side, specs: list[ColSpec], opts: ReadOptions) -> dict[str, dict]:
+def raw_checks(con, side: Side, specs: list[ColSpec], opts: ReadOptions, rows: int = 0
+               ) -> dict[str, dict]:
     """The two checks that need the value as the file has it, plus leading zeros, read from
-    the source in one pass: per text column the values with leading or trailing spaces and
-    whether any differ only in case; per number column the values that start with a zero.
+    the source a few columns a statement: per text column the values with leading or
+    trailing spaces and whether any differ only in case; per number column the values that
+    start with a zero.
     The null tokens are folded first, as the reader folds them, so 'null', ' NULL ' and a
     cell of spaces are not spellings or padded values. A column with case variants is read
     once more for how many spellings are involved and the group with the most of them."""
@@ -374,7 +410,9 @@ def raw_checks(con, side: Side, specs: list[ColSpec], opts: ReadOptions) -> dict
                  f"count(DISTINCT {v}) - count(DISTINCT lower({v}))"]
     for s in nums:
         aggs.append(f"count(*) FILTER (WHERE regexp_matches({raw(s)}, '^0[0-9]'))")
-    found = con.execute(f"SELECT {', '.join(aggs)} FROM {source_expr(side)}").fetchone()
+    per = 2 * columns_a_statement(rows)                # a text column is two of them
+    found = tuple(v for i in range(0, len(aggs), per) for v in con.execute(
+        f"SELECT {', '.join(aggs[i:i + per])} FROM {source_expr(side)}").fetchone())
     out: dict[str, dict] = {}
     for i, s in enumerate(text):
         spaces, variants = found[2 * i], found[2 * i + 1]
@@ -553,7 +591,7 @@ def observe(con, table: str, side: Side, specs: list[ColSpec], stats: pd.DataFra
     duplicates = duplicate_rows(con, table, cols)
     key, key_part = key_line(con, table, cols, rows, keys)
     say(f"{who}: dependencies…")
-    deps, cut_deps = dependencies(con, table, cols, facts)
+    deps, cut_deps = dependencies(con, table, cols, facts, rows)
     say(f"{who}: correlations…")
     corr, cut_corr = correlations(con, table, specs)
     say(f"{who}: outliers…")
@@ -561,7 +599,7 @@ def observe(con, table: str, side: Side, specs: list[ColSpec], stats: pd.DataFra
     say(f"{who}: patterns…")
     pat, pat_facts = patterns(con, table, specs)
     say(f"{who}: leading spaces, case variants, leading zeros…")
-    raw = raw_checks(con, side, specs, opts) if rows else {}
+    raw = raw_checks(con, side, specs, opts, rows) if rows else {}
 
     notes = table_notes(duplicates, key, deps, cut_deps, corr, cut_corr, pat_facts)
     for s in specs:

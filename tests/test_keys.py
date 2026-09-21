@@ -699,3 +699,33 @@ def test_key_reasons_for_one_table():
         "salary: a measure, decimal - never a key")
     assert key_reasons(["dept", "emp_id"], tot, tot, aff, {}, None, [frozenset(["emp_id"])], "how", "hr") == \
         "emp_id says identifier · no nulls · 3,000 distinct of 3,000 · adds nothing - emp_id is already unique · how"
+
+
+def test_a_checksum_column_is_unique_but_no_key(tmp_path):
+    """A row hash is unique by construction: named as one, or holding digests, it is listed
+    under the surrogate key on one table and on the pair, says so, and Auto never takes
+    it beside a key. A plain text column of the same length is untouched."""
+    import hashlib
+    rows = [[i, hashlib.md5(str(i).encode()).hexdigest(), hashlib.sha256(str(i).encode()).hexdigest(),
+             f"N{i % 7}", "x" * 32] for i in range(200)]
+    header = ["emp_id", "row_hash", "token", "name", "pad"]
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
+    P = _csv_single(tmp_path, header, rows)
+    table, combos, _ = suggest_keys_single(P, specs, "t", OPTS)
+    assert combos == [["emp_id"], ["row_hash"], ["token"]], combos
+    assert list(table["Looks like a key"]) == ["yes", "checksum", "checksum"]
+    assert table.iloc[1]["Why"].startswith("row_hash: a checksum - unique by construction, not a key")
+    assert table.iloc[2]["Why"].startswith("token: a checksum - unique by construction, not a key")
+    A, B = _csv_sides(tmp_path, header, rows, rows)
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos[0] == ["emp_id"] and ["row_hash"] in combos and ["token"] in combos
+    assert dict(zip(table["Key columns"], table["Looks like a key"]))["token"] == "checksum"
+    from tablecmp.auto import auto_configure
+    A.name, B.name = "a", "b"
+    _, notes, chosen, _ = auto_configure(A, B, "a", "b", OPTS, lambda m: None)
+    assert chosen == ["emp_id"]
+    # a name that says checksum ranks under even with no unique id beside it
+    rows = [[f"F{i}", i // 2] for i in range(50)]
+    P = _csv_single(tmp_path / "f" if (tmp_path / "f").mkdir() is None else tmp_path, ["fingerprint", "grp"], rows)
+    table, combos, _ = suggest_keys_single(P, [ColSpec(c, c, c) for c in ("fingerprint", "grp")], "t", OPTS)
+    assert combos[0] == ["fingerprint"] and table.iloc[0]["Looks like a key"] == "checksum"

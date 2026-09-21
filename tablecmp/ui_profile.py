@@ -106,9 +106,9 @@ def dependencies_frame(prof: dict) -> pd.DataFrame:
 
 
 def show_profile(prof: dict, NP: str, made: str) -> None:
-    """Top to bottom: the headline, the keys, what stands out, the statistics table with
-    its two save routes, the outliers, patterns and dependencies folded, then a fold per
-    column with its most and least frequent values."""
+    """Top to bottom: the headline, the keys, the statistics table with its two save
+    routes, what stands out, the outliers, patterns and dependencies folded, then a fold
+    per column with its most and least frequent values."""
     st.subheader("Profile")
     st.caption(prof["headline"])
 
@@ -124,12 +124,6 @@ def show_profile(prof: dict, NP: str, made: str) -> None:
     st.dataframe(table, width="stretch", hide_index=True)
 
     notes: list[str] = prof["notes"]
-    st.markdown("**What stands out**")
-    if notes:
-        st.markdown("\n".join(f"- {n}" for n in notes))
-    else:
-        st.caption("Nothing stands out - no nulls, no duplicates, no constant columns, no outliers.")
-
     st.markdown("**Statistics**")
     stats: pd.DataFrame = prof["stats"]
     st.dataframe(stats, width="stretch", hide_index=True, height=min(560, 45 + 35 * len(stats)))
@@ -150,6 +144,12 @@ def show_profile(prof: dict, NP: str, made: str) -> None:
     with d2:
         save_row(files, "Save to folder", key="save_profile_P",
                  run={"pair": stem, "run_id": made}, tag="P")
+
+    st.markdown("**What stands out**")
+    if notes:
+        st.markdown("\n".join(f"- {n}" for n in notes))
+    else:
+        st.caption("Nothing stands out - no nulls, no duplicates, no constant columns, no outliers.")
 
     with st.expander("Outliers", expanded=False):
         out: pd.DataFrame = prof["outliers"]

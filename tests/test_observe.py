@@ -288,7 +288,7 @@ def test_the_other_forms_of_the_lines(tmp_path):
     # 1..3000 with one -100,000: P25 = 750.75, P75 = 2,250.25, the low fence -1,498.5
     assert _lines(notes, "amount:") == ["amount: 1 outlier - below -1,498.50 (1.5 × IQR) · lowest -100,000",
                                         "amount: 1 negative value"]
-    assert _lines(notes, "code:") == ["code: 99.9% of values are A9999 - 4 are not (K12, K-0020, 0030K, …)"]
+    assert _lines(notes, "code:") == ["code: 99.9% of values are A9999 - 4 are not (0030K, K-0020, K12, …)"]
     row = out["outliers"].set_index("Column").loc["amount"]
     assert row["Outliers"] == 1 and row["Low fence"] == "-1498.5" and row["High fence"] == "4499.5"
     assert "patterns: the 3 most common shapes per column are listed - more exist in code (5 shapes)" in notes
@@ -515,3 +515,29 @@ def test_never_raises_on_odd_tables(tmp_path):
     nokeys = _measure(_side(EX / "hr_employees.csv"), keys=None)
     assert not any(n.startswith("key:") or n.startswith("no single") for n in nokeys["notes"])
     assert "key" not in nokeys["headline"]
+
+
+def test_a_dependency_is_tried_on_a_sample_first_then_on_every_row(tmp_path, monkeypatch):
+    """With the sample at a thousand rows: x determines y on the first thousand and not on
+    the second, so it is not listed; x determines z on every row, both ways, so the pair
+    is listed once as one-to-one. Every row is read for the ones that hold on the sample."""
+    import tablecmp.observe as observe_mod
+    monkeypatch.setattr(observe_mod, "SAMPLE_ROWS", 1000)
+    rows = [[i, i // 10, (i // 10) if i < 1000 else -1 - (i % 3), i // 10] for i in range(2000)]
+    out = _measure(_side(_write(tmp_path / "dep.csv", ["id", "x", "y", "z"], rows)))
+    deps = out["deps"]
+    pairs = {(r["Determines"], r["Determined"]): r["Kind"] for _, r in deps.iterrows()}
+    assert ("x", "z") in pairs and pairs[("x", "z")] == "one-to-one"
+    assert not any("y" in p for p in pairs), pairs
+    assert any("x ↔ z: one-to-one" in n for n in out["notes"]), out["notes"]
+    assert not any("x → y" in n for n in out["notes"])
+
+
+def test_duplicate_rows_are_exact_and_nulls_equal(tmp_path):
+    """Two rows alike in every column count once each as a duplicate; a null equals a null
+    and differs from an empty-looking value; rows alike in all but one column do not."""
+    rows = [["a", "1", ""], ["a", "1", ""], ["a", "1", "x"], ["b", "1", ""], ["b", "1", ""],
+            ["b", "1", ""], ["c", "2", "0"]]
+    out = _measure(_side(_write(tmp_path / "dup.csv", ["k", "n", "v"], rows)))
+    assert out["duplicates"] == 3                       # one of the a's, two of the b's
+    assert any(n.startswith("3 exact duplicate rows") for n in out["notes"]), out["notes"]

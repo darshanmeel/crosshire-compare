@@ -11,8 +11,8 @@ from tablecmp.observe import CORR_COLS, DEP_COLS, OUTLIER_COLS, PATTERN_COLS
 from tablecmp.profile import STATS_COLS, measure, measure_on, profile_single, profile_tables, stats_table
 from tablecmp.sniff import looks_like
 from tablecmp.sources import Side, file_stamp, source_schema
-from tablecmp.sql import scratch
-from tablecmp.values import ColSpec, ReadOptions, register
+from tablecmp.sql import columns_a_statement, scratch
+from tablecmp.values import ColSpec, ReadOptions, hold, register
 
 EX = Path(__file__).resolve().parent.parent / "examples"
 OPTS = ReadOptions(tokens=("NULL", ""), trim=True)
@@ -246,3 +246,84 @@ def test_profile_tables_still_pairs():
     assert set(both.columns) >= {"Nulls A", "Nulls B", "Min A", "Max B", "constant", "empty"}
     assert isinstance(prof["notes"], list)
     assert prof["freq"]["department"]["A"][0].iloc[0]["Value"] == "Support"
+
+
+def test_columns_a_statement_shrinks_with_the_rows():
+    """A small table's columns are measured 32 a statement, a million rows' four at a time,
+    ten million rows' one at a time - never none."""
+    assert columns_a_statement(0) == 32 and columns_a_statement(3_000) == 32
+    assert columns_a_statement(100_000) == 32
+    assert columns_a_statement(1_000_000) == 4
+    assert columns_a_statement(10_000_000) == 1 and columns_a_statement(10 ** 9) == 1
+
+
+def test_stats_table_measures_a_few_columns_a_statement(tmp_path):
+    """Seventy columns of ten rows are three statements of at most 32 columns, and the
+    table is the one a single statement would give - one row per column, in order."""
+    import csv
+    header = [f"c{i}" for i in range(70)]
+    with open(tmp_path / "wide.csv", "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(header)
+        w.writerows([[f"v{(i * j) % 7}" for j in range(70)] for i in range(10)])
+    side = _side("wide.csv", base=tmp_path)
+    specs = single_specs(side)
+    con = scratch()
+    register(con, side, "prof", specs, "A", OPTS, materialize=True)
+    sent = []
+
+    class Counting:                     # the connection, every statement noted
+        def execute(self, sql, *a, **k):
+            sent.append(sql)
+            return con.execute(sql, *a, **k)
+    stats = stats_table(Counting(), "prof", specs, rows=10)
+    unions = [q for q in sent if "count(DISTINCT" in q]
+    assert len(unions) == 3 and max(q.count("UNION ALL") for q in unions) == 31
+    assert list(stats["Column"]) == header and list(stats["Rows"]) == [10] * 70
+    assert list(stats["Distinct"])[:3] == [1, 7, 7]              # c0 is constant, c1 = v0..v6
+
+
+def test_a_table_too_big_for_memory_is_profiled_from_the_file(monkeypatch):
+    """When the table would not fit in a quarter of DuckDB's memory, hold registers a view
+    over the file instead of a table, the profile says so, and everything it measures -
+    statistics, frequencies, keys, what stands out - reads the same as from a table."""
+    import tablecmp.values as values
+    side = _side("hr_employees.csv")
+    looks = looks_like(side, side.columns, opts=OPTS)
+    specs = single_specs(side, looks)
+    from_table = profile_single(side, specs, OPTS, name="hr", looks=looks)
+    monkeypatch.setattr(values, "HOLD_SHARE", 0.0)             # nothing fits
+    con = scratch()
+    assert hold(con, side, "prof", specs, "A", OPTS) == "view"
+    assert con.execute("SELECT table_type FROM information_schema.tables WHERE table_name = 'prof'"
+                       ).fetchone()[0] == "VIEW"
+    said = []
+    from_view = profile_single(side, specs, OPTS, said.append, name="hr", looks=looks)
+    assert "t: too big to hold in memory - measured from the file" in said
+    pd.testing.assert_frame_equal(from_view["stats"], from_table["stats"])
+    assert from_view["keys"][1] == from_table["keys"][1]
+    assert from_view["notes"] == from_table["notes"]
+    assert from_view["headline"] == from_table["headline"]
+    for c in from_table["freq"]:
+        for a, b in zip(from_view["freq"][c], from_table["freq"][c]):
+            pd.testing.assert_frame_equal(a, b)
+    pd.testing.assert_frame_equal(from_view["deps"], from_table["deps"])
+    pd.testing.assert_frame_equal(from_view["outliers"], from_table["outliers"])
+    pd.testing.assert_frame_equal(from_view["patterns"], from_table["patterns"])
+
+
+def test_hold_reads_the_memory_limit(monkeypatch):
+    """The limit is read from the connection as DuckDB prints it; a table of 3,000 rows and
+    7 columns fits with the default, and not when a value is reckoned at a megabyte."""
+    import tablecmp.values as values
+    from tablecmp.sql import memory_limit_bytes
+    monkeypatch.setenv("COMPARE_DUCKDB_MEMORY", "1.5GB")
+    assert 1_350_000_000 < memory_limit_bytes(scratch()) <= 1_500_000_000    # '1.3 GiB' as printed
+    monkeypatch.delenv("COMPARE_DUCKDB_MEMORY")
+    assert memory_limit_bytes(scratch()) > 100_000_000
+    side = _side("hr_employees.csv")
+    side.rows = 3000                    # known, as the sidebar leaves it - not counted here
+    specs = single_specs(side)
+    assert hold(scratch(), side, "p", specs, "A", OPTS) == "table"
+    monkeypatch.setattr(values, "BYTES_A_CELL", 10 ** 6)
+    assert hold(scratch(), side, "p", specs, "A", OPTS) == "view"

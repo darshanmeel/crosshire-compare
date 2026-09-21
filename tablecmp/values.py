@@ -17,7 +17,7 @@ import duckdb
 import pandas as pd
 
 from .sources import Side, source_expr
-from .sql import ident, lit, scratch
+from .sql import ident, lit, memory_limit_bytes, scratch
 
 NUMERIC_TYPES = ("INT", "DECIMAL", "NUMERIC", "DOUBLE", "FLOAT", "REAL", "BIGINT",
                  "SMALLINT", "TINYINT", "HUGEINT", "NUMBER")
@@ -323,6 +323,25 @@ def register(con: duckdb.DuckDBPyConnection, side: Side, name: str, specs: list[
     what = "TABLE" if materialize else "VIEW"
     con.execute(f"CREATE OR REPLACE {what} {ident(name)} AS {sql}")
     return name
+
+
+BYTES_A_CELL = 24                   # a canonical text value in a DuckDB table, on average
+HOLD_SHARE = 0.25                   # of DuckDB's memory a held table may take
+
+
+def hold(con: duckdb.DuckDBPyConnection, side: Side, name: str, specs: list[ColSpec],
+         which: str, opts: ReadOptions, rows: int | None = None) -> str:
+    """One side under the shared names, held the way its size allows: a table, read and
+    typed once, when it fits in a quarter of DuckDB's memory; else a view, which reads and
+    types the columns a query asks for from the file each time - slower per query, but a
+    table of any size profiles without a copy of it in memory. Returns "table" or "view".
+    `rows` is the side's row count when known, else it is counted."""
+    if rows is None:
+        rows = side.rows if side.rows is not None else int(
+            con.execute(f"SELECT count(*) FROM {source_expr(side)}").fetchone()[0])
+    fits = rows * max(len(specs), 1) * BYTES_A_CELL <= memory_limit_bytes(con) * HOLD_SHARE
+    register(con, side, name, specs, which, opts, materialize=fits)
+    return "table" if fits else "view"
 
 
 def register_plain(con, side: Side, name: str, cols: list[str], opts: ReadOptions,

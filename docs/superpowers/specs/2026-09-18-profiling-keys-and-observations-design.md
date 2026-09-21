@@ -25,11 +25,24 @@ which gains the same columns on both pages.
   `try_cast(c AS DATE)` / `AS TIMESTAMP`, the way `stats_table` already does. The raw source
   (`raw_text(side, col)` over `source_expr(side)`) is read only for the two checks that need
   the untrimmed value: leading/trailing spaces and case variants.
-- One read of the table. `profile_single` opens one scratch connection, registers the table
-  once (`materialize=True`), and every measure - statistics, frequencies, keys, observations,
-  outliers, patterns, dependencies - runs on that connection. Nothing keeps the connection
-  after it returns: the profile dict holds only DataFrames, lists, strings and ints, because
-  it lives in `st.session_state`.
+- One read of the table while it fits. `profile_single` opens one scratch connection and holds
+  the table on it through `values.hold`: a table read and typed once when rows × columns ×
+  24 bytes is within a quarter of DuckDB's `memory_limit`, else a view over the file - every
+  measure then reads and types the columns it asks for, slower per measure, but a table of
+  any size profiles with no copy of it in memory (an in-memory DuckDB table cannot be paged
+  out, so one bigger than the memory is an out-of-memory error, not a slow run). The disc
+  says *too big to hold in memory - measured from the file*. Every measure - statistics,
+  frequencies, keys, observations, outliers, patterns, dependencies - runs on that
+  connection. Nothing keeps the connection after it returns: the profile dict holds only
+  DataFrames, lists, strings and ints, because it lives in `st.session_state`.
+- A few columns a statement. Every `count(DISTINCT c)` holds a hash table, and hundreds of
+  them in one statement - the statistics as one `UNION ALL` of a branch per column, the raw
+  checks as one aggregate of every column, the single-column figures of the key search -
+  run DuckDB out of memory on a wide table however few the rows, or hang it (DuckDB 1.5:
+  150 branches never finish with 8 threads where 140 take two seconds). So the statistics,
+  the raw checks and the single-column figures go `sql.columns_a_statement(rows)` columns a
+  statement: 32, fewer as the rows grow, so that a statement holds about four million
+  values - a million rows four columns at a time, ten million one at a time.
 - `st.*` only in `ui_profile.py`. `profile.py`, `observe.py`, `keys.py` stay plain Python.
 - Plain wording, the house style: lower-case reasons joined with ` · `, no emojis, numbers
   with thousands separators, percentages with one decimal in prose and two in tables.
@@ -108,9 +121,18 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
   (`pairs`): it neither ends the search nor keeps a measure or a lone seed out, though a
   superset of it still adds nothing. `emp_id` is never followed by `hire_date + emp_id`.
   The same search serves the pair.
+- A checksum of the row is unique by construction and says nothing about which row it is:
+  a column named as one (`HASH_WORDS`: hash, hk, checksum, md5, sha…, crc, digest,
+  fingerprint, etag) or whose first 200 filled values are all hex of one digest length
+  (32, 40, 64, 128 - `looks_hashed`, tried on the text columns whose min and max length
+  are one such length when a statistics table is at hand, on every text column otherwise)
+  gets affinity −5, so it is never a seed or an added column beside a key, ranks under one
+  however unique it is, reads *Looks like a key: checksum* and *a checksum - unique by
+  construction, not a key*, and Auto never takes it beside a key. It is still listed when
+  unique: it is. The pair does the same.
 - The table lists the best `want` = 3: when anything is unique, only the keys; when nothing
   is, the closest. No overlap (there is no other side). Ranking: unique first,
-  non-redundant first, no measure among the columns first, an identifier among them first
+  non-redundant first, no measure or checksum among the columns first, an identifier among them first
   (`emp_id` above a name and a date), affinity sum, fewer columns, selectivity. The pair
   ranks a key with no values in common - a row number each side counts for itself - under
   every key that pairs something, right after unique.
@@ -138,7 +160,7 @@ Returns:
 
 ```python
 {"notes": list[str],          # What stands out - the lines, table-level first, then per column in table order
- "duplicates": int,           # exact duplicate rows (every column the same, nulls equal)
+ "duplicates": int,           # exact duplicate rows (every column the same, nulls equal) - told apart by md5_number(combo(cols)), 16 bytes a row
  "outliers": pd.DataFrame,    # one row per number / date / timestamp column
  "patterns": pd.DataFrame,    # top shapes per text column
  "deps": pd.DataFrame,        # functional dependencies and one-to-one pairs
@@ -171,18 +193,26 @@ else stays. `E1234` → `A9999`, `2026-01-12` → `9999-99-99`, `Finance & Contr
 
 Per text column, `GROUP BY` shape over the whole column (nulls skipped), keep the top 3 exact
 shapes: `Column · Pattern · Collapsed · Count · % · Example` - `%` of non-null values,
-`Example` the first value with that shape in file order (`arg_min(v, rowid)` or `min(v)`).
+`Example` the smallest value with that shape (`min(v)` - a view over the file has no rowid,
+and the scratch connection keeps no insertion order anyway).
 The DataFrame holds every text column's top 3; the note says when more shapes exist.
 
 ### 5.3 Functional dependencies and correlations
 
 - Candidates for a determinant X: every column that is not unique and not constant, ordered
   by distinct count ascending (the fewest values first, the most informative), capped at 40
-  determinants; the note says when the cap cut columns. For each X one query counts, for
-  every other non-constant column Y, `count(DISTINCT X) = count(DISTINCT (X, Y))` (X, Y
-  combined with `keys.combo`, so nulls are one value). Rows of `deps`:
-  `Determines · Determined · Kind · Distinct` where Kind is `one-to-one` when Y → X holds as
-  well, else `many-to-one`. A one-to-one pair is listed once (X first by table order).
+  determinants; the note says when the cap cut columns. For each X one pass grouped by X
+  takes, for every other non-constant column Y, `min(Y)`, `max(Y)` and `count(Y)` per group
+  - X determines Y when every group holds one value (min and max the same, count 0 or the
+  group's size, so a null is one value) - a few Y a statement when X has many groups; no
+  hash table per Y, as `count(DISTINCT (X, Y))` would keep. On a table over 200,000 rows
+  (`SAMPLE_ROWS`) the pass runs first on a sample - the first 200,000 rows, fewer when that
+  many would not fit in a quarter of the memory, held as a temp table so the forty passes
+  read it and not the file: a dependency that fails there fails everywhere, so only the
+  ones that hold on the sample are tried on every row. Y → X is tried the same way for the
+  pairs that hold. Rows of `deps`: `Determines · Determined · Kind · Distinct` where Kind is
+  `one-to-one` when Y → X holds as well, else `many-to-one`. A one-to-one pair is listed
+  once (X first by table order).
   A Y that is determined because X is nearly unique is not interesting, so X with
   `Distinct % of filled ≥ 99` are excluded too.
 - Correlations: for number columns (at most 30, the first in table order, noted when cut),
@@ -267,13 +297,13 @@ After **Profile**, top to bottom:
    warning (`Nothing up to 4 columns is unique - the closest are below. …` - the number is
    `keys.MAX_KEY_COLS`, the one constant the search depth, the notes and the page share), then
    the candidate table.
-4. **What stands out** - the notes as a Markdown bullet list; when empty,
-   *Nothing stands out - no nulls, no duplicates, no constant columns, no outliers.*
-5. **Statistics** - the stats table, then the download / save row. **Download profile.csv**
+4. **Statistics** - the stats table, then the download / save row. **Download profile.csv**
    as now. **Save to folder** writes `<Table>__profile.csv`, `<Table>__keys.csv`,
    `<Table>__notes.txt` (the headline, then one note per line), `<Table>__outliers.csv`,
    `<Table>__patterns.csv`, `<Table>__dependencies.csv` (deps and corr stacked, with a
    `Kind` column telling them apart) - empty tables write a header-only file.
+5. **What stands out** - the notes as a Markdown bullet list; when empty,
+   *Nothing stands out - no nulls, no duplicates, no constant columns, no outliers.*
 6. **Outliers**, **Patterns**, **Dependencies** - three expanders, collapsed, each holding
    its table (Dependencies holds deps then corr with a caption each); an empty one says so in
    a caption instead of the table.

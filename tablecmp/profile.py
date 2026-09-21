@@ -7,8 +7,8 @@ from typing import Any
 import pandas as pd
 
 from .sources import Side
-from .sql import ident, lit, scratch
-from .values import ColSpec, ReadOptions, register
+from .sql import columns_a_statement, ident, lit, scratch
+from .values import ColSpec, ReadOptions, hold
 
 STATS_COLS = ["Column", "Type", "Rows", "Nulls", "Null %", "Distinct", "Distinct % of filled",
               "Distinct % of rows", "Top value", "Top %", "Min", "Max", "Mean", "Avg length",
@@ -28,10 +28,16 @@ def label(v: Any) -> str:
     return "∅ null" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v)
 
 
-def stats_table(con, table: str, specs: list[ColSpec]) -> pd.DataFrame:
+def stats_table(con, table: str, specs: list[ColSpec], rows: int | None = None) -> pd.DataFrame:
     """One row per column, every STATS_COLS column. The distinct share is given both ways -
     of the filled rows and of all rows. Top value / Top % are left blank here: measure_on
-    fills them from the frequency tables, which already hold the most frequent value."""
+    fills them from the frequency tables, which already hold the most frequent value.
+    The columns are measured a few at a time - one statement per columns_a_statement of
+    them, not one for the whole table: every column's count(DISTINCT) holds a hash table,
+    and hundreds of them at once run DuckDB out of memory on a wide table however few
+    the rows. `rows` sizes the statements; counted when not given."""
+    if rows is None:
+        rows = int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
     branches = []
     for s in specs:
         c = ident(s.canon)
@@ -42,7 +48,10 @@ def stats_table(con, table: str, specs: list[ColSpec]) -> pd.DataFrame:
             f"min({num}) AS min_n, max({num}) AS max_n, avg({num}) AS mean_n, "
             f"round(avg(length({c})), 1) AS avg_len, "
             f"min(length({c})) AS min_len, max(length({c})) AS max_len FROM {table}")
-    raw = con.execute(" UNION ALL ".join(branches)).fetchdf()
+    per = columns_a_statement(rows)
+    parts = [con.execute(" UNION ALL ".join(branches[i:i + per])).fetchdf()
+             for i in range(0, len(branches), per)]
+    raw = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     kinds = {s.canon: s.kind for s in specs}
     out = []
     for _, r in raw.iterrows():
@@ -67,25 +76,28 @@ def stats_table(con, table: str, specs: list[ColSpec]) -> pd.DataFrame:
     return df
 
 
-def freq_tables(con, table: str, col: str, n: int = 10) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """(most frequent, least frequent) values of one column, with counts and %."""
+def freq_tables(con, table: str, col: str, n: int = 10, rows: int | None = None
+                ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(most frequent, least frequent) values of one column, with counts and %. One pass
+    counts the values, held once; each end is a top-n over the counts, not a rank over
+    every distinct value, so a column with a hundred million distinct values is never
+    sorted in full. `rows` is the table's row count, counted when not given."""
     c = ident(col)
+    if rows is None:
+        rows = int(con.execute(f"SELECT count(*) FROM {table}").fetchone()[0])
     df = con.execute(f"""
-        WITH c AS (SELECT {c} AS v, count(*) AS n FROM {table} GROUP BY 1),
-             r AS (SELECT v, n,
-                          row_number() OVER (ORDER BY n DESC, v) AS top_rk,
-                          row_number() OVER (ORDER BY n ASC, v) AS bot_rk,
-                          sum(n) OVER () AS total FROM c)
-        SELECT v, n, top_rk, bot_rk, total FROM r WHERE top_rk <= {n} OR bot_rk <= {n}
+        WITH c AS MATERIALIZED (SELECT {c} AS v, count(*) AS n FROM {table} GROUP BY 1)
+        SELECT * FROM (SELECT v, n, 'top' AS which FROM c ORDER BY n DESC, v LIMIT {int(n)})
+        UNION ALL
+        SELECT * FROM (SELECT v, n, 'bottom' AS which FROM c ORDER BY n ASC, v LIMIT {int(n)})
     """).fetchdf()
-    total = int(df["total"].iloc[0]) if len(df) else 0
 
-    def shape(sub: pd.DataFrame, rk: str) -> pd.DataFrame:
-        sub = sub.sort_values(rk)
-        return pd.DataFrame({"Value": sub["v"].map(label),
+    def end(which: str) -> pd.DataFrame:
+        sub = df[df["which"] == which]
+        return pd.DataFrame({"Value": sub["v"].map(label).values,
                              "Count": sub["n"].astype(int).values,
-                             "%": (sub["n"] / max(total, 1) * 100).round(2).values})
-    return shape(df[df["top_rk"] <= n], "top_rk"), shape(df[df["bot_rk"] <= n], "bot_rk")
+                             "%": (sub["n"] / max(rows, 1) * 100).round(2).values})
+    return end("top"), end("bottom")
 
 
 def measure_on(con, side: Side, which: str, specs: list[ColSpec], say
@@ -95,9 +107,10 @@ def measure_on(con, side: Side, which: str, specs: list[ColSpec], say
     measures are taken - measure reads a side for the pair and profile_single for the
     Profiling page, each on its own connection."""
     say(f"{side.name or which}: statistics for {len(specs)} columns…")
-    stats = stats_table(con, "prof", specs)
+    stats = stats_table(con, "prof", specs, side.rows)
     say(f"{side.name or which}: value frequencies…")
-    freq = {s.canon: freq_tables(con, "prof", s.canon) for s in specs}
+    rows = int(stats["Rows"].iloc[0]) if len(stats) else 0
+    freq = {s.canon: freq_tables(con, "prof", s.canon, rows=rows) for s in specs}
     # the most frequent value and its share of all rows head the frequency table already -
     # a null counts as a value there, shown as ∅ null; an empty table has no head
     heads = {c: top.iloc[0] for c, (top, _) in freq.items() if len(top)}
@@ -112,7 +125,8 @@ def measure(side: Side, which: str, specs: list[ColSpec], opts: ReadOptions, say
     (the stats table, {column: (most frequent, least frequent)})."""
     say(f"Reading {side.name or which}…")
     con = scratch()
-    register(con, side, "prof", specs, which, opts, materialize=True)
+    if hold(con, side, "prof", specs, which, opts) == "view":
+        say(f"{side.name or which}: too big to hold in memory - measured from the file")
     return measure_on(con, side, which, specs, say)
 
 
@@ -131,7 +145,8 @@ def profile_single(side: Side, specs: list[ColSpec], opts: ReadOptions, progress
     who = side.name or "A"
     say(f"Reading {who}…")
     con = scratch()
-    register(con, side, "prof", specs, "A", opts, materialize=True)
+    if hold(con, side, "prof", specs, "A", opts) == "view":
+        say(f"{who}: too big to hold in memory - measured from the file")
     stats, freq = measure_on(con, side, "A", specs, say)
     say("Looking for keys…")
     keys = suggest_keys_single(side, specs, name or who, opts, say, con=con, view="prof", stats=stats,
