@@ -194,6 +194,11 @@ class Connection:
 - `paired.csv`: written by a DuckDB `COPY` of the wide layout (keys, `a_<col>`, `b_<col>`)
   at run time; the on-screen A-above-B frame is unchanged; the "Build export" button is
   replaced by a download of the file.
+  *Amended 2026-09-22:* written when it is asked for, not at run time - `compare.paired_path(run)`
+  writes it once and registers it, the Downloads button **Write the paired rows** calls it, and
+  the zip, the Parquet copies and Save everything call it first. On a 100,000-row, 200-column
+  pair it was 19 s of the run's 80 s for a file most runs never download; the run is now 57 s.
+  It is therefore the one file not present after every run.
 - `verdict_of(res, mode) -> Verdict(status, tone, word)`: identical / ok / "Identical" when
   no diff rows and no one-sided rows; differences / warn / "Small differences" when
   diff % < 5 and one-sided <= matched; differences / bad / "Differences" otherwise; error /

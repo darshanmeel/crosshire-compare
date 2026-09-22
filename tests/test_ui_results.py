@@ -113,9 +113,17 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     _view(at, "Columns & values")
     assert not any("Could not" in e.value for e in at.error), [e.value for e in at.error]
     assert any("Where they differ" in m.value for m in at.markdown)
-    # the zip is built when it is asked for, and holds every file
+    # the paired rows are written when they are asked for, and then they are a file like any other
     import zipfile
     _view(at, "Downloads")
+    assert not (folder / f"{pair}__paired.csv").exists()
+    assert not any(p.startswith("Paired rows") for p in at.selectbox(key=f"dl_pick_{rid}").options)
+    at.button(key="write_paired_btn").click(); at.run()
+    assert not at.exception, at.exception
+    assert (folder / f"{pair}__paired.csv").exists()
+    assert any(p.startswith("Paired rows") for p in at.selectbox(key=f"dl_pick_{rid}").options)
+    assert not any(b.key == "write_paired_btn" for b in at.button)      # written once, then kept
+    # the zip is built when it is asked for, and holds every file
     assert not run.get("zip")
     at.button(key="zip_run_btn").click(); at.run()
     z = run["zip"]

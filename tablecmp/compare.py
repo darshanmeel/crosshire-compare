@@ -293,11 +293,7 @@ def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = ""
            "con": con, "left": "src_a", "right": "src_b", "cfg": cfg, "signature": sig,
            "at": started.strftime("%H:%M:%S"), "mode": mode, "run_id": rid, "pair": cfg["name"],
            "started_at": started.isoformat(timespec="seconds"), "verdict": verdict_of(res, mode)}
-    if res.error:
-        return run                                       # nothing paired; the app discards the folder
-    say("Writing the paired rows…")
-    write_paired(run, keys, list(res.columns_compared or cfg["compare_columns"]))
-    return run
+    return run              # the paired rows are written when they are asked for: see paired_path
 
 
 def engine_compare(con, cfg: dict, folder: Path, out: Path, keys: list[str], say) -> Outcome:
@@ -580,24 +576,6 @@ def differing_rows(run: dict, keys: list[str], cols: list[str], limit: int
     return result
 
 
-def paired_frame(run: dict, keys: list[str], cols: list[str], limit: int) -> pd.DataFrame:
-    """Every paired row, A above B, for export."""
-    con = run["con"]
-    pair_views(run, keys)
-    sel = ", ".join([f"l.{ident(k)} AS {ident('k_' + k)}" for k in keys]
-                    + [f"l.{ident(c)} AS {ident('l_' + c)}" for c in cols]
-                    + [f"r.{ident(c)} AS {ident('r_' + c)}" for c in cols])
-    df = con.execute(f"SELECT {sel} FROM cmp_l l JOIN cmp_r r ON {join_on(keys)} "
-                     f"ORDER BY l.__rn LIMIT {int(limit)}").fetchdf()
-    rows = []
-    for _, row in df.iterrows():
-        for side, prefix in (("A", "l_"), ("B", "r_")):
-            rec = {"Side": side, **{k: row[f"k_{k}"] for k in keys},
-                   **{c: row[f"{prefix}{c}"] for c in cols}}
-            rows.append(rec)
-    return pd.DataFrame(rows, columns=["Side"] + keys + cols) if rows else pd.DataFrame()
-
-
 def write_paired(run: dict, keys: list[str], cols: list[str]) -> Path:
     """Every paired row side by side - keys, then a_<col>, b_<col> - straight from DuckDB.
     In hash mode nothing pairs by key, so the file is a header only."""
@@ -614,6 +592,29 @@ def write_paired(run: dict, keys: list[str], cols: list[str]) -> Path:
     con.execute(f"COPY (SELECT {sel or 'l.__rn'} FROM cmp_l l JOIN cmp_r r ON {join_on(keys)} ORDER BY l.__rn) "
                 f"TO {lit(str(path))} (HEADER)")
     run["files"][path.name] = path
+    return path
+
+
+def paired_path(run: dict) -> Path | None:
+    """The run's paired-rows file, written the first time something asks for it - the button on
+    Downloads, the zip, a save of everything, the Parquet copies - and kept after that.
+
+    Every other file of a run falls out of the comparison itself. This one is a second pass
+    over both sides joined and written out whole: on a 100,000-row, 200-column pair it was 19
+    of the run's 80 seconds, and most runs are read on the page and never downloaded. So it is
+    written on request, like the zip; once written it is in the folder, the file list and the
+    summary's listing like any other file. None when the run failed - nothing paired.
+    """
+    res, cfg = run["result"], run["cfg"]
+    if res.error:
+        return None
+    have = run["files"].get(f"{cfg['name']}__paired.csv")
+    if have and have.exists():
+        return have
+    keys = list(res.keys or cfg["keys"]) if run["mode"] == "key" else []
+    path = write_paired(run, keys, list(res.columns_compared or cfg["compare_columns"]))
+    from .outputs import refresh_listing
+    refresh_listing(run)
     return path
 
 

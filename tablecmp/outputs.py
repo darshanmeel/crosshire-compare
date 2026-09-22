@@ -223,6 +223,13 @@ def _relist_summary(run: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8", newline="\n")
 
 
+def refresh_listing(run: dict) -> None:
+    """After a file lands in the run folder - Parquet copies, the paired rows - the run's file
+    list and the listing inside summary.json follow it."""
+    _refresh_files(run)
+    _relist_summary(run)
+
+
 def write_parquet_copies(run: dict) -> list[Path]:
     """Every CSV table of the run as Parquet next to it, through DuckDB."""
     folder, pair = Path(run["folder"]), run["pair"]
@@ -237,8 +244,7 @@ def write_parquet_copies(run: dict) -> list[Path]:
                     f"TO {lit(str(dst))} (FORMAT PARQUET)")
         written.append(dst)
     con.close()
-    _refresh_files(run)
-    _relist_summary(run)
+    refresh_listing(run)
     run.pop("zip", None)                         # the zip, if one was built, is stale now
     return written
 

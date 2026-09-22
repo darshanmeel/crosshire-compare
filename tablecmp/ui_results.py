@@ -9,7 +9,8 @@ import streamlit as st
 
 from .columns import key_chips_html, PAINTED_ROWS, row_css
 from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows,
-                      diffs_by_key_value, near_match, side_labels, style_pairs, value_pairs)
+                      diffs_by_key_value, near_match, paired_path, side_labels, style_pairs,
+                      value_pairs)
 from .outputs import default_save_folder, save_target, table_formats, verdict_of, write_parquet_copies, zip_run
 from .report import build_report
 from .sources import Side
@@ -286,12 +287,14 @@ def default_save_dir(tag: str = "A") -> str:
     return str(downloads if downloads.exists() else Path.home())
 
 
-def save_row(files: dict[str, bytes | Path], label: str, key: str, run: dict, tag: str = "A") -> None:
+def save_row(files: dict[str, bytes | Path], label: str, key: str, run: dict, tag: str = "A",
+             prepare=None) -> None:
     """A folder box and a button that writes the given files there - no browser involved,
     which is the reliable route for big results. The default is a folder per run,
     <base>/<pair>__<run_id>, where <base> is COMPARE_OUT_DIR when it is set, else the folder
     of the last save, else next to file A (`tag` names another side - the Profiling page's
-    table) or Downloads. Under COMPARE_OUT_DIR every save must stay inside it."""
+    table) or Downloads. Under COMPARE_OUT_DIR every save must stay inside it. `prepare` is
+    called on the click and returns files to add - what the run writes only when asked for."""
     per_run = f"{run['pair']}__{run['run_id']}"
     base = Path(st.session_state.get("save_dir") or default_save_dir(tag))
     box = f"{key}_dir"
@@ -315,6 +318,8 @@ def save_row(files: dict[str, bytes | Path], label: str, key: str, run: dict, ta
         if not (folder or "").strip():
             st.error("Type a folder to save into.")
             return
+        if prepare is not None:
+            files = {**files, **prepare()}
         try:
             target = save_target(folder, run)
             target.mkdir(parents=True, exist_ok=True)
@@ -401,12 +406,47 @@ MIME = {".csv": "text/csv", ".json": "application/json", ".html": "text/html",
         ".parquet": "application/vnd.apache.parquet"}
 
 
+def have_paired(run) -> bool:
+    p = run["files"].get(f"{run['pair']}__paired.csv")
+    return bool(p and p.exists())
+
+
+def paired_row(run, NA: str, NB: str) -> None:
+    """The one file a run does not write as it goes: every matched row with both sides beside
+    each other. On a wide pair it takes longer to write than the comparison itself takes to
+    run, and most runs are read here and never downloaded - so it is offered, not assumed.
+    Zip, Save everything and the Parquet copies write it too: those say the whole run."""
+    if have_paired(run):
+        return
+    p1, p2 = st.columns([2, 1])
+    with p1:
+        st.caption(f"**Paired rows** - every matched row with {NA} beside {NB} - are written when "
+                   "you ask for them. On a wide pair that file takes longer than the comparison "
+                   "did, and most runs are read here rather than downloaded.")
+    with p2:
+        st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+        if st.button("Write the paired rows", key="write_paired_btn", width="stretch"):
+            with st.spinner("Writing the paired rows…"):
+                paired_path(run)
+            st.rerun()          # the offer is drawn before the click is known: redraw without it
+
+
+def paired_first(run) -> dict[str, Path]:
+    """The paired rows, written now if they are not on disk - what a save of everything adds."""
+    if have_paired(run):
+        return {}
+    with st.spinner("Writing the paired rows…"):
+        p = paired_path(run)
+    return {p.name: p} if p else {}
+
+
 def downloads_tab(run, A, B, NA, NB, limit) -> None:
     st.markdown("#### Downloads")
     st.caption("Complete results, not just the rows displayed. Values are the canonical form "
                "both sides were compared on.")
     ensure_report(run, A, B, NA, NB, limit)
     name = run["pair"]
+    paired_row(run, NA, NB)
     buttons = [(f"{name}__{suffix}", label.format(NA=NA, NB=NB)) for suffix, label in DOWNLOAD_LABELS]
     buttons += [(p.name, f"{p.name[len(name) + 2:-len('.parquet')]} (Parquet)")
                 for p in sorted(run["files"].values()) if p.suffix == ".parquet"]
@@ -428,8 +468,11 @@ def downloads_tab(run, A, B, NA, NB, limit) -> None:
                                width="stretch", mime=MIME.get(path.suffix, "application/octet-stream"),
                                key=f"dl_{fname}_{run['run_id']}", on_click="ignore")
     if st.button("Zip the whole run", key="zip_run_btn",
-                 help="Every file of this run in one archive - written next to the run folder"):
-        with st.spinner("Zipping the run folder…"):
+                 help="Every file of this run in one archive - the paired rows written first when "
+                      "they are not on disk yet - next to the run folder"):
+        with st.spinner("Writing the paired rows and zipping…" if not have_paired(run)
+                        else "Zipping the run folder…"):
+            paired_path(run)
             zip_run(run)
     z = run.get("zip")
     if z and z.exists():
@@ -446,8 +489,10 @@ def downloads_tab(run, A, B, NA, NB, limit) -> None:
     if fmt in ("parquet", "both") and not any(p.suffix == ".parquet" for p in run["files"].values()):
         if st.button("Write Parquet copies for this run", key="write_pq"):
             with st.spinner("Writing Parquet…"):
+                paired_path(run)                  # a table of the run like any other
                 write_parquet_copies(run)         # drops the zip too, so it is rebuilt with them
             st.rerun()
     everything = {p.name: p for p in run["files"].values() if p.exists()}
-    save_row(everything, "Save everything to folder", key="save_all", run=run)
+    save_row(everything, "Save everything to folder", key="save_all", run=run,
+             prepare=lambda: paired_first(run))
 

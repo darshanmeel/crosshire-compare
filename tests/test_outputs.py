@@ -73,8 +73,10 @@ def test_run_folder_has_every_file(tmp_path, monkeypatch):
     assert folder.name.startswith("hr_compare_payroll__") and folder.parent == tmp_path / "work"
     names = {p.name for p in folder.iterdir()}
     for suffix in ("summary.json", "summary.csv", "columns.csv", "cell_diffs.csv", "left_only.csv",
-                   "right_only.csv", "paired.csv", "diff.html"):
+                   "right_only.csv", "diff.html"):
         assert f"hr_compare_payroll__{suffix}" in names, suffix
+    # the paired rows are the exception: written when something asks for them, not as the run goes
+    assert "hr_compare_payroll__paired.csv" not in names
     assert not [p for p in folder.iterdir() if p.is_dir()]          # flat: no <pair>/ sub-folder left
     js = json.loads((folder / "hr_compare_payroll__summary.json").read_text(encoding="utf-8"))
     assert js["schema_version"] == 1 and js["pair"] == "hr_compare_payroll" and js["run_id"] == run["run_id"]
@@ -134,10 +136,16 @@ def test_profile_frame_carries_every_stat(tmp_path, monkeypatch):
 
 
 def test_paired_file_and_value_pairs(tmp_path, monkeypatch):
-    from tablecmp.compare import value_pairs
+    from tablecmp.compare import paired_path, value_pairs
     run, A, B = _run(tmp_path, monkeypatch)
+    out.write_summary(run, A, B, "hr", "payroll")
     res = run["result"]
-    paired = Path(run["files"]["hr_compare_payroll__paired.csv"])
+    assert "hr_compare_payroll__paired.csv" not in run["files"]     # asked for, not assumed
+    paired = paired_path(run)
+    assert paired == paired_path(run)                              # written once, then kept
+    assert run["files"]["hr_compare_payroll__paired.csv"] == paired
+    js = json.loads(Path(run["folder"], "hr_compare_payroll__summary.json").read_text(encoding="utf-8"))
+    assert "hr_compare_payroll__paired.csv" in {f["name"] for f in js["files"]}   # listed like the rest
     with open(paired, newline="", encoding="utf-8") as fh:
         rows = list(csv.reader(fh))
     assert rows[0] == ["emp_id", "a_department", "a_active", "b_department", "b_active"]
@@ -155,6 +163,8 @@ def test_hash_mode_writes_whole_rows(tmp_path, monkeypatch):
     with open(folder / "hr_compare_payroll__left_only.csv", newline="", encoding="utf-8") as fh:
         header = next(csv.reader(fh))
     assert header == ["emp_id", "department", "active"]     # every column, no __h / __k helpers
+    from tablecmp.compare import paired_path
+    assert paired_path(run).name == "hr_compare_payroll__paired.csv"   # a header, nothing pairs by key
     with open(folder / "hr_compare_payroll__paired.csv", newline="", encoding="utf-8") as fh:
         assert next(csv.reader(fh)) == ["department", "active"]
     out.write_summary(run, A, B, "hr", "payroll")
@@ -162,8 +172,10 @@ def test_hash_mode_writes_whole_rows(tmp_path, monkeypatch):
 
 
 def test_parquet_copies_and_zip(tmp_path, monkeypatch):
+    from tablecmp.compare import paired_path
     run, A, B = _run(tmp_path, monkeypatch, fmt="both")
     out.write_summary(run, A, B, "hr", "payroll")
+    paired_path(run)                              # what the page writes before it copies or zips
     written = out.write_parquet_copies(run)
     names = {p.name for p in written}
     assert {"hr_compare_payroll__cell_diffs.parquet", "hr_compare_payroll__left_only.parquet",
