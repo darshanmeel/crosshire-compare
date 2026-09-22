@@ -37,17 +37,20 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
         suggest = st.button("Suggest keys", width="stretch", key="sugg_btn",
                             help="Finds the column combinations that identify a row on both sides, "
                                  "a level at a time - every column, then every pair, then three, "
-                                 "then four - with Desbordante (HyUCC / PyroUCC) when it is "
-                                 "installed. Minutes on a wide or big pair. Only runs when pressed.")
+                                 "then four - counted on the first side and verified on the second, "
+                                 "with Desbordante (HyUCC / PyroUCC) when it is installed. Minutes "
+                                 "on a wide or big pair. Only runs when pressed.")
     with k3:
         check = st.button("Check key", width="stretch", disabled=not keys, key="check_btn",
                           help="Counts distinct key values against rows on each side.")
-    st.caption("Suggest keys measures every column and, when none is unique on both sides, every "
-               "pair of the most key-like columns, then combinations of three and of four - each "
-               "level only when the one before found no key. Over 5,000 rows a level is counted on a "
-               "random sample of 5,000 rows first and only the combinations unique there are "
-               "verified on every row - a full count each, which is where the time goes on a wide "
-               "or big pair with no obvious key: minutes.")
+    st.caption("Suggest keys measures every column and, when none is unique, every pair of the "
+               "most key-like columns, then combinations of three and of four - each level only "
+               "when the one before found no key. The counting reads one side: over 5,000 rows a "
+               "level is counted on a random sample of 5,000 rows of it first, only the "
+               "combinations unique there are counted on every row - a full count each, which is "
+               "where the time goes on a wide or big pair with no obvious key: minutes - and what "
+               "is unique there is verified on the other side, where it has to be unique too and "
+               "to share values before it is the key.")
     if suggest:                                   # under the row, so the disc has the width
         try:
             with ui_log.running("Looking for keys…", "Key search", here=True) as box:

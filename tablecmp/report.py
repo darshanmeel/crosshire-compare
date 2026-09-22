@@ -161,6 +161,18 @@ def _pairs_table(df: pd.DataFrame, marks: dict[int, set[str]], keys: list[str],
     return f'<div class="tw"><table><tr>{head}</tr>{"".join(body)}</table></div>'
 
 
+PROFILE_COLS = 24           # columns the top-values grids hold: the key, then what differs
+
+
+def _profile_shown(keys: list[str], cols: list[str], res) -> list[str]:
+    """The columns a top-values grid holds: the key first - it says why rows paired or did
+    not - then the columns that differ, worst first, then the rest, up to PROFILE_COLS.
+    Counting every column of a wide pair is minutes of work nobody reads."""
+    rest = [c for c in cols if c not in keys]
+    rest.sort(key=lambda c: (-res.diffs_by_column.get(c, 0), c))
+    return (list(keys) + rest)[:PROFILE_COLS]
+
+
 def _profile_grid(prof: dict, keys: list[str], top: int = 6) -> str:
     if not prof:
         return ""
@@ -415,11 +427,12 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
         blocks = "".join(f"<h3 class='sec-sub' style='margin-top:18px'>{esc(k)}</h3>"
                          + _table(t, numeric={"Matched rows", "Rows that differ", "% of those rows", "Cells that differ"})
                          for k, t in by_val.items())
-        prof = _profile_grid(bucket_profile(run, keys, cols, "differ"), keys)
+        shown = _profile_shown(keys, cols, res)
+        prof = _profile_grid(bucket_profile(run, keys, cols, "differ", only=shown), keys)
         parts.append(f"""<section class="sec" id="by-key"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Differences by <em>key value.</em></h2>
 <div class="sec-sub">the key is identical on both sides for these rows - this is where the differences sit, not what they are</div></div></div>
 <div class="body">{blocks}
-<h3 class="sec-sub" style="margin-top:26px">Every column across the {res.diff_rows:,} rows that differ - top values, counted on each side</h3>{prof}</div></section>""")
+<h3 class="sec-sub" style="margin-top:26px">The key and the {len(shown) - len(keys)} columns that differ most, across the {res.diff_rows:,} rows that differ - top values, counted on each side{' · of ' + f'{len(cols):,}' + ' compared columns' if len(cols) > len(shown) else ''}</h3>{prof}</div></section>""")
         df, marks = differing_rows(run, keys, cols, cap)
         parts.append(f"""<section class="sec" id="rows"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Rows that <em>differ.</em></h2>
 <div class="sec-sub">{esc(name_a)} above {esc(name_b)} · {min(res.diff_rows, cap):,} of {res.diff_rows:,} rows · capped at {limit:,} rows or {CELL_BUDGET:,} cells · differing cells marked</div></div></div>
@@ -434,7 +447,7 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
         parts.append(f"""<section class="sec" id="{sid}"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Only in <em>{esc(name)}.</em></h2>
 <div class="sec-sub">{min(total, cap):,} of {total:,} rows · capped at {limit:,} rows or {CELL_BUDGET:,} cells · no partner on the other side</div></div></div>
 <div class="body"><h3 class="sec-sub">Top values by column - the key columns are why these rows did not pair</h3>
-{_profile_grid(bucket_profile(run, keys, cols, "left" if tag == "left_only" else "right"), keys)}
+{_profile_grid(bucket_profile(run, keys, cols, "left" if tag == "left_only" else "right", only=_profile_shown(keys, cols, res)), keys)}
 <h3 class="sec-sub" style="margin-top:20px">The rows</h3>
 <div class="{"side-a" if tag == "left_only" else "side-b"}">{_table(frame)}</div></div></section>""")
 

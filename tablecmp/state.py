@@ -30,7 +30,8 @@ DEFAULTS = {"A": Side, "B": Side, "P": Side,  # the two sides compared, the one 
             "fetched_A": lambda: None, "fetched_B": lambda: None,   # the database fetch each side holds
             "fetched_P": lambda: None,
             # the widgets kept across pages that do not start blank, off or at zero
-            "opt_trim": lambda: True, "opt_empty": lambda: True, "auto_profile": lambda: True,
+            "opt_trim": lambda: True, "opt_empty": lambda: True,
+            "auto_profile": lambda: False,        # profiling is the slow part: asked for, not assumed
             "null_tokens": lambda: NULL_TOKENS_DEFAULT, "disp_rows": lambda: 1000,
             **{f"nick_{tag}": (lambda name=name: name) for tag, name in DEFAULT_NAMES.items()},
             **{f"{k}_{tag}": (lambda: True) for tag in "ABP" for k in ("hd", "pq")},

@@ -7,9 +7,9 @@ import duckdb
 import pandas as pd
 import streamlit as st
 
-from .columns import (SHOWN_COLS, apply_mapping_json, build_table, chips_html, fill_looks,
-                      mapping_json, match_columns_by_data, normalise, only_in, pair_rows, reused,
-                      roles, row_css, shape, specs_from, table_compare, table_keys, untaken)
+from .columns import (PAINTED_ROWS, SHOWN_COLS, apply_mapping_json, build_table, chips_html,
+                      fill_looks, mapping_json, match_columns_by_data, normalise, only_in, pair_rows,
+                      reused, roles, row_css, shape, specs_from, table_compare, table_keys, untaken)
 from .sniff import looks_like
 from .sources import Side
 from .state import bump, forget_results
@@ -87,8 +87,11 @@ def render(A: Side, B: Side, NA: str, NB: str, opts: ReadOptions) -> Setup:
         with tcol:
             shown = prev.copy()                     # the Role column is for the eye: not stored
             shown.insert(0, "Role", roles(prev, NA, NB))
+            # a style per cell is what makes a wide file's table slow to draw and slow to
+            # answer a tick: past PAINTED_ROWS the Role column and the chips carry the roles
+            painted = shown.style.apply(row_css, axis=1) if len(shown) <= PAINTED_ROWS else shown
             edited = st.data_editor(
-                shown.style.apply(row_css, axis=1), key=f"cmap_{st.session_state['map_rev']}",
+                painted, key=f"cmap_{st.session_state['map_rev']}",
                 hide_index=True, width="stretch", num_rows="fixed", column_order=["Role", *SHOWN_COLS],
                 height=min(640, 45 + 35 * len(prev)),
                 disabled=["Role", "Matched by", "A detected", "A looks like", "B detected", "B looks like"],

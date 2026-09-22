@@ -7,6 +7,7 @@ from pathlib import Path
 from streamlit.testing.v1 import AppTest
 
 from tablecmp.columns import specs_from
+from tablecmp.compare import column_ledger
 
 ROOT = Path(__file__).resolve().parent.parent
 EX = ROOT / "examples"
@@ -32,6 +33,9 @@ def _ok(at):
 
 
 def _finish(at):
+    # the profile is the slow part, so the tick starts off: this flow asks for it
+    at.sidebar.checkbox(key="auto_profile").set_value(True)
+    _ok(at.run())
     _ok(at.button(key="auto_btn").click().run())
     at = _ok(at.run())                             # the auto_go rerun
     res = at.session_state["result"]
@@ -50,6 +54,7 @@ def _finish(at):
     assert box.dataframe, "Auto's profile is not shown"
     tick = at.checkbox(key="auto_profile").help
     assert "Profile section" in tick and "profile.csv" in tick and "report" not in tick, tick
+    _ok(at.radio(key="res_view").set_value("Downloads").run())    # one results view at a time
     _ok(at.button(key="save_all").click().run())
     saved = list((Path(os.environ["COMPARE_OUT_DIR"])).glob(f"{pair}__*"))
     assert saved and (saved[0] / f"{pair}__summary.json").exists()
@@ -118,14 +123,21 @@ def test_database_flow(monkeypatch, tmp_path):
     # the names still name the run
     at = _ok(at.run())
     assert [c.value for c in at.sidebar.caption if c.value.startswith("Both sides are called SAMPLE")] == [
-        "Both sides are called SAMPLE - name this one to tell them apart; the names are on every "
-        "output file (left_compare_right)."] * 2
-    # the page's Files line names the tables, like the sidebar and the report - not a made-up file
+        "Both sides are called SAMPLE, so the page shows them as A · SAMPLE and B · SAMPLE - name "
+        "this one to tell them apart in the tables and on every output file "
+        "(left_compare_right)."] * 2
+    # the page's Files line names the tables, like the sidebar and the report - not a made-up
+    # file - with the tag in front, since one name for both sides names neither
     assert _files_line(at) == (
-        "**SAMPLE** DuckDB file · hr.employees - 3,000 rows × 7 columns &nbsp;|&nbsp; "
-        "**SAMPLE** DuckDB file · payroll.employees - 2,985 rows × 7 columns")
+        "**A · SAMPLE** DuckDB file · hr.employees - 3,000 rows × 7 columns &nbsp;|&nbsp; "
+        "**B · SAMPLE** DuckDB file · payroll.employees - 2,985 rows × 7 columns")
     res = _finish(at)
-    assert res["pair"] == "SAMPLE_compare_SAMPLE"
+    assert res["pair"] == "A_SAMPLE_compare_B_SAMPLE"
+    # the two sides are two columns in the tables the run writes, not one name twice
+    sheet = (Path(res["folder"]) / f"{res['pair']}__columns.csv").read_text(encoding="utf-8")
+    assert sheet.splitlines()[0].split(",")[:3] == ["column", "name_a", "name_b"]
+    ledger = column_ledger(res, "A · SAMPLE", "B · SAMPLE")
+    assert "A · SAMPLE" in ledger.columns and "B · SAMPLE" in ledger.columns
     js = json.loads((Path(res["folder"]) / f"{res['pair']}__summary.json").read_text(encoding="utf-8"))
     assert js["sources"]["A"]["connection"] == "SAMPLE" and js["sources"]["A"]["sql"].startswith("SELECT")
     # where a side is picked the tag keeps the two SAMPLEs apart: a step added to B lands on B

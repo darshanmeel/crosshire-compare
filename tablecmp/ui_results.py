@@ -7,15 +7,17 @@ from pathlib import Path
 import duckdb
 import streamlit as st
 
-from .columns import key_chips_html, row_css
+from .columns import key_chips_html, PAINTED_ROWS, row_css
 from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows,
-                      diffs_by_key_value, matched_values, near_match, side_labels, style_pairs, top_values,
-                      value_pairs)
+                      diffs_by_key_value, near_match, side_labels, style_pairs, value_pairs)
 from .outputs import default_save_folder, save_target, table_formats, verdict_of, write_parquet_copies, zip_run
 from .report import build_report
 from .sources import Side
 from .theme import THEME, esc
 from .values import ColSpec
+
+
+COLUMN_CARDS = 12       # compared columns opened without being asked for - the worst first
 
 
 def verdict(run: dict, NA: str, NB: str, stale: bool) -> tuple[str, str]:
@@ -54,27 +56,21 @@ def render(run: dict, A: Side, B: Side, NA: str, NB: str, stale: bool, limit: in
     _, html = verdict(run, NA, NB, stale)
     st.markdown(html, unsafe_allow_html=True)
 
-    view = st.tabs(["Summary", "Columns & values", "Report", "Downloads"])
-    with view[0]:
-        try:
+    # one view at a time, not four tabs: Streamlit builds every tab on every rerun, so with
+    # tabs each click on the page rebuilt the report and read every result file into memory
+    view = st.radio("View", ["Summary", "Columns & values", "Report", "Downloads"],
+                    horizontal=True, key="res_view", label_visibility="collapsed")
+    try:
+        if view == "Summary":
             summary_tab(run, res, NA, NB, keys, cols, specs, mode)
-        except (duckdb.Error, KeyError, ValueError) as exc:
-            st.error(f"Could not build part of the summary: {exc}")
-    with view[1]:
-        try:
+        elif view == "Columns & values":
             columns_tab(run, res, NA, NB, keys, cols, specs, mode, limit)
-        except (duckdb.Error, KeyError, ValueError) as exc:
-            st.error(f"Could not build part of this view: {exc}")
-    with view[2]:
-        try:
+        elif view == "Report":
             report_tab(run, A, B, NA, NB, limit)
-        except (duckdb.Error, KeyError, ValueError) as exc:
-            st.error(f"Could not build the report: {exc}")
-    with view[3]:
-        try:
+        else:
             downloads_tab(run, A, B, NA, NB, limit)
-        except (duckdb.Error, KeyError, ValueError, OSError) as exc:
-            st.error(f"Could not prepare the downloads: {exc}")
+    except (duckdb.Error, KeyError, ValueError, OSError) as exc:
+        st.error(f"Could not build the {view} view: {exc}")
 
 
 def summary_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode) -> None:
@@ -142,8 +138,10 @@ def summary_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode) -> None:
     for col in ("Matched", "Mismatched", f"Values only in {NA}", f"Values only in {NB}"):
         if col in ledger.columns:
             config[col] = st.column_config.NumberColumn(col, format="localized")
-    # the rows in the column table's colours: a key green, a column that took no part red
-    st.dataframe(ledger.style.apply(row_css, axis=1), width="stretch", hide_index=True,
+    # the rows in the column table's colours: a key green, a column that took no part red -
+    # past PAINTED_ROWS the Role column carries them, a style per cell being slow to draw
+    painted = ledger.style.apply(row_css, axis=1) if len(ledger) <= PAINTED_ROWS else ledger
+    st.dataframe(painted, width="stretch", hide_index=True,
                  height=min(640, 45 + 35 * len(ledger)), column_config=config)
     where_they_sit(run, res, NA, NB, keys, cols)
 
@@ -156,13 +154,21 @@ def columns_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode, limit) -> No
         return
     cells_path = run["files"].get(f"{run['pair']}__cell_diffs.csv")
     pairs = value_pairs(run, 10)                 # one DuckDB pass over cd, every column at once
-    sample = matched_values(run, cols)
     differing = sorted([c for c in cols if res.diffs_by_column.get(c, 0)],
                        key=lambda c: (-res.diffs_by_column.get(c, 0), c))
     agreeing = sorted(c for c in cols if not res.diffs_by_column.get(c, 0))
+    # the columns that differ are what the page opens with - a wide pair drawing a card per
+    # column, each with its own tables, is what makes the page slow to answer a click
+    order = differing + agreeing
+    shown = (differing or order)[:COLUMN_CARDS]
+    rest = [c for c in order if c not in shown]
     st.caption(f"Each compared column on the **{res.matched_rows:,} rows that paired"
                f"{' on ' + ' + '.join(keys) if keys else ' by position'}**. Columns that "
-               "differ come first, worst first.")
+               "differ come first, worst first"
+               + (f" - the first {len(shown)} of {len(order)} are open; the rest are under "
+                  "*Other columns*." if rest else ".")
+               + " What each column holds across a set of rows is counted in one place: "
+                 "*Profile by bucket* on the Summary.")
     if differing:
         st.error(f"**{len(differing)} column(s) differ**: "
                  + ", ".join(f"{c} ({res.diffs_by_column[c]:,})" for c in differing[:10])
@@ -174,7 +180,14 @@ def columns_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode, limit) -> No
             if len(df):
                 st.dataframe(style_pairs(df, marks), width="stretch", hide_index=True,
                              height=min(600, 40 + 35 * len(df)))
-    for col in differing + agreeing:
+    if rest:
+        with st.expander(f"Other columns - {len(rest)} not open", expanded=False):
+            extra = st.multiselect("Columns to open", rest, default=[], key="col_cards",
+                                   label_visibility="collapsed",
+                                   placeholder="pick the columns to look at",
+                                   help="Each one adds the value pairs behind its count.")
+        shown = shown + [c for c in order if c in extra]
+    for col in shown:
         n = res.diffs_by_column.get(col, 0)
         pct = round(n / res.matched_rows * 100, 2) if res.matched_rows else 0.0
         read_as = specs[col].describe() if col in specs else "text"
@@ -193,13 +206,6 @@ def columns_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode, limit) -> No
                 st.markdown("**Where they differ** - the value pairs behind the count")
                 st.dataframe(pair, width="stretch", hide_index=True,
                              column_config={"Count": st.column_config.NumberColumn("Count", format="localized")})
-            if f"a_{col}" in sample.columns:
-                st.markdown("**Distribution across the matched rows**")
-                m1, m2 = st.columns(2)
-                m1.caption(NA)
-                m1.dataframe(top_values(sample[f"a_{col}"], len(sample)), width="stretch", hide_index=True)
-                m2.caption(NB)
-                m2.dataframe(top_values(sample[f"b_{col}"], len(sample)), width="stretch", hide_index=True)
     if cells_path:
         with st.expander("Near-match analysis - is it formatting or real data?"):
             st.caption("High similarity means the two values are nearly the same text - "
@@ -224,8 +230,10 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
         return
     st.markdown("#### Profile by bucket")
     st.caption("Pick a bucket - keys matched, matched but different, only in one file - and see the "
-               "top values of every column for those rows, key columns first. For paired rows each "
-               "value is counted on both sides, so a non-key column shows what it held in each file.")
+               "top values for those rows. The key columns are counted; any other column is counted "
+               "when you add it, so a wide pair does not count hundreds of columns nobody asked to "
+               "see. For paired rows each value is counted on both sides, so a non-key column shows "
+               "what it held in each file.")
     default = next((i for i, b in enumerate(buckets) if b[0] == "differ"), 0)
     label = st.radio("Bucket", [b[1] for b in buckets], horizontal=True, key="bucket_pick",
                      index=default, label_visibility="collapsed")
@@ -241,8 +249,16 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
                 st.markdown(f"**{k}** - top {len(tbl)} values by rows that differ")
                 st.dataframe(tbl, width="stretch", hide_index=True, height=min(420, 45 + 35 * len(tbl)))
         st.markdown("**Every column across these rows** - top values, counted on each side")
+    others = [c for c in cols if c not in keys]
+    shown = list(keys) if keys else others[:3]
+    if others:
+        with st.expander(f"Other columns - {len(others)} to add", expanded=False):
+            extra = st.multiselect("Columns to count", others, default=[],
+                                   key=f"bucket_cols_{bucket}", label_visibility="collapsed",
+                                   placeholder="pick the columns to count for these rows")
+        shown = shown + [c for c in others if c in extra]
     with st.spinner("Profiling…"):
-        prof = bucket_profile(run, keys, cols, bucket)
+        prof = bucket_profile(run, keys, cols, bucket, only=shown)
     if not prof:
         st.caption("Nothing to profile for this bucket.")
         return
@@ -281,15 +297,18 @@ def save_row(files: dict[str, bytes | Path], label: str, key: str, run: dict, ta
     box = f"{key}_dir"
     # a keyed text box keeps whatever it holds, whatever `value` says - so when a new run arrives
     # the box is set through session state, once, and then left to the user. Streamlit drops the
-    # box's state on a rerun that stops before it is drawn (Write Parquet copies), so a box that
-    # is gone is seeded again too
-    if st.session_state.get(f"{box}_for") != run["run_id"] or box not in st.session_state:
-        st.session_state[box] = str(default_save_folder(run, base))
+    # box's state on a rerun that does not draw it - Write Parquet copies, or another results
+    # view - so what it held is kept alongside and put back, and only a new run resets it
+    same_run = st.session_state.get(f"{box}_for") == run["run_id"]
+    if not same_run or box not in st.session_state:
+        typed = st.session_state.get(f"{box}_kept") if same_run else None
+        st.session_state[box] = typed or str(default_save_folder(run, base))
         st.session_state[f"{box}_for"] = run["run_id"]
     c1, c2 = st.columns([3, 1])
     with c1:
         folder = st.text_input("Save to folder", key=box, label_visibility="collapsed",
                                placeholder=r"C:\data\compare_out")
+        st.session_state[f"{box}_kept"] = folder
     with c2:
         go = st.button(label, key=key, width="stretch")
     if go:
@@ -387,25 +406,36 @@ def downloads_tab(run, A, B, NA, NB, limit) -> None:
     st.caption("Complete results, not just the rows displayed. Values are the canonical form "
                "both sides were compared on.")
     ensure_report(run, A, B, NA, NB, limit)
-    z = run.get("zip")
-    if not z or not z.exists():
-        with st.spinner("Zipping the run folder…"):
-            z = zip_run(run)
-    st.download_button("Download all as zip", z.read_bytes(), file_name=z.name, mime="application/zip",
-                       type="primary", key=f"dl_zip_{run['at']}", on_click="ignore",
-                       help="Every file of this run in one archive")
     name = run["pair"]
     buttons = [(f"{name}__{suffix}", label.format(NA=NA, NB=NB)) for suffix, label in DOWNLOAD_LABELS]
     buttons += [(p.name, f"{p.name[len(name) + 2:-len('.parquet')]} (Parquet)")
                 for p in sorted(run["files"].values()) if p.suffix == ".parquet"]
     present = [(f, label) for f, label in buttons if f in run["files"] and run["files"][f].exists()]
-    grid = st.columns(5)
-    for i, (fname, label) in enumerate(present):
-        path = run["files"][fname]
-        with grid[i % 5]:
-            st.download_button(label, path.read_bytes(), file_name=fname, width="stretch",
-                               mime=MIME.get(path.suffix, "application/octet-stream"),
-                               key=f"dl_{fname}_{run['at']}", on_click="ignore")
+    # a browser download holds the whole file in memory, and Streamlit fills every download
+    # button on every rerun - so one file is picked and only that one is read
+    labels = {f"{label} · {run['files'][f].stat().st_size / 1e6:,.1f} MB": f for f, label in present}
+    d1, d2 = st.columns([2, 1])
+    with d1:
+        pick = st.selectbox("File to download", list(labels), key=f"dl_pick_{run['run_id']}",
+                            help="Every file of this run is in the folder already - this is the "
+                                 "browser route for one of them.")
+    with d2:
+        st.markdown('<div style="height:28px"></div>', unsafe_allow_html=True)
+        if pick:
+            fname = labels[pick]
+            path = run["files"][fname]
+            st.download_button(f"Download {fname}", path.read_bytes(), file_name=fname,
+                               width="stretch", mime=MIME.get(path.suffix, "application/octet-stream"),
+                               key=f"dl_{fname}_{run['run_id']}", on_click="ignore")
+    if st.button("Zip the whole run", key="zip_run_btn",
+                 help="Every file of this run in one archive - written next to the run folder"):
+        with st.spinner("Zipping the run folder…"):
+            zip_run(run)
+    z = run.get("zip")
+    if z and z.exists():
+        st.download_button(f"Download {z.name} · {z.stat().st_size / 1e6:,.1f} MB", z.read_bytes(),
+                           file_name=z.name, mime="application/zip", type="primary",
+                           key=f"dl_zip_{run['run_id']}", on_click="ignore")
     env = table_formats()                        # COMPARE_TABLE_FORMATS, or csv
     st.session_state.setdefault("out_fmt", "both" if {"csv", "parquet"} <= env else
                                 "parquet" if "parquet" in env else "csv")

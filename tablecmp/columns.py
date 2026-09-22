@@ -284,6 +284,9 @@ def role_tone(role: str) -> str:
     return "pos" if role == "key" else "" if role == "compared" else "neg"
 
 
+PAINTED_ROWS = 150      # rows a table is painted over: a style per cell is slow to draw past that
+
+
 def row_css(row: pd.Series) -> list[str]:
     """The Styler's say on one row of a table with a Role column - the column table, the
     Summary tab's ledger: the role's tint in every cell."""

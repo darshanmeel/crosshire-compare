@@ -65,18 +65,26 @@ def _boot(monkeypatch, tmp_path):
     return at
 
 
+def _view(at, name: str):
+    """The results show one view at a time - pick it and let the page draw it."""
+    at.radio(key="res_view").set_value(name)
+    at.run()
+    assert not at.exception, at.exception
+    return at
+
+
 def test_summary_tab_opens_with_the_key(monkeypatch, tmp_path):
     """The Summary tab starts with a Key block - the key columns as green chips and the line that
     says what the rows were matched on - before the row counts; the ledger under Columns carries
     the column table's colours, a key row green and a one-sided row red."""
     at = _boot(monkeypatch, tmp_path)
-    summary = next(t for t in at.tabs if t.label == "Summary")
-    texts = [m.value for m in summary.markdown]
+    assert at.radio(key="res_view").value == "Summary"      # the view the results open on
+    texts = [m.value for m in at.markdown]
     assert texts.index("#### Key") < texts.index("#### Row counts") < texts.index("#### Columns")
     assert texts[texts.index("#### Key") + 1] == '<div class="chips"><span class="chip key">emp_id</span></div>'
     matched = at.session_state["result"]["result"].matched_rows
     assert texts[texts.index("#### Key") + 2] == f"Rows are matched on **emp_id** - **{matched:,}** rows matched"
-    ledger = summary.dataframe[0]
+    ledger = next(d for d in at.dataframe if "Role" in list(d.value.columns))
     roles = ledger.value["Role"].tolist()
     assert roles[0] == "key" and roles[-1].startswith("only in ")
     # the Styler's rules, one per coloured row: "#T_x_row0_col0, ... { background-color: ...; color: ... }"
@@ -100,12 +108,16 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     at.run()
     assert not at.exception, at.exception
     assert at.session_state["result"]["_report"] is html
-    # every tab rendered: no swallowed failure, the value pairs are on the Columns tab
+    assert any(f"<b>{run['verdict'].word}</b>" in m.value for m in at.markdown)   # the banner, above the views
+    # one view at a time: the value pairs are on Columns & values, and nothing is swallowed
+    _view(at, "Columns & values")
     assert not any("Could not" in e.value for e in at.error), [e.value for e in at.error]
     assert any("Where they differ" in m.value for m in at.markdown)
-    assert any(f"<b>{run['verdict'].word}</b>" in m.value for m in at.markdown)
-    # the zip is built on the first visit and holds every file
+    # the zip is built when it is asked for, and holds every file
     import zipfile
+    _view(at, "Downloads")
+    assert not run.get("zip")
+    at.button(key="zip_run_btn").click(); at.run()
     z = run["zip"]
     assert z.name == f"{pair}__{rid}.zip" and z.parent == folder.parent
     with zipfile.ZipFile(z) as zf:
@@ -123,6 +135,7 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     assert on_disk == expect and f"{pair}__report.html" in on_disk and f"{pair}__summary.json" in on_disk
     assert any(f"Saved {len(expect)} files to" in s.value for s in at.success)
     # the report button saves the report alone into the same per-run folder
+    _view(at, "Report")
     assert at.text_input(key="save_report_dir").value == str(saved)
     (saved / f"{pair}__report.html").unlink()
     at.button(key="save_report").click(); at.run()
@@ -130,6 +143,7 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     assert (saved / f"{pair}__report.html").read_text(encoding="utf-8") == html
     assert any("Saved 1 file to" in s.value for s in at.success)
     # Parquet on the switch: the copies land in the run folder and the zip follows
+    _view(at, "Downloads")
     assert not any(p.suffix == ".parquet" for p in run["files"].values())
     at.radio(key="out_fmt").set_value("parquet"); at.run()
     assert not at.exception, at.exception
@@ -138,6 +152,7 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     assert not at.exception, at.exception
     assert f"{pair}__paired.parquet" in run["files"] and f"{pair}__cell_diffs.parquet" in run["files"]
     assert not any(b.key == "write_pq" for b in at.button)
+    at.button(key="zip_run_btn").click(); at.run()            # the copies dropped the old zip
     with zipfile.ZipFile(run["zip"]) as zf:
         assert f"{pair}__paired.parquet" in zf.namelist()
     # the rerun behind Write Parquet copies stops before the save box is drawn. Streamlit 1.56
@@ -158,15 +173,18 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     at.number_input(key="disp_rows").set_value(500); at.run()
     assert not at.exception, at.exception
     assert at.session_state["result"] is run and not any("Settings have changed" in w.value for w in at.warning)
-    assert any(e.label.startswith("Rows that differ") and "first 500 of" in e.label for e in at.expander)
     assert run["_report_key"] == ("report", run["at"], 500)
+    _view(at, "Columns & values")
+    assert any(e.label.startswith("Rows that differ") and "first 500 of" in e.label for e in at.expander)
     # a second run gets its own default folder, even though the box held a typed value
+    _view(at, "Downloads")
     assert at.text_input(key="save_all_dir").value == str(tmp_path / "out" / "typed")
     at.button(key="go").click(); at.run()
     assert not at.exception, at.exception
     run2 = at.session_state["result"]
     assert run2["run_id"] != rid and run2["_report_key"] == ("report", run2["at"], 500)
     assert at.text_input(key="save_all_dir").value == str(tmp_path / "out" / f"{pair}__{run2['run_id']}")
+    _view(at, "Report")
     assert at.text_input(key="save_report_dir").value == str(tmp_path / "out" / f"{pair}__{run2['run_id']}")
     assert not Path(run["folder"]).exists() and not z.exists()      # the old run and its zip are gone
 

@@ -344,9 +344,15 @@ def hold(con: duckdb.DuckDBPyConnection, side: Side, name: str, specs: list[ColS
     if rows is None:
         rows = side.rows if side.rows is not None else int(
             con.execute(f"SELECT count(*) FROM {source_expr(side)}").fetchone()[0])
-    fits = rows * max(len(specs), 1) * BYTES_A_CELL <= memory_limit_bytes(con) * HOLD_SHARE
+    fits = fits_held(con, rows, len(specs))
     register(con, side, name, specs, which, opts, materialize=fits)
     return "table" if fits else "view"
+
+
+def fits_held(con: duckdb.DuckDBPyConnection, rows: int, cols: int) -> bool:
+    """Whether a table of that shape fits the share of DuckDB's memory a held copy may
+    take - what decides between holding a table and reading a view each time."""
+    return rows * max(cols, 1) * BYTES_A_CELL <= memory_limit_bytes(con) * HOLD_SHARE
 
 
 def register_plain(con, side: Side, name: str, cols: list[str], opts: ReadOptions,

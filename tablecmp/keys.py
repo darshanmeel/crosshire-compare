@@ -177,6 +177,28 @@ def selectivity(d: dict[str, int], totals: dict[str, int]) -> float:
     return min(d[v] / max(totals[v], 1) for v in totals)
 
 
+def count_sql(cols, nulls_apart: bool = False) -> str:
+    """The distinct count of one combination - with `nulls_apart` the rows where any of its
+    columns is null are left out, the way key_uniqueness counts them."""
+    sql = f"count(DISTINCT {combo(list(cols))})"
+    if nulls_apart:
+        sql += f" FILTER (WHERE NOT ({any_null(list(cols))}))"
+    return sql
+
+
+def count_combos(con, table: str, combos: list[tuple], rows: int,
+                 nulls_apart: bool = False) -> list[int]:
+    """The distinct count of each combination on `table`, a few a statement - each count
+    holds a hash table of its own (sql.columns_a_statement), and hundreds at once is what
+    runs DuckDB out of memory."""
+    per = columns_a_statement(rows)
+    out: list[int] = []
+    for i in range(0, len(combos), per):
+        picks = ", ".join(count_sql(cols, nulls_apart) for cols in combos[i:i + per])
+        out += [int(n) for n in con.execute(f"SELECT {picks} FROM {table}").fetchone()]
+    return out
+
+
 def single_figures(con, views, cols: list[str], totals: dict[str, int] | None = None
                    ) -> tuple[dict[str, dict[str, int]], dict[str, int]]:
     """Each column on its own: distinct count per view, and nulls over every view - a few
@@ -252,10 +274,10 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
     unique on the sample are verified on every row, the tightest first, a statement's
     worth at a time; a statement that verified a key ends the level, so the tightest key
     is verified in one and the coincidences behind it are never counted on every row.
-    On a pair `pairs(cols)` says whether a unique
-    combination has any value in common with the other side: one with none is unique but
-    no key - it pairs no rows - so it does not end the level, though a superset of it
-    still adds nothing. Nothing unique at all, and the closest are listed: the most
+    On a pair only one side is counted here and `pairs(cols)` verifies what was found on
+    the other: a combination unique on the side counted is a key only when it holds there
+    too - one that does not is listed but does not end the level, so the search goes on,
+    though a superset of it still adds nothing. Nothing unique at all, and the closest are listed: the most
     selective combinations counted, each cut back to the fewest columns that tell as many
     rows apart, and the most selective single columns. Returns each candidate as
     (columns, distinct per view, how it was found), ranked; the column sets that are
@@ -285,21 +307,8 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
         """Holds more than a set that is unique already - columns added to a key that works."""
         return any(u < set(cols) for u in uniques)
 
-    def count_sql(cols) -> str:
-        sql = f"count(DISTINCT {combo(list(cols))})"
-        if nulls_apart:
-            sql += f" FILTER (WHERE NOT ({any_null(list(cols))}))"
-        return sql
-
     def count_many(table: str, combos: list[tuple], rows: int) -> list[int]:
-        """The distinct count of each combination on `table`, a few a statement - each is a
-        hash table (sql.columns_a_statement)."""
-        per = columns_a_statement(rows)
-        out: list[int] = []
-        for i in range(0, len(combos), per):
-            picks = ", ".join(count_sql(cols) for cols in combos[i:i + per])
-            out += [int(n) for n in con.execute(f"SELECT {picks} FROM {table}").fetchone()]
-        return out
+        return count_combos(con, table, combos, rows, nulls_apart)
 
     def distinct(cols) -> dict[str, int]:
         if len(cols) == 1:
@@ -560,7 +569,9 @@ def key_reasons(cols: list[str], d: dict[str, int], totals: dict[str, int], affi
                         else "a date, not an identifier" if any(KEY_WORDS.search(c) for c in cols)
                         else "no identifier in the name")
     n_null = sum(nulls.get(c, 0) for c in cols)
-    bits.append("no nulls" if not n_null else f"{n_null:,} nulls")
+    # on a pair the nulls are A's: the side the search counts (suggest_keys)
+    said_in = f" in {name_a}" if name_b is not None else ""
+    bits.append(("no nulls" if not n_null else f"{n_null:,} nulls") + said_in)
     # the figures per side, the side named on a pair: "3,000 distinct of 3,000 in hr, 2,985
     # of 2,985 in payroll" - a table on its own reads "3,000 distinct of 3,000"
     sides = ([("probe_a", name_a), ("probe_b", name_b)] if name_b is not None
@@ -593,27 +604,32 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
                  profile: dict | None = None
                  ) -> tuple[pd.DataFrame, list[list[str]], str]:
     """Candidate keys, best first - each with how much of A's values B shares and the
-    reasons for its place - plus a note on how they were found. A profile of the same
-    columns supplies the single-column figures, so they are not measured twice."""
+    reasons for its place - plus a note on how they were found. The search itself counts
+    one side, A: every column, then the combinations, each level on a random sample first
+    (see search_keys). What is unique there is verified on B - unique there too, and
+    sharing values - and only then is it a key that ends the search; one that fails on B
+    is listed but the search goes on. A profile of the same columns supplies the
+    single-column figures, so they are not measured twice."""
     say = progress or (lambda _msg: None)
     candidates = [s.canon for s in specs]
     say(f"Reading both sides ({len(candidates)} columns)…")
     con = probe(A, B, specs, opts)
     views = ("probe_a", "probe_b")
     totals = {v: con.execute(f"SELECT count(*) FROM {v}").fetchone()[0] for v in views}
+    lead = {"probe_a": totals["probe_a"]}          # the side the search counts; B verifies
 
     from_profile = {c: profile_singles(profile, c) for c in candidates}
     measure = [c for c in candidates if from_profile[c] is None]
     used_profile = len(measure) < len(candidates)
-    say("Reading the profile…" if used_profile else "Measuring every column…")
-    singles, nulls = single_figures(con, views, measure, totals)
+    say("Reading the profile…" if used_profile else f"Measuring every column of {name_a}…")
+    singles, nulls = single_figures(con, ("probe_a",), measure, lead)
     for c, p in from_profile.items():
         if p is not None:
             singles[c] = {"probe_a": p["probe_a"], "probe_b": p["probe_b"]}
-            nulls[c] = p["nulls_a"] + p["nulls_b"]
+            nulls[c] = p["nulls_a"]
     stats = [profile["stats"][w] for w in ("A", "B")
              if profile and isinstance(profile.get("stats"), dict) and w in profile["stats"]]
-    hashed = {c for c in could_be_hashed(specs, stats) if any(looks_hashed(con, v, c) for v in views)}
+    hashed = {c for c in could_be_hashed(specs, stats) if looks_hashed(con, "probe_a", c)}
     affinity = {s.canon: key_affinity(s.canon, A.schema.get(s.a_src, ""),
                                       B.schema.get(s.b_src, ""), s.canon in hashed) for s in specs}
     ov: dict[tuple, float] = {}
@@ -636,16 +652,38 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
         register(con, side, name, [s for s in specs if s.canon in cols], which, opts,
                  materialize=True, sample=n)
 
-    # a key with no values in common pairs no rows, so it is no key to the search
-    found, unique_sets, note = search_keys(con, views, totals, candidates, singles, nulls,
+    b_count: dict[tuple, int] = {}
+
+    def on_b(combos: list[tuple]) -> None:
+        """The distinct count on B of combinations the search on A turned up - measured
+        once each, a few a statement."""
+        todo = [c for c in combos if c not in b_count]
+        if todo:
+            for cols, n in zip(todo, count_combos(con, "probe_b", todo, totals["probe_b"])):
+                b_count[cols] = n
+
+    def verified(cols: list[str]) -> bool:
+        """What a combination unique on A has to be to end the search: unique on B as well,
+        and sharing values with it - a key with none pairs no rows. One that is neither is
+        listed all the same, but the search goes on to the next level."""
+        on_b([tuple(cols)])
+        return b_count[tuple(cols)] == totals["probe_b"] and overlap(cols) > 0
+
+    # the levels are counted on A alone - every column, then the combinations - and what is
+    # unique there is verified on B: half the counting of measuring both sides at every level
+    found, unique_sets, note = search_keys(con, ("probe_a",), lead, candidates, singles, nulls,
                                            affinity, max_cols, want, say,
-                                           pairs=lambda cols: overlap(cols) > 0, sampler=sampler)
+                                           pairs=verified, sampler=sampler)
+    note += f" - counted on {name_a} alone, every candidate verified on {name_b}"
     if used_profile:
         note += " - single-column figures from the profile"
 
     n_found = len(found)
-    found = found[:want * 2]                       # the overlap is measured on the best of them
-    say(f"Overlap between the sides for {len(found)} candidate(s)…")
+    found = found[:want * 2]                       # B and the overlap are measured on the best of them
+    say(f"Verifying {len(found)} candidate(s) on {name_b}…")
+    on_b([tuple(cols) for cols, _, _ in found])
+    found = [(cols, {**d, "probe_b": b_count[tuple(cols)]}, how) for cols, d, how in found]
+    unique_sets = [frozenset(cols) for cols, d, _ in found if is_unique(d, totals)]
     for cols, _, _ in found:
         overlap(cols)
     rank(found, totals, affinity, unique_sets, ov)

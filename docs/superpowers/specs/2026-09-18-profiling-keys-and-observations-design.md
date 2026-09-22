@@ -126,9 +126,16 @@ def suggest_keys_single(P: Side, specs: list[ColSpec], name: str, opts: ReadOpti
   combinations unique on the sample are verified on every row, the tightest first, a
   statement's worth at a time; a statement that verified a key ends the level, so the
   tightest key costs one statement and the coincidences behind it are never counted in
-  full. On a pair a unique combination with no values in common pairs no rows, so
-  it is no key to the search (`pairs`): it ends no level, though a superset of it still
-  adds nothing. Nothing unique at all, and the closest are listed: the `want` most
+  full. On a pair only one side is counted - `suggest_keys` calls `search_keys` with
+  the A view alone and A's totals - and the `pairs` callback verifies on B what the
+  search found on A: a combination unique on A is a key only when B's distinct count
+  equals B's rows and the two sides share values (a unique combination with no values
+  in common pairs no rows). One that fails either test is listed and ends no level, so
+  the search goes on; a superset of it still adds nothing. B is counted for the
+  candidates only - the ones unique on A, then the `want * 2` best - `count_combos`
+  batching them, and the single-column figures are measured on A alone (a profile still
+  supplies both sides). The note says so: *counted on <A> alone, every candidate
+  verified on <B>*. Nothing unique at all, and the closest are listed: the `want` most
   selective combinations counted, each cut back to the fewest columns that tell as many
   rows apart (leave one out, the least key-like first, while the count holds), and the
   `want` most selective single columns - *on its own - with a null it can complete no

@@ -204,8 +204,9 @@ def name_hint(tag: str, side: Side) -> None:
     box = (st.session_state.get(f"nick_{tag}") or "").strip()
     other = side_name("B" if tag == "A" else "A")
     if side_name(tag) == other:              # two database sides on one connection, typically
-        st.caption(f"Both sides are called {other} - name this one to tell them apart; the "
-                   "names are on every output file (left_compare_right).")
+        st.caption(f"Both sides are called {other}, so the page shows them as A · {other} and "
+                   f"B · {other} - name this one to tell them apart in the tables and on every "
+                   "output file (left_compare_right).")
     elif not side.is_database and box in ("", DEFAULT_NAMES[tag]):
         st.caption("Name this side - it names every output file (left_compare_right).")
 
@@ -234,9 +235,10 @@ def auto_panel() -> None:
     st.caption("Auto does everything by itself - pairs the columns, finds the key, "
                "compares, and lists each decision so you can change it.")
     st.checkbox("Profile both sides first", key="auto_profile",
-                help="Counts, nulls and distinct values per column feed the key search, the "
-                     "Profile section under Rows and the profile.csv in the run folder. "
-                     "Untick to skip it on a very big pair.")
+                help="Off by default: it measures every column of both files - minutes on a big "
+                     "or wide pair - and Auto finds the key without it. Tick it and the counts, "
+                     "nulls and distinct values per column feed the key search, the Profile "
+                     "section under Rows and the profile.csv in the run folder.")
     if st.button("Figure it all out and compare", type="primary", width="stretch",
                  disabled=not both_in, key="auto_btn"):
         st.session_state["auto_request"] = True

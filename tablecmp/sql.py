@@ -27,6 +27,13 @@ def scratch(ordered: bool = False) -> duckdb.DuckDBPyConnection:
     mem = os.environ.get("COMPARE_DUCKDB_MEMORY", "").strip()
     if mem:
         con.execute(f"SET memory_limit = {lit(mem)}")
+    else:
+        # DuckDB's own default is 80% of the machine, which leaves too little for Streamlit,
+        # pandas and the browser: past its limit DuckDB spills to temp_directory - set above -
+        # rather than failing, so a lower one costs a little speed and never the run
+        keep = int(memory_limit_bytes(con) * MEMORY_SHARE)
+        if keep:
+            con.execute(f"SET memory_limit = '{keep}B'")
     return con
 
 
@@ -34,6 +41,7 @@ UNITS = {"B": 1, "KB": 1e3, "MB": 1e6, "GB": 1e9, "TB": 1e12,
          "KIB": 2 ** 10, "MIB": 2 ** 20, "GIB": 2 ** 30, "TIB": 2 ** 40}
 CELLS_A_STATEMENT = 4_000_000       # values one measuring statement may hold at once
 COLUMNS_A_STATEMENT = 32            # and the most columns, however few the rows
+MEMORY_SHARE = 0.75                 # of DuckDB's own limit a connection keeps (see scratch)
 
 
 def memory_limit_bytes(con: duckdb.DuckDBPyConnection) -> int:

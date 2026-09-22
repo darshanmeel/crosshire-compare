@@ -275,12 +275,16 @@ def profile_section(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: Read
         st.dataframe(pa, width="stretch", hide_index=True, height=min(560, 45 + 35 * len(pa)))
     with tabs_p[2]:
         st.dataframe(pb, width="stretch", hide_index=True, height=min(560, 45 + 35 * len(pb)))
-    st.markdown("**Value frequencies** - 10 most and 10 least frequent per column, per file")
-    for c in setup.canon:
-        if c not in freq or "A" not in freq[c]:
-            continue
+    st.markdown("**Value frequencies** - 10 most and 10 least frequent values, per file")
+    have = [c for c in setup.canon if c in freq and "A" in freq[c]]
+    picked = st.multiselect("Columns to list", have, default=[c for c in setup.keys if c in have][:2],
+                            key="freq_cols_pair", placeholder="pick the columns whose values to list",
+                            help="The figures are measured already - this only draws the tables, "
+                                 "and a table per column of a wide pair is what makes the page slow.")
+    for c in picked:
         with st.expander(f"**{c}**{' · key' if c in setup.keys else ''} - {ia.at[c, 'Type']} · "
-                         f"{NA}: {ia.at[c, 'Distinct']:,} distinct · {NB}: {ib.at[c, 'Distinct']:,} distinct"):
+                         f"{NA}: {ia.at[c, 'Distinct']:,} distinct · {NB}: {ib.at[c, 'Distinct']:,} distinct",
+                         expanded=True):
             fa, fb = st.columns(2)
             for slot, which, name in ((fa, "A", NA), (fb, "B", NB)):
                 with slot:
@@ -351,8 +355,10 @@ def compare_page(strip, opts: ReadOptions) -> None:
         st.info("Load **A** and **B** in the sidebar - a CSV or JSON file, or a database table, on each "
                 "side. For a big file, open **Rows to read** there first and cut it down before pressing Load.")
         return
-    NA = ui_sidebar.side_name("A")               # the Name box, else the connection, else Left / Right
-    NB = ui_sidebar.side_name("B")
+    # the Name box, else the connection, else Left / Right - and when both sides come from one
+    # connection and carry its name, the tag tells them apart (A · SAMPLE, B · SAMPLE): the name
+    # is a column header, a table's key and half a file name, so two the same would collide
+    NA, NB = side_labels(ui_sidebar.side_name("A"), ui_sidebar.side_name("B"))
     auto_step(A, B, NA, NB, opts)
     files_section(A, B, NA, NB)
 

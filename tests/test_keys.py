@@ -439,7 +439,7 @@ def test_nulls_are_counted(tmp_path):
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("id", "code")]
     table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
     assert sorted(combos[0]) == ["code", "id"]                 # neither alone: grown
-    assert "20 nulls" in table.iloc[0]["Why"]                  # 10 on each side
+    assert "10 nulls in a" in table.iloc[0]["Why"]              # the side the search counts
     (tmp_path / "full").mkdir()
     full = [[i, f"C{i // 2}"] for i in range(100)]
     table, combos, _ = suggest_keys(*_csv_sides(tmp_path / "full", ["id", "code"], full, full), specs, "a", "b", OPTS)
@@ -806,3 +806,22 @@ def test_a_checksum_column_is_unique_but_no_key(tmp_path):
     P = _csv_single(tmp_path / "f" if (tmp_path / "f").mkdir() is None else tmp_path, ["fingerprint", "grp"], rows)
     table, combos, _ = suggest_keys_single(P, [ColSpec(c, c, c) for c in ("fingerprint", "grp")], "t", OPTS)
     assert combos[0] == ["fingerprint"] and table.iloc[0]["Looks like a key"] == "checksum"
+
+
+def test_the_search_counts_one_side_and_verifies_on_the_other(tmp_path):
+    """The levels are counted on A; what is unique there is verified on B before it can be the
+    key. A column unique on A and not on B is listed - Unique on both: no - and ends no level,
+    so the search goes on to the pairs and finds the combination that holds on both sides."""
+    header = ["ticket", "grp", "seq"]
+    rows_a = [[i, i // 10, i % 10] for i in range(200)]            # ticket unique here
+    rows_b = [[i % 100, i // 10, i % 10] for i in range(200)]      # ... and twice over here
+    A, B = _csv_sides(tmp_path, header, rows_a, rows_b)
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in header]
+    table, combos, note = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert sorted(combos[0]) == ["grp", "seq"]                     # the pair that holds on both
+    best = table.iloc[0]
+    assert best["Unique on both"] == "yes" and best["Distinct in a"] == best["Distinct in b"] == 200
+    lone = table[table["Key columns"] == "ticket"].iloc[0]         # unique on A alone: no key
+    assert lone["Unique on both"] == "no"
+    assert (lone["Distinct in a"], lone["Distinct in b"]) == (200, 100)
+    assert "counted on a alone, every candidate verified on b" in note

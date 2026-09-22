@@ -189,9 +189,15 @@ def show_profile(prof: dict, NP: str, made: str) -> None:
         else:
             st.caption("No correlated number columns.")
 
-    st.markdown("**Value frequencies** - 10 most and 10 least frequent per column")
+    st.markdown("**Value frequencies** - 10 most and 10 least frequent values")
     by_col = stats.set_index("Column")
-    for col, (top, bottom) in prof["freq"].items():
+    have = list(prof["freq"])
+    picked = st.multiselect("Columns to list", have, default=[c for c in (best or []) if c in have][:2],
+                            key="freq_cols_P", placeholder="pick the columns whose values to list",
+                            help="The figures are measured already - this only draws the tables, "
+                                 "and a table per column of a wide table is what makes the page slow.")
+    for col in picked:
+        top, bottom = prof["freq"][col]
         with st.expander(f"**{col}** - {by_col.at[col, 'Type']} · {by_col.at[col, 'Distinct']:,} distinct · "
-                         f"{by_col.at[col, 'Null %']}% null"):
+                         f"{by_col.at[col, 'Null %']}% null", expanded=True):
             freq_tables(top, bottom)

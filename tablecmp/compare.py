@@ -28,7 +28,7 @@ from .profile import label
 from .sources import Side, work_dir
 from .sql import ident, lit, scratch
 from .theme import THEME
-from .values import FALLBACK_FORMATS, ColSpec, ReadOptions, date_format, register
+from .values import FALLBACK_FORMATS, ColSpec, ReadOptions, date_format, fits_held, register
 
 OPS = ["=", "!=", ">", ">=", "<", "<=", "in", "not in", "between", "like", "is null", "is not null"]
 OP_MAP = {"=": "eq", "!=": "ne", ">": "gt", ">=": "ge", "<": "lt", "<=": "le",
@@ -382,14 +382,19 @@ def ordered_view(con, table: str, name: str, keys: list[str] | None = None) -> N
 
 
 def pair_views(run: dict, keys: list[str]) -> None:
-    """cmp_l / cmp_r with row number and occurrence index - built as tables once per run so
-    every follow-up table (by key value, profiles, differing rows) is a plain join."""
+    """cmp_l / cmp_r with row number and occurrence index - held as tables once per run so
+    every follow-up table (by key value, profiles, differing rows) is a plain join. A side
+    too big to hold a second copy of stays a view over the one already read: the numbering
+    is worked out per query instead of once, which is slower and costs no memory."""
     con = run["con"]
     if run.get("_pair_keys") == tuple(keys):
         return
+    cols = len(run["cfg"].get("specs") or [])
     for side, name in (("left", "cmp_l"), ("right", "cmp_r")):
         ordered_view(con, run[side], f"{name}_v", keys)
-        con.execute(f"CREATE OR REPLACE TABLE {ident(name)} AS SELECT * FROM {ident(name + '_v')}")
+        rows = int(con.execute(f"SELECT count(*) FROM {ident(run[side])}").fetchone()[0])
+        what = "TABLE" if fits_held(con, rows, cols + 2) else "VIEW"
+        con.execute(f"CREATE OR REPLACE {what} {ident(name)} AS SELECT * FROM {ident(name + '_v')}")
     run["_pair_keys"] = tuple(keys)
 
 
@@ -446,23 +451,6 @@ def cd_columns(run: dict) -> set[str]:
 @lru_cache(maxsize=32)
 def load_csv(path: str) -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, keep_default_na=False, na_values=[""])
-
-
-def matched_values(run: dict, cols: list[str], cap: int = 50000) -> pd.DataFrame:
-    """A sample of the rows that paired, both sides side by side."""
-    if "matched_sample" in run:
-        return run["matched_sample"]
-    cfg, con = run["cfg"], run["con"]
-    keys = cfg["keys"] if run["mode"] == "key" else []
-    pair_views(run, keys)
-    picks = ([f"l.{ident(k)} AS {ident('k_' + k)}" for k in keys]
-             + [f"l.{ident(c)} AS {ident('a_' + c)}" for c in cols]
-             + [f"r.{ident(c)} AS {ident('b_' + c)}" for c in cols])
-    df = (con.execute(f"SELECT {', '.join(picks)} FROM cmp_l l JOIN cmp_r r "
-                      f"ON {join_on(keys)} ORDER BY l.__rn LIMIT {int(cap)}").fetchdf()
-          if picks else pd.DataFrame())
-    run["matched_sample"] = df
-    return df
 
 
 def column_ledger(run: dict, name_a: str, name_b: str) -> pd.DataFrame:
@@ -645,60 +633,81 @@ def value_pairs(run: dict, n: int = 5) -> dict[str, pd.DataFrame]:
 
 
 def bucket_profile(run: dict, keys: list[str], cols: list[str], bucket: str,
-                   n: int = 10) -> dict[str, pd.DataFrame]:
+                   n: int = 10, only: list[str] | None = None) -> dict[str, pd.DataFrame]:
     """Top values per column for one bucket of rows: 'matched' (paired on the key),
     'differ' (paired but not equal), 'left' (only in A) or 'right' (only in B). Key columns
     first. For paired buckets each value is counted on both sides, since a non-key column
-    can differ."""
+    can differ. `only` names the columns to profile - nothing else is measured, which is
+    what keeps a wide pair from counting hundreds of columns nobody asked to see; without
+    it every column is. Each column is measured once per bucket and kept on the run."""
     con, cfg = run["con"], run["cfg"]
-    cache = run.setdefault("_profiles", {})
-    if bucket in cache:
-        return cache[bucket]
-    ordered = [k for k in keys] + [c for c in cols if c not in keys]
-    out: dict[str, pd.DataFrame] = {}
-    cache[bucket] = out                      # filled in place below
-    if bucket in ("left", "right"):
-        f = run["files"].get(f"{cfg['name']}__{bucket}_only.csv")
-        if not f:
-            return out
+    every = list(keys) + [c for c in cols if c not in keys]
+    wanted = every if only is None else [c for c in every if c in set(only)]
+    cache: dict[str, pd.DataFrame] = run.setdefault("_profiles", {}).setdefault(bucket, {})
+    todo = [c for c in wanted if c not in cache]
+    if todo:
+        if bucket in ("left", "right"):
+            _one_side_profile(run, bucket, todo, cache, n)
+        elif keys:
+            _paired_profile(run, keys, bucket, todo, cache, n)
+    return {c: cache[c] for c in wanted if c in cache}
+
+
+def _counts_frame(df: pd.DataFrame, total: int, names: list[str]) -> pd.DataFrame:
+    """A (value, count) frame as the page shows it: the label, the count, and the share of
+    the bucket's rows - a frame counted on both sides (v, na, nb) has no single share."""
+    df["v"] = df["v"].map(label)
+    if "n" in df.columns:
+        df["%"] = (df["n"] / max(total, 1) * 100).round(2)
+    df.columns = names
+    return df
+
+
+def _one_side_profile(run: dict, bucket: str, todo: list[str], cache: dict, n: int) -> None:
+    """The one-sided rows - read from the run's left_only / right_only file, once."""
+    con, cfg = run["con"], run["cfg"]
+    f = run["files"].get(f"{cfg['name']}__{bucket}_only.csv")
+    if not f:
+        return
+    if run.get("_one_side") != bucket:
         con.execute(f"CREATE OR REPLACE TABLE one_side AS SELECT * FROM "
                     f"read_csv({lit(str(f))}, all_varchar=true)")
-        have = {r[0] for r in con.execute("DESCRIBE one_side").fetchall()}
-        total = con.execute("SELECT count(*) FROM one_side").fetchone()[0]
-        for c in ordered:
-            if c not in have:
-                continue
-            df = con.execute(f"SELECT {ident(c)} AS v, count(*) AS n FROM one_side "
-                             f"GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT {int(n)}").fetchdf()
-            df["%"] = (df["n"] / max(total, 1) * 100).round(2)
-            df["v"] = df["v"].map(label)
-            df.columns = ["Value", "Rows", "%"]
-            out[c] = df
-        return out
-    if not keys:
-        return out
+        run["_one_side"] = bucket
+    have = {r[0] for r in con.execute("DESCRIBE one_side").fetchall()}
+    total = con.execute("SELECT count(*) FROM one_side").fetchone()[0]
+    for c in todo:
+        if c not in have:
+            continue
+        df = con.execute(f"SELECT {ident(c)} AS v, count(*) AS n FROM one_side "
+                         f"GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT {int(n)}").fetchdf()
+        cache[c] = _counts_frame(df, total, ["Value", "Rows", "%"])
+
+
+def _paired_profile(run: dict, keys: list[str], bucket: str, todo: list[str],
+                    cache: dict, n: int) -> None:
+    """The paired rows - matched on the key, or matched but not equal. The rows are held
+    once per bucket with the key and the columns asked for, a side each."""
+    con = run["con"]
     pair_views(run, keys)
     picks = ", ".join([f"l.{ident(k)} AS {ident(k)}" for k in keys]
                       + [f"l.{ident(c)} AS {ident('a_' + c)}, r.{ident(c)} AS {ident('b_' + c)}"
-                         for c in cols if c not in keys])
+                         for c in todo if c not in keys])
     if bucket == "matched":                       # every row that paired on the key
         con.execute(f"CREATE OR REPLACE TABLE differ AS SELECT {picks} "
                     f"FROM cmp_l l JOIN cmp_r r ON {join_on(keys)}")
     else:                                         # paired on the key, but not equal
         if not cells_table(run):
-            return out
+            return
         occ = cd_occ(run)
         con.execute(f"CREATE OR REPLACE TABLE differ AS SELECT {picks} "
                     f"FROM cmp_l l JOIN cmp_r r ON {join_on(keys)} "
                     f"WHERE {row_key(keys, 'l.', '__occ' if occ else None)} IN (SELECT {row_key(keys, '', occ)} FROM cd)")
     total = con.execute("SELECT count(*) FROM differ").fetchone()[0]
-    for c in ordered:
+    for c in todo:
         if c in keys:
             df = con.execute(f"SELECT {ident(c)} AS v, count(*) AS n FROM differ "
                              f"GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT {int(n)}").fetchdf()
-            df["%"] = (df["n"] / max(total, 1) * 100).round(2)
-            df["v"] = df["v"].map(label)
-            df.columns = ["Value", "Rows", "%"]
+            cache[c] = _counts_frame(df, total, ["Value", "Rows", "%"])
         else:
             a, b = ident("a_" + c), ident("b_" + c)
             df = con.execute(f"""
@@ -707,16 +716,7 @@ def bucket_profile(run: dict, keys: list[str], cols: list[str], bucket: str,
                 SELECT coalesce(ca.v, cb.v) AS v, coalesce(na, 0) AS na, coalesce(nb, 0) AS nb
                 FROM ca FULL OUTER JOIN cb ON ca.v IS NOT DISTINCT FROM cb.v
                 ORDER BY greatest(coalesce(na, 0), coalesce(nb, 0)) DESC, 1 LIMIT {int(n)}""").fetchdf()
-            df["v"] = df["v"].map(label)
-            df.columns = ["Value", "Rows A", "Rows B"]
-        out[c] = df
-    return out
-
-
-def top_values(series: pd.Series, total: int, n: int = 10) -> pd.DataFrame:
-    counts = series.map(label).value_counts().head(n)
-    return pd.DataFrame({"Value": counts.index, "Count": counts.values,
-                         "%": (counts.values / max(total, 1) * 100).round(2)})
+            cache[c] = _counts_frame(df, total, ["Value", "Rows A", "Rows B"])
 
 
 def near_match(cells_path: str) -> pd.DataFrame:

@@ -366,6 +366,7 @@ def test_app_flow_with_every_item_together(monkeypatch, tmp_path):
     assert settings["column_rules"]["department"] == {"type": "string", "tolerance": 0.0, "ignore_case": True}
     assert next(s for s in settings["specs"] if s["canon"] == "department")["case"] == "ignore"
     assert "ignored on: department" in run["_report"]
+    _ok(at.radio(key="res_view").set_value("Downloads").run())    # one results view at a time
     _ok(at.button(key="save_all").click().run())
     saved = sorted(Path(tmp_path / "out").glob(f"{pair}__*"))
     assert len(saved) == 1 and (saved[0] / f"{pair}__summary.json").exists()
