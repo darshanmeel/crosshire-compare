@@ -8,12 +8,13 @@ import duckdb
 import streamlit as st
 
 from .columns import key_chips_html, PAINTED_ROWS, row_css
-from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows,
-                      diffs_by_key_value, near_match, paired_path, side_labels, style_pairs,
-                      value_pairs)
+from .compare import (bucket_profile, column_ledger, have_paired, ledger_counts, Outcome,
+                      differing_rows, diffs_by_key_value, near_match, paired_path, side_labels,
+                      style_pairs, value_pairs)
 from .outputs import default_save_folder, save_target, table_formats, verdict_of, write_parquet_copies, zip_run
 from .report import build_report
 from .sources import Side
+from .state import kept_picks
 from .theme import THEME, esc
 from .values import ColSpec
 
@@ -182,8 +183,9 @@ def columns_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode, limit) -> No
                 st.dataframe(style_pairs(df, marks), width="stretch", hide_index=True,
                              height=min(600, 40 + 35 * len(df)))
     if rest:
+        kept_picks("col_cards", rest)
         with st.expander(f"Other columns - {len(rest)} not open", expanded=False):
-            extra = st.multiselect("Columns to open", rest, default=[], key="col_cards",
+            extra = st.multiselect("Columns to open", rest, key="col_cards",
                                    label_visibility="collapsed",
                                    placeholder="pick the columns to look at",
                                    help="Each one adds the value pairs behind its count.")
@@ -235,10 +237,18 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
                "when you add it, so a wide pair does not count hundreds of columns nobody asked to "
                "see. For paired rows each value is counted on both sides, so a non-key column shows "
                "what it held in each file.")
-    default = next((i for i, b in enumerate(buckets) if b[0] == "differ"), 0)
-    label = st.radio("Bucket", [b[1] for b in buckets], horizontal=True, key="bucket_pick",
-                     index=default, label_visibility="collapsed")
-    bucket = next(b[0] for b in buckets if b[1] == label)
+    names = dict(buckets)                        # bucket -> its label, carrying this run's counts
+    # what is held is the bucket, not the label: the label has row counts in it, so the next run's
+    # label is a different string and the pick would be lost. bucket_id is no widget's key, so
+    # Streamlit keeps it through the runs that draw another view
+    want = st.session_state.get("bucket_id")
+    if want not in names:
+        want = "differ" if "differ" in names else next(iter(names))
+    st.session_state["bucket_pick"] = names[want]
+    label = st.radio("Bucket", list(names.values()), horizontal=True, key="bucket_pick",
+                     label_visibility="collapsed")
+    bucket = next(b for b, lab in names.items() if lab == label)
+    st.session_state["bucket_id"] = bucket
     if bucket == "differ":
         st.markdown(f"**By key value** - the {res.diff_rows:,} rows that paired on **{' + '.join(keys)}** "
                     "but disagree on a compared column, grouped by each key column. The key is identical "
@@ -253,8 +263,9 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
     others = [c for c in cols if c not in keys]
     shown = list(keys) if keys else others[:3]
     if others:
+        kept_picks(f"bucket_cols_{bucket}", others)
         with st.expander(f"Other columns - {len(others)} to add", expanded=False):
-            extra = st.multiselect("Columns to count", others, default=[],
+            extra = st.multiselect("Columns to count", others,
                                    key=f"bucket_cols_{bucket}", label_visibility="collapsed",
                                    placeholder="pick the columns to count for these rows")
         shown = shown + [c for c in others if c in extra]
@@ -406,11 +417,6 @@ MIME = {".csv": "text/csv", ".json": "application/json", ".html": "text/html",
         ".parquet": "application/vnd.apache.parquet"}
 
 
-def have_paired(run) -> bool:
-    p = run["files"].get(f"{run['pair']}__paired.csv")
-    return bool(p and p.exists())
-
-
 def paired_row(run, NA: str, NB: str) -> None:
     """The one file a run does not write as it goes: every matched row with both sides beside
     each other. On a wide pair it takes longer to write than the comparison itself takes to
@@ -432,12 +438,15 @@ def paired_row(run, NA: str, NB: str) -> None:
 
 
 def paired_first(run) -> dict[str, Path]:
-    """The paired rows, written now if they are not on disk - what a save of everything adds."""
+    """The paired rows, written now if they are not on disk - what a save of everything adds.
+    The whole file list is returned, not the one name: writing the paired rows can write their
+    Parquet copy too, and a save that missed it would copy a summary.json that lists it."""
     if have_paired(run):
         return {}
     with st.spinner("Writing the paired rows…"):
-        p = paired_path(run)
-    return {p.name: p} if p else {}
+        if not paired_path(run):
+            return {}
+    return {p.name: p for p in run["files"].values() if p.exists()}
 
 
 def downloads_tab(run, A, B, NA, NB, limit) -> None:

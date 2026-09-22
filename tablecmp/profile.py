@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from .sources import Side
-from .sql import columns_a_statement, ident, lit, scratch
+from .sql import columns_a_statement, ident, in_batches, lit, scratch
 from .values import ColSpec, ReadOptions, hold
 
 STATS_COLS = ["Column", "Type", "Rows", "Nulls", "Null %", "Distinct", "Distinct % of filled",
@@ -48,9 +48,8 @@ def stats_table(con, table: str, specs: list[ColSpec], rows: int | None = None) 
             f"min({num}) AS min_n, max({num}) AS max_n, avg({num}) AS mean_n, "
             f"round(avg(length({c})), 1) AS avg_len, "
             f"min(length({c})) AS min_len, max(length({c})) AS max_len FROM {table}")
-    per = columns_a_statement(rows)
-    parts = [con.execute(" UNION ALL ".join(branches[i:i + per])).fetchdf()
-             for i in range(0, len(branches), per)]
+    parts = in_batches(branches, lambda part: [con.execute(" UNION ALL ".join(part)).fetchdf()],
+                       columns_a_statement(rows))
     raw = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     kinds = {s.canon: s.kind for s in specs}
     out = []

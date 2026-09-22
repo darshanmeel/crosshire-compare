@@ -154,6 +154,9 @@ def test_database_flow(monkeypatch, tmp_path):
     spec = next(s for s in specs_from(at.session_state["cmap"]) if s.canon == canon)
     assert spec.a_steps == [] and spec.b_steps == [{"op": "trim", "params": {}}], canon
     assert [b.label for b in at.main.button if b.label.startswith("Copy to")] == ["Copy to A · SAMPLE"]
+    # the results view stays where it was left - _finish went to Downloads - so ask for Summary
+    assert at.session_state["res_view"] == "Downloads"
+    _ok(at.radio(key="res_view").set_value("Summary").run())
     assert at.radio(key="bucket_pick").options[-2:] == [
         f"Only in A · SAMPLE ({int(COUNTS['only_left']):,})", f"Only in B · SAMPLE ({int(COUNTS['only_right']):,})"]
 

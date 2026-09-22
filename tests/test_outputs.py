@@ -180,10 +180,11 @@ def test_parquet_copies_and_zip(tmp_path, monkeypatch):
     assert {"hr_compare_payroll__cell_diffs.parquet", "hr_compare_payroll__left_only.parquet",
             "hr_compare_payroll__columns.parquet"} <= names
     assert "hr_compare_payroll__paired.parquet" not in names      # …before the paired rows exist
-    # so the paired rows bring their own copy when they are asked for, and drop the stale zip
+    # so the paired rows bring their own copy when they are asked for, and take the stale zip
+    # with them - it was built without them, and nothing points at it any more
     stale = out.zip_run(run)
     paired_path(run)
-    assert not run.get("zip") and stale.exists()
+    assert not run.get("zip") and not stale.exists()
     pq = Path(run["folder"]) / "hr_compare_payroll__paired.parquet"
     assert pq.exists() and run["files"][pq.name] == pq
     js = json.loads(Path(run["folder"], "hr_compare_payroll__summary.json").read_text(encoding="utf-8"))

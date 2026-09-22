@@ -106,7 +106,7 @@ from tablecmp.outputs import pair_name, sweep_work_dir, table_formats, write_par
 from tablecmp.profile import profile_tables                                       # noqa: E402
 from tablecmp.report import build_report                                          # noqa: E402
 from tablecmp.sources import Side, preview_rows                                   # noqa: E402
-from tablecmp.state import bump, forget_results, init_state                       # noqa: E402
+from tablecmp.state import bump, forget_results, init_state, kept_picks           # noqa: E402
 from tablecmp.theme import css, status_strip                                      # noqa: E402
 from tablecmp.ui_columns import Setup                                             # noqa: E402
 from tablecmp.values import ReadOptions                                           # noqa: E402
@@ -277,7 +277,8 @@ def profile_section(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: Read
         st.dataframe(pb, width="stretch", hide_index=True, height=min(560, 45 + 35 * len(pb)))
     st.markdown("**Value frequencies** - 10 most and 10 least frequent values, per file")
     have = [c for c in setup.canon if c in freq and "A" in freq[c]]
-    picked = st.multiselect("Columns to list", have, default=[c for c in setup.keys if c in have][:2],
+    kept_picks("freq_cols_pair", have, [c for c in setup.keys if c in have][:2])
+    picked = st.multiselect("Columns to list", have,
                             key="freq_cols_pair", placeholder="pick the columns whose values to list",
                             help="The figures are measured already - this only draws the tables, "
                                  "and a table per column of a wide pair is what makes the page slow.")

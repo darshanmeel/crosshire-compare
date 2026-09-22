@@ -17,6 +17,7 @@ from .keys import MAX_KEY_COLS
 from .outputs import run_id
 from .profile import profile_single
 from .sniff import looks_like
+from .state import kept_picks
 from .sources import Side, preview_rows, slug
 from .ui_results import save_row
 from .values import ReadOptions
@@ -192,7 +193,8 @@ def show_profile(prof: dict, NP: str, made: str) -> None:
     st.markdown("**Value frequencies** - 10 most and 10 least frequent values")
     by_col = stats.set_index("Column")
     have = list(prof["freq"])
-    picked = st.multiselect("Columns to list", have, default=[c for c in (best or []) if c in have][:2],
+    kept_picks("freq_cols_P", have, [c for c in (best or []) if c in have][:2])
+    picked = st.multiselect("Columns to list", have,
                             key="freq_cols_P", placeholder="pick the columns whose values to list",
                             help="The figures are measured already - this only draws the tables, "
                                  "and a table per column of a wide table is what makes the page slow.")

@@ -595,6 +595,13 @@ def write_paired(run: dict, keys: list[str], cols: list[str]) -> Path:
     return path
 
 
+def have_paired(run: dict) -> bool:
+    """Whether the run's paired-rows file is on disk - it is written when it is asked for, and
+    a folder can be swept under a session that is still open."""
+    p = run["files"].get(f"{run['cfg']['name']}__paired.csv")
+    return bool(p and p.exists())
+
+
 def paired_path(run: dict) -> Path | None:
     """The run's paired-rows file, written the first time something asks for it - the button on
     Downloads, the zip, a save of everything, the Parquet copies - and kept after that.
@@ -610,16 +617,15 @@ def paired_path(run: dict) -> Path | None:
     res, cfg = run["result"], run["cfg"]
     if res.error:
         return None
-    have = run["files"].get(f"{cfg['name']}__paired.csv")
-    if have and have.exists():
-        return have
+    if have_paired(run):
+        return run["files"][f"{cfg['name']}__paired.csv"]
     keys = list(res.keys or cfg["keys"]) if run["mode"] == "key" else []
     path = write_paired(run, keys, list(res.columns_compared or cfg["compare_columns"]))
-    from .outputs import has_parquet, parquet_copy, refresh_listing
+    from .outputs import drop_zip, has_parquet, parquet_copy, refresh_listing
     if has_parquet(run):
         parquet_copy(run, "paired")
     refresh_listing(run)
-    run.pop("zip", None)              # a zip built before this file does not hold it
+    drop_zip(run)                     # a zip built before this file does not hold it
     return path
 
 

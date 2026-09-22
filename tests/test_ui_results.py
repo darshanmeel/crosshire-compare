@@ -177,6 +177,16 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     at.button(key="save_all").click(); at.run()
     assert not any("Type a folder" in e.value for e in at.error)
     assert (saved / f"{pair}__paired.parquet").exists()
+    # a run that keeps Parquet copies: a save writes the paired rows first, and the copy that
+    # follows them goes with it - or the summary.json copied beside it lists a file nobody has
+    for suffix in ("paired.csv", "paired.parquet"):
+        (folder / f"{pair}__{suffix}").unlink()
+        (saved / f"{pair}__{suffix}").unlink()
+    at.run()
+    at.button(key="save_all").click(); at.run()
+    assert not at.exception, at.exception
+    for suffix in ("paired.csv", "paired.parquet"):
+        assert (saved / f"{pair}__{suffix}").exists(), suffix
     # a folder outside COMPARE_OUT_DIR is refused with a sentence
     at.text_input(key="save_all_dir").set_value(str(tmp_path / "elsewhere")); at.run()
     at.button(key="save_all").click(); at.run()

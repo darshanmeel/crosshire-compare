@@ -10,7 +10,7 @@ import pandas as pd
 
 from .profile import profile_singles
 from .sources import Side, work_dir
-from .sql import columns_a_statement, ident, lit, scratch
+from .sql import columns_a_statement, ident, in_batches, lit, scratch
 from .values import ColSpec, ReadOptions, hold, register
 
 DATE_TYPES = ("DATE", "TIMESTAMP", "DATETIME")
@@ -191,12 +191,10 @@ def count_combos(con, table: str, combos: list[tuple], rows: int,
     """The distinct count of each combination on `table`, a few a statement - each count
     holds a hash table of its own (sql.columns_a_statement), and hundreds at once is what
     runs DuckDB out of memory."""
-    per = columns_a_statement(rows)
-    out: list[int] = []
-    for i in range(0, len(combos), per):
-        picks = ", ".join(count_sql(cols, nulls_apart) for cols in combos[i:i + per])
-        out += [int(n) for n in con.execute(f"SELECT {picks} FROM {table}").fetchone()]
-    return out
+    def run(batch: list[tuple]) -> list[int]:
+        picks = ", ".join(count_sql(cols, nulls_apart) for cols in batch)
+        return [int(n) for n in con.execute(f"SELECT {picks} FROM {table}").fetchone()]
+    return in_batches(combos, run, columns_a_statement(rows))
 
 
 def single_figures(con, views, cols: list[str], totals: dict[str, int] | None = None
@@ -207,14 +205,14 @@ def single_figures(con, views, cols: list[str], totals: dict[str, int] | None = 
     singles: dict[str, dict[str, int]] = {c: {} for c in cols}
     nulls: dict[str, int] = {}
     for v in views:
-        per = columns_a_statement((totals or {}).get(v, 0))
-        for i in range(0, len(cols), per):
-            part = cols[i:i + per]
+        def run(part: list[str], v=v) -> list:
             picks = ", ".join(f"count(DISTINCT {ident(c)}), count(*) - count({ident(c)})" for c in part)
             row = con.execute(f"SELECT {picks} FROM {v}").fetchone()
             for j, c in enumerate(part):
                 singles[c][v] = row[2 * j]
                 nulls[c] = nulls.get(c, 0) + row[2 * j + 1]
+            return list(part)
+        in_batches(cols, run, columns_a_statement((totals or {}).get(v, 0)))
     return singles, nulls
 
 
@@ -227,18 +225,24 @@ def rank(found: list[tuple[list[str], dict[str, int], str]], totals: dict[str, i
     below every one that pairs some - a row number each side counts for itself under a
     name and a date shared by both; then the ones that look like a key (no measure among
     them); then the ones with an identifier in the name - emp_id above hire_date +
-    first_name + last_name, however key-like a name and a date read; then affinity sum,
-    the share of values the other side has when there is one, how close - distinct values
-    per row, the same for every key - then fewer columns."""
+    first_name + last_name, however key-like a name and a date read; then how close it comes -
+    distinct values per row, the same for every key - the share of values the other side has
+    when there is one, then fewer columns, then how key-like the names are on average.
+
+    How close it comes before the names, and the names averaged rather than summed: a sum
+    grows with every column added, so four key-like names outscored the two that are the key
+    whenever nothing was unique on both sides - the list then held four-column coincidences
+    and not the pair the reader wanted."""
     def key(f):
         cols, d, _ = f
         return (not is_unique(d, totals), any(u < set(cols) for u in unique_sets),
                 overlap is not None and not overlap[tuple(cols)],
                 not all(affinity[c] >= 0 for c in cols),
                 not any(ID_WORDS.search(c) for c in cols),
-                -sum(affinity[c] for c in cols),
+                -selectivity(d, totals),
                 -round(overlap[tuple(cols)]) if overlap is not None else 0,
-                -selectivity(d, totals), len(cols))
+                len(cols),
+                -sum(affinity[c] for c in cols) / len(cols))
     found.sort(key=key)
 
 
@@ -289,18 +293,47 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
     value, as it always has."""
     order = {c: i for i, c in enumerate(candidates)}
     live = [c for c in candidates if not all(singles[c][v] <= 1 for v in views)]
+
+    def alone_count(c: str) -> dict[str, int]:
+        """A column's distinct count as a key counts it. A combination counts a null as a
+        value unless nulls are apart, and rows with a null key do pair - the join matches
+        null with null - so a column unique but for one null is counted unique here too.
+        Counting it one way alone and the other in a pair is what made a pair read `unique
+        as a pair - no single column is` when the single column was just as unique."""
+        n = singles[c]
+        if nulls_apart or not nulls.get(c, 0):
+            return n
+        return {v: n[v] + 1 for v in views}
     found: list[tuple[list[str], dict[str, int], str]] = []
     seen: set[frozenset] = set()
     uniques: list[frozenset] = []          # the column sets found unique, as they are found
     keys: list[frozenset] = []             # the ones that pair rows - all of them on one table
 
-    def offer(cols, d, how):
+    def verify(combos: list[tuple]) -> set[frozenset]:
+        """Which of these hold on the other side too - all of them when there is no other side.
+
+        The tightest is asked about on its own and the rest only when it did not hold: a
+        designed key is verified in one small statement, as it was when each candidate was
+        asked about in turn, and a table where nothing holds asks about the rest a few a
+        statement rather than one statement per candidate."""
+        if pairs is None:
+            return {frozenset(c) for c in combos}
+        if not combos:
+            return set()
+        held = pairs([list(combos[0])])
+        if not held and len(combos) > 1:
+            held = pairs([list(c) for c in combos[1:]])
+        return held
+
+    def offer(cols, d, how, held: set[frozenset] | None = None):
+        """One candidate, with `held` when the caller has already asked the other side about
+        a batch this one is in - without it a unique candidate is asked about on its own."""
         if cols and frozenset(cols) not in seen:
             seen.add(frozenset(cols))
             found.append((list(cols), d, how))
             if is_unique(d, totals):
                 uniques.append(frozenset(cols))
-                if pairs is None or pairs(list(cols)):
+                if frozenset(cols) in (verify([tuple(cols)]) if held is None else held):
                     keys.append(frozenset(cols))
 
     def adds_nothing(cols) -> bool:
@@ -312,7 +345,7 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
 
     def distinct(cols) -> dict[str, int]:
         if len(cols) == 1:
-            return singles[cols[0]]
+            return alone_count(cols[0])
         return {v: count_many(v, [tuple(cols)], totals[v])[0] for v in views}
 
     def shrink(cols, d):
@@ -331,9 +364,10 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
         return cols, d
 
     # ---- level 1: every column on its own
-    for c in live:
-        if is_unique(singles[c], totals):
-            offer([c], singles[c], HOW_SINGLE)
+    alone = [(c,) for c in live if is_unique(alone_count(c), totals)]
+    held = verify(alone) if alone else set()
+    for (c,) in alone:
+        offer([c], alone_count(c), HOW_SINGLE, held)
     pair = len(views) > 1
     hint = "`pip install desbordante` for exact key discovery (HyUCC / PyroUCC)"
 
@@ -382,7 +416,7 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
                                     "is the key, so no combination was tried - " + hint)
 
     # ---- the pool: the most key-like columns in table order, a measure only in the second pass
-    able = [c for c in live if not is_unique(singles[c], totals)
+    able = [c for c in live if not is_unique(alone_count(c), totals)
             and not (nulls_apart and nulls.get(c, 0))]
     pool = sorted([c for c in able if affinity[c] >= 0],
                   key=lambda c: (affinity[c] < 3, order[c]))[:POOL_COLS]
@@ -390,9 +424,8 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
     pool.sort(key=order.get)
 
     def values(c: str, v: str) -> int:
-        """Distinct values of the column as a combination counts them: null one value on a
-        pair; with nulls apart no pool column has any."""
-        return singles[c][v] + (1 if nulls.get(c, 0) and not nulls_apart else 0)
+        """Distinct values of the column as a combination counts them - see counted()."""
+        return alone_count(c)[v]
 
     def product(cols, v: str) -> int:
         out = 1
@@ -406,7 +439,9 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
 
     def level_combos(cols_pool: list[str], size: int, must: set[str] | None) -> list[tuple]:
         """The combinations of `size` pool columns worth counting, the tightest first -
-        with `must`, only the ones holding one of those columns (the measures pass)."""
+        with `must`, only the ones holding one of those columns (the measures pass). Past
+        MAX_TRIED the rest are dropped; `could` keeps how many there were, so the note can
+        say the cut rather than let the reader read a count as the whole of it."""
         out = []
         for cols in combinations(cols_pool, size):
             if must is not None and not any(c in must for c in cols):
@@ -416,6 +451,7 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
             out.append(cols)
         first = views[0]
         out.sort(key=lambda cols: (product(cols, first), tuple(order[c] for c in cols)))
+        could[size] = max(could[size], len(out))
         return out[:MAX_TRIED]
 
     # the random sample of each view over KEY_SAMPLE rows, made when a level needs it, dropped at the end
@@ -464,14 +500,19 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
             for v in views:
                 for cols, d in zip(batch, count_many(v, batch, totals[v])):
                     counted.setdefault(cols, {})[v] = d
+            unique_here = [cols for cols in batch if is_unique(counted[cols], totals)]
+            held = verify(unique_here) if unique_here else set()
             for cols in batch:
                 on_sample.discard(cols)
                 if is_unique(counted[cols], totals):
-                    offer(list(cols), counted[cols], HOW_LEVEL.get(len(cols), HOW_LEVEL[4]))
+                    offer(list(cols), counted[cols], HOW_LEVEL.get(len(cols), HOW_LEVEL[4]), held)
             if keys:
                 break
 
+    # the biggest level of each width, not the sum of the two passes: the note says what one
+    # level tried, and a reader adding up two passes read "600 tightest" for two lots of 300
     tried = {size: 0 for size in range(2, max_cols + 1)}
+    could = {size: 0 for size in range(2, max_cols + 1)}    # before the MAX_TRIED cut
     with_measures = False
     for must in (None, set(measures)):
         if must is not None:
@@ -484,7 +525,7 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
             combos = level_combos(cols_pool, size, must)
             if not combos:
                 continue
-            tried[size] += len(combos)
+            tried[size] = max(tried[size], len(combos))
             say(f"{'Pairs' if size == 2 else f'Combinations of {size}'}: {len(combos):,}…")
             try_level(combos)
             if keys:
@@ -504,20 +545,23 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
             d = distinct(list(cols)) if cols in on_sample else counted[cols]
             cols, d = shrink(list(cols), d)
             offer(cols, d, HOW_ALONE if len(cols) == 1 else HOW_CLOSEST.format(n=max_cols))
-        others = [c for c in live if not is_unique(singles[c], totals)]
-        for c in sorted(others, key=lambda c: -selectivity(singles[c], totals))[:want]:
+        others = [c for c in live if not is_unique(alone_count(c), totals)]
+        for c in sorted(others, key=lambda c: -selectivity(alone_count(c), totals))[:want]:
             how = (HOW_NULL if nulls_apart and nulls.get(c, 0)
                    else HOW_ONLY if len(pool + measures) <= 1 else HOW_NO_COMBO)
-            offer([c], singles[c], how)
+            offer([c], alone_count(c), how)
     for name, _ in sample.values():
         con.execute(f"DROP TABLE IF EXISTS {name}")
 
-    n_pool = len(pool) + (len(measures) if with_measures else 0)
-    steps = [f"every pair of the {n_pool} most key-like columns" if tried[2] else
-             f"the pairs of the {n_pool} most key-like columns - none could be unique, so none was counted"]
+    said_pool = (f"the {len(pool)} most key-like columns"
+                 + (f" and the {len(measures)} measures" if with_measures else ""))
+    steps = [f"every pair of {said_pool}" if tried[2] else
+             f"the pairs of {said_pool} - none could be unique, so none was counted"]
     for size in range(3, max_cols + 1):
         if tried[size]:
-            steps.append(f"the {tried[size]:,} tightest combinations of {size}")
+            steps.append(f"the {tried[size]:,} tightest of {could[size]:,} combinations of {size}"
+                         if could[size] > tried[size] else
+                         f"the {tried[size]:,} tightest combinations of {size}")
     where = (f" - on a random sample of {KEY_SAMPLE:,} rows first, the ones unique there verified on every row"
              if sample else "")
     if keys:
@@ -526,7 +570,7 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
                 + (" - a measure only once the key-like columns had no key" if with_measures else ""))
     else:
         note = (f"Nothing up to {max_cols} columns is unique - every column, {', '.join(steps)}"
-                + (" and the measures" if with_measures else "") + where)
+                + where)
     note += " - " + hint
     unique_sets = [frozenset(cols) for cols, d, _ in found if is_unique(d, totals)]
     rank(found, totals, affinity, unique_sets)
@@ -662,12 +706,14 @@ def suggest_keys(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_b: st
             for cols, n in zip(todo, count_combos(con, "probe_b", todo, totals["probe_b"])):
                 b_count[cols] = n
 
-    def verified(cols: list[str]) -> bool:
-        """What a combination unique on A has to be to end the search: unique on B as well,
-        and sharing values with it - a key with none pairs no rows. One that is neither is
-        listed all the same, but the search goes on to the next level."""
-        on_b([tuple(cols)])
-        return b_count[tuple(cols)] == totals["probe_b"] and overlap(cols) > 0
+    def verified(combos: list[list[str]]) -> set[frozenset]:
+        """Which combinations unique on A end the search: the ones unique on B as well and
+        sharing values with it - a key with none pairs no rows. One that is neither is listed
+        all the same, but the search goes on to the next level. A whole batch at a time, so B
+        is counted a few combinations a statement and not once per candidate."""
+        on_b([tuple(c) for c in combos])
+        return {frozenset(c) for c in combos
+                if b_count[tuple(c)] == totals["probe_b"] and overlap(c) > 0}
 
     # the levels are counted on A alone - every column, then the combinations - and what is
     # unique there is verified on B: half the counting of measuring both sides at every level

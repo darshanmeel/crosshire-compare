@@ -4,6 +4,7 @@ the statistics table and the ten most and least frequent values per column."""
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from tablecmp.columns import single_specs, suggested_steps
 from tablecmp.keys import KEY_COLS
@@ -255,6 +256,34 @@ def test_columns_a_statement_shrinks_with_the_rows():
     assert columns_a_statement(100_000) == 32
     assert columns_a_statement(1_000_000) == 4
     assert columns_a_statement(10_000_000) == 1 and columns_a_statement(10 ** 9) == 1
+
+
+def test_a_batch_that_runs_out_of_memory_is_halved_and_tried_again():
+    """A count(DISTINCT) fails rather than spilling, and how much memory it wants depends on
+    how wide the values are - which the cell count behind the batch size cannot know. A batch
+    that fails is halved and tried again, smaller from then on, and every item is still
+    measured once, in order."""
+    import duckdb
+    from tablecmp.sql import in_batches
+    sizes = []
+
+    def run(batch):
+        sizes.append(len(batch))
+        if len(batch) > 3:                       # what this machine could not hold
+            raise duckdb.OutOfMemoryException("failed to allocate")
+        return [x * 2 for x in batch]
+
+    assert in_batches(list(range(10)), run, 8) == [x * 2 for x in range(10)]
+    assert sizes == [8, 4, 2, 2, 2, 2, 2]        # 8 fails, 4 fails, then twos to the end
+    one = []
+
+    def never(batch):                            # a single item that still will not fit
+        one.append(len(batch))
+        raise duckdb.OutOfMemoryException("failed to allocate")
+
+    with pytest.raises(duckdb.OutOfMemoryException):
+        in_batches([1, 2], never, 2)
+    assert one == [2, 1]                         # halved to one, then said out loud
 
 
 def test_stats_table_measures_a_few_columns_a_statement(tmp_path):

@@ -230,6 +230,14 @@ def refresh_listing(run: dict) -> None:
     _relist_summary(run)
 
 
+def drop_zip(run: dict) -> None:
+    """A zip built before a new file landed does not hold it, so it goes - the file too, or it
+    would sit in the work folder until the sweep with nothing pointing at it."""
+    z = run.pop("zip", None)
+    if z:
+        Path(z).unlink(missing_ok=True)
+
+
 def parquet_copy(run: dict, table: str) -> Path | None:
     """One table of the run as Parquet next to its CSV - None when there is no such CSV yet.
     Its own call so a table written later than the rest, the paired rows, gets its copy without
@@ -256,7 +264,7 @@ def write_parquet_copies(run: dict) -> list[Path]:
     """Every CSV table of the run as Parquet next to it, through DuckDB."""
     written = [p for p in (parquet_copy(run, t) for t in TABLES) if p]
     refresh_listing(run)
-    run.pop("zip", None)                         # the zip, if one was built, is stale now
+    drop_zip(run)                                # the zip, if one was built, is stale now
     return written
 
 

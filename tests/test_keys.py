@@ -142,9 +142,10 @@ def test_a_key_that_pairs_nothing_ranks_below_one_that_does(tmp_path):
 
 
 def test_a_pair_with_one_column_to_try_still_offers_it(tmp_path):
-    """The only column that varies is not unique: it is the closest there is, so it is
-    listed - on its own, with nothing to add - rather than nothing at all."""
-    rows = [["" if i == 3 else i, "x"] for i in range(20)]
+    """The only column that varies is not unique - two rows share the one null - so it is the
+    closest there is and is listed on its own, with nothing to add, rather than nothing at
+    all."""
+    rows = [["" if i in (3, 7) else i, "x"] for i in range(20)]
     A, B = _csv_sides(tmp_path, ["x_id", "k"], rows, rows)
     specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("x_id", "k")]
     table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
@@ -154,6 +155,22 @@ def test_a_pair_with_one_column_to_try_still_offers_it(tmp_path):
     only = [ColSpec(canon="x_id", a_src="x_id", b_src="x_id", kind="text")]
     _, combos, _ = suggest_keys(A, B, only, "a", "b", OPTS)
     assert combos == [["x_id"]]
+
+
+def test_a_column_with_one_null_is_a_key_on_a_pair(tmp_path):
+    """One null is one value: rows with a null key pair - the join matches null with null -
+    and that is how a combination has always counted a null, so a lone column is counted the
+    same way. It was the one place the two disagreed: the column read `not unique` alone and
+    `unique as a pair` the moment anything was added to it."""
+    rows = [["" if i == 3 else i, i % 4, "x"] for i in range(20)]
+    A, B = _csv_sides(tmp_path, ["x_id", "grp", "k"], rows, rows)
+    specs = [ColSpec(canon=c, a_src=c, b_src=c, kind="text") for c in ("x_id", "grp", "k")]
+    table, combos, _ = suggest_keys(A, B, specs, "a", "b", OPTS)
+    assert combos[0] == ["x_id"]
+    row = table.iloc[0]
+    assert row["Unique on both"] == "yes" and row["Distinct in a"] == 20
+    assert "1 nulls in a" in row["Why"] and row["Why"].endswith("unique by itself")
+    assert not any(len(c) > 1 and "x_id" in c for c in combos)     # nothing is grown onto it
 
 
 def test_a_grown_key_is_cut_back_to_minimal(tmp_path):

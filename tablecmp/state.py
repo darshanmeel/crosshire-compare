@@ -21,7 +21,11 @@ PANEL_KEYS = ("nick", "how", "pt", "dl", "hd", "ob", "od", "top", "nm", "pq",
 # only one Streamlit sees.
 KEEP = ("opt_trim", "opt_empty", "opt_case", "opt_tol", "null_tokens", "disp_rows", "auto_rerun",
         "nokey_mode", "out_fmt", "auto_profile",
+        # the results page draws one view at a time, so a widget on another view is not drawn
+        # on this run either - these are what the reader picked, and picking again is the work
+        "res_view", "col_cards", "freq_cols_pair", "freq_cols_P",
         *(f"{k}_{tag}" for tag in "ABP" for k in PANEL_KEYS))
+KEEP_PREFIXES = ("bucket_cols_",)             # one picker per bucket, named for the bucket
 
 DEFAULTS = {"A": Side, "B": Side, "P": Side,  # the two sides compared, the one table profiled
             "result": lambda: None, "cmap": lambda: None,
@@ -42,9 +46,20 @@ def init_state() -> None:
     for key, make in DEFAULTS.items():
         if key not in st.session_state:
             st.session_state[key] = make()
-    for key in KEEP:                              # see KEEP: written back before any widget is drawn
+    kept = [*KEEP, *(k for k in list(st.session_state) if k.startswith(KEEP_PREFIXES))]
+    for key in kept:                              # see KEEP: written back before any widget is drawn
         if key in st.session_state:
             st.session_state[key] = st.session_state[key]
+
+
+def kept_picks(key: str, options: list[str], default: list[str] | None = None) -> list[str]:
+    """What a multiselect holds, kept across a run that does not draw it (see KEEP) and cut
+    back to the options on offer: a new file can take a column away, and Streamlit raises on
+    a value that is not among the options. The default is used once, when nothing is held."""
+    have = set(options)
+    held = st.session_state[key] if key in st.session_state else list(default or [])
+    st.session_state[key] = [c for c in held if c in have]
+    return st.session_state[key]
 
 
 def forget_results() -> None:
