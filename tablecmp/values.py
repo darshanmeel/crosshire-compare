@@ -254,10 +254,14 @@ def date_format(steps: list) -> str:
 
 # ---- reading one value -------------------------------------------------------
 def fold_nulls(base: str, tokens: tuple[str, ...]) -> str:
+    """The value, with the null tokens read as null. list_contains over a constant list,
+    never `IN (...)`: DuckDB plans an IN over a list of constants as a join, and a
+    statement holding one per column plans hundreds of them - 200 columns of a 100,000-row
+    table took seven minutes that way and take four seconds this way."""
     if not tokens:
         return base
     listed = ", ".join(lit(t.upper()) for t in tokens)
-    return f"CASE WHEN upper(trim({base})) IN ({listed}) THEN NULL ELSE {base} END"
+    return f"CASE WHEN list_contains([{listed}], upper(trim({base}))) THEN NULL ELSE {base} END"
 
 
 def typed_exprs(text: str, kind: str, fmt: str = "", trim_text: bool = True) -> tuple[str, str]:

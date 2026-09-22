@@ -81,10 +81,12 @@ def looks_like(side: Side, cols: list[str], n: int = 2000,
 
 def _values_sql(col: str, n: int, opts: ReadOptions) -> str:
     """The column's distinct values, first seen first - what both passes measure."""
+    # list_contains, not IN (...): DuckDB plans an IN over constants as a join, and a
+    # statement holding one per column plans dozens of them (see values.fold_nulls)
     tokens = ", ".join(lit(t.upper()) for t in opts.tokens) or lit("")
     return (f"FROM (SELECT v, min(__rn) AS rn "
             f"FROM (SELECT trim({ident(col)}) AS v, __rn FROM vals) "
-            f"WHERE v IS NOT NULL AND v <> '' AND upper(v) NOT IN ({tokens}) "
+            f"WHERE v IS NOT NULL AND v <> '' AND NOT list_contains([{tokens}], upper(v)) "
             f"GROUP BY v ORDER BY rn LIMIT {int(n)})")
 
 
@@ -114,11 +116,11 @@ def _wants_formats(row: tuple | None) -> bool:
 def _decide_sql(col: str, n: int, opts: ReadOptions) -> str:
     """The first pass: one query over the column's distinct values, the cheap checks as
     aggregates, the column's name first."""
-    words = ", ".join(lit(w) for w in BOOL_WORDS)
+    words = "[" + ", ".join(lit(w) for w in BOOL_WORDS) + "]"
     fl = "[" + ", ".join(lit(f) for f in FORMAT_PRESETS.values()) + "]"
     aggs = [f"{lit(col)} AS col", "count(*)",
-            f"count(*) FILTER (WHERE lower(v) IN ({words}))",
-            f"list(v ORDER BY rn) FILTER (WHERE lower(v) IN ({words}))",
+            f"count(*) FILTER (WHERE list_contains({words}, lower(v)))",
+            f"list(v ORDER BY rn) FILTER (WHERE list_contains({words}, lower(v)))",
             "count(try_cast(replace(v, ',', '') AS DOUBLE))",
             "arg_min(v, rn) FILTER (WHERE regexp_matches(v, '[0-9],[0-9]'))",
             "count(try_cast(v AS TIMESTAMP))",
