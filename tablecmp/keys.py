@@ -163,6 +163,7 @@ HOW_ALONE = "on its own - adding a column told no more rows apart"
 HOW_ONLY = "on its own - no other column to add"
 HOW_NULL = "on its own - with a null it can complete no key"
 HOW_NO_COMBO = "on its own - no combination with it is unique"
+HOW_UNPOOLED = "on its own - not among the columns combined, so nothing was tried with it"
 HOW_HYUCC = "found with Desbordante HyUCC"
 HOW_PYRO = "found with Desbordante PyroUCC as almost unique"
 
@@ -368,19 +369,17 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
     held = verify(alone) if alone else set()
     for (c,) in alone:
         offer([c], alone_count(c), HOW_SINGLE, held)
-    pair = len(views) > 1
     hint = "`pip install desbordante` for exact key discovery (HyUCC / PyroUCC)"
 
     if desbordante_available():
+        # one view, on a pair as on one table: the other side verifies what this one turned up
         n = min(UCC_SAMPLE, max(totals.values()))
-        note = (f"Found with Desbordante HyUCC on the first {n:,} rows"
-                + (" of each side and verified on every row of both" if pair
-                   else " and verified on every row")
-                + " - the shortest combinations first, and a length that holds a key ends the search")
+        note = (f"Found with Desbordante HyUCC on the first {n:,} rows and verified on every row"
+                " - the shortest combinations first, and a length that holds a key ends the search")
         if keys:
             note = "Found by measuring every column - a column unique by itself is the key, so no combination was tried"
         else:
-            say("Desbordante: minimal unique column combinations" + (" on each side…" if pair else "…"))
+            say("Desbordante: minimal unique column combinations…")
             cands: set[frozenset] = set()
             for v in views:
                 cands.update(frozenset(c) for c in ucc_candidates(con, v, live, max_lhs=max_cols))
@@ -548,7 +547,8 @@ def search_keys(con, views, totals: dict[str, int], candidates: list[str],
         others = [c for c in live if not is_unique(alone_count(c), totals)]
         for c in sorted(others, key=lambda c: -selectivity(alone_count(c), totals))[:want]:
             how = (HOW_NULL if nulls_apart and nulls.get(c, 0)
-                   else HOW_ONLY if len(pool + measures) <= 1 else HOW_NO_COMBO)
+                   else HOW_ONLY if len(pool + measures) <= 1
+                   else HOW_NO_COMBO if c in pool or c in measures else HOW_UNPOOLED)
             offer([c], alone_count(c), how)
     for name, _ in sample.values():
         con.execute(f"DROP TABLE IF EXISTS {name}")

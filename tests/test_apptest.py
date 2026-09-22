@@ -140,8 +140,9 @@ def test_database_flow(monkeypatch, tmp_path):
     # the two sides are two columns in the tables the run writes, not one name twice
     sheet = (Path(res["folder"]) / f"{res['pair']}__columns.csv").read_text(encoding="utf-8")
     assert sheet.splitlines()[0].split(",")[:3] == ["column", "name_a", "name_b"]
-    ledger = column_ledger(res, "A · SAMPLE", "B · SAMPLE")
-    assert "A · SAMPLE" in ledger.columns and "B · SAMPLE" in ledger.columns
+    _ok(at.radio(key="res_view").set_value("Summary").run())
+    ledger = next(d for d in at.dataframe if "Match %" in list(d.value.columns))
+    assert [c for c in ledger.value.columns if "SAMPLE" in str(c)] == ["A · SAMPLE", "B · SAMPLE"]
     js = json.loads((Path(res["folder"]) / f"{res['pair']}__summary.json").read_text(encoding="utf-8"))
     assert js["sources"]["A"]["connection"] == "SAMPLE" and js["sources"]["A"]["sql"].startswith("SELECT")
     # where a side is picked the tag keeps the two SAMPLEs apart: a step added to B lands on B
@@ -154,9 +155,6 @@ def test_database_flow(monkeypatch, tmp_path):
     spec = next(s for s in specs_from(at.session_state["cmap"]) if s.canon == canon)
     assert spec.a_steps == [] and spec.b_steps == [{"op": "trim", "params": {}}], canon
     assert [b.label for b in at.main.button if b.label.startswith("Copy to")] == ["Copy to A · SAMPLE"]
-    # the results view stays where it was left - _finish went to Downloads - so ask for Summary
-    assert at.session_state["res_view"] == "Downloads"
-    _ok(at.radio(key="res_view").set_value("Summary").run())
     assert at.radio(key="bucket_pick").options[-2:] == [
         f"Only in A · SAMPLE ({int(COUNTS['only_left']):,})", f"Only in B · SAMPLE ({int(COUNTS['only_right']):,})"]
 
@@ -235,8 +233,15 @@ def test_profiling_page(monkeypatch, tmp_path):
     assert [lb for lb in labels if lb in ("Outliers", "Patterns", "Dependencies")] == ["Outliers", "Patterns", "Dependencies"]
     assert labels.index("Dependencies") < labels.index("**emp_id** - text · 3,000 distinct · 0.0% null")
     assert [d.proto.label for d in at.main.get("download_button")] == ["Download profile.csv"]
-    assert [e.label for e in at.main.expander if e.label.startswith("**emp_id**")] == [
-        "**emp_id** - text · 3,000 distinct · 0.0% null"]
+    # one fold per picked column, not one per column of the table: the tables are what made
+    # the page slow, so they are drawn for the columns in the picker and no others
+    folds = [e.label for e in at.main.expander if e.label.startswith("**") and " distinct · " in e.label]
+    assert folds == ["**emp_id** - text · 3,000 distinct · 0.0% null"]
+    picked = at.multiselect(key="freq_cols_P")
+    assert picked.value == ["emp_id"] and len(picked.options) > 1
+    _ok(picked.set_value(["emp_id", "department"]).run())
+    folds = [e.label for e in at.main.expander if e.label.startswith("**") and " distinct · " in e.label]
+    assert len(folds) == 2 and any(lb.startswith("**department**") for lb in folds), folds
     assert "profile is from earlier settings" not in "".join(c.value for c in at.main.caption)
     # Save to folder: the six files land in a folder named after the table, under COMPARE_OUT_DIR
     _ok(at.button(key="save_profile_P").click().run())

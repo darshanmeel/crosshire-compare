@@ -72,7 +72,11 @@ def render(run: dict, A: Side, B: Side, NA: str, NB: str, stale: bool, limit: in
         else:
             downloads_tab(run, A, B, NA, NB, limit)
     except (duckdb.Error, KeyError, ValueError, OSError) as exc:
-        st.error(f"Could not build the {view} view: {exc}")
+        if not Path(run["folder"]).exists():     # swept after 24 hours, or removed by hand
+            st.error("The files of this run are gone - the work folder is swept after "
+                     "`COMPARE_KEEP_HOURS` (24). Press **Compare** to run it again.")
+        else:
+            st.error(f"Could not build the {view} view: {exc}")
 
 
 def summary_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode) -> None:

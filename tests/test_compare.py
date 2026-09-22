@@ -160,6 +160,25 @@ def test_number_filter_on_a_key_or_uncompared_column_runs_as_numbers(tmp_path, m
     assert "try_cast(\"id\" AS DOUBLE) >" in res.filter_left
 
 
+def test_bucket_profile_measures_only_what_is_asked_for(tmp_path, monkeypatch):
+    """A wide pair has hundreds of columns and counting them all for a bucket is minutes of
+    work nobody asked for, so `only` names what to measure: the key columns the page opens
+    with, and whatever the reader adds. What was measured once is kept, not measured again."""
+    from tablecmp.compare import bucket_profile
+    from tests.test_outputs import _run
+    run, A, B = _run(tmp_path, monkeypatch)
+    keys, cols = run["result"].keys, list(run["result"].columns_compared)
+    other = next(c for c in cols if c not in keys)
+    prof = bucket_profile(run, keys, cols, "differ", only=list(keys))
+    assert set(prof) == set(keys) and set(run["_profiles"]["differ"]) == set(keys)
+    more = bucket_profile(run, keys, cols, "differ", only=list(keys) + [other])
+    assert set(more) == set(keys) | {other}
+    assert set(run["_profiles"]["differ"]) == set(keys) | {other}     # the one column, not the rest
+    assert more[keys[0]] is prof[keys[0]]                             # measured once, then kept
+    every = bucket_profile(run, keys, cols, "differ")                 # no `only`: every column
+    assert set(every) == set(keys) | set(cols)
+
+
 def test_two_sides_with_one_name_stay_apart():
     """Two database sides on one connection are both called SAMPLE: the labels a widget offers
     carry the tag, and a filter on B · SAMPLE lands on the right side, not silently on the left."""

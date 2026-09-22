@@ -95,6 +95,45 @@ def test_summary_tab_opens_with_the_key(monkeypatch, tmp_path):
     assert not any(f"_row{plain}_col0," in r for r in rules)     # a compared row is left alone
 
 
+def test_one_view_is_drawn_and_what_it_counts_is_what_was_asked_for(monkeypatch, tmp_path):
+    """The page draws the view that is picked and nothing else - the reason the radio replaced
+    tabs, which built all four on every rerun - and the bucket profile counts the key columns
+    plus whatever is added to it, not every compared column. What is picked survives a trip to
+    another view, which tabs used to give for free."""
+    at = _boot(monkeypatch, tmp_path)
+    run = at.session_state["result"]
+    keys = run["result"].keys
+    # Summary is drawn: no Downloads, no Report, no Columns & values
+    assert at.radio(key="res_view").value == "Summary"
+    texts = [m.value for m in at.main.markdown]
+    assert "#### Row counts" in texts
+    for other in ("#### Downloads", "#### Report", "#### Columns & values"):
+        assert other not in texts, other
+    assert not any(b.key in ("zip_run_btn", "save_all", "nearmatch") for b in at.button)
+    # the bucket profile draws the key columns, and whatever is added to it - see
+    # test_compare.test_bucket_profile_measures_only_what_is_asked_for for what it measures
+    other = next(c for c in run["result"].columns_compared if c not in keys)
+    at.multiselect(key="bucket_cols_differ").set_value([other]); at.run()
+    assert not at.exception, at.exception
+    # the pick is still there after a look at another view - Streamlit drops a widget it does
+    # not draw, and with one view at a time the other views are not drawn
+    _view(at, "Downloads")
+    _view(at, "Summary")
+    assert at.multiselect(key="bucket_cols_differ").value == [other]
+    assert at.session_state["bucket_id"] == "differ"
+    # the same for the column cards: 12 are open, the rest are a pick that is kept
+    _view(at, "Columns & values")
+    cards = at.multiselect(key="col_cards")
+    assert cards.value == [] and cards.options                   # something is folded away
+    shut = cards.options[0]
+    assert not any(e.label.startswith(f"**{shut}**") for e in at.expander)
+    cards.set_value([shut]); at.run()
+    assert any(e.label.startswith(f"**{shut}**") for e in at.expander)
+    _view(at, "Summary")
+    _view(at, "Columns & values")
+    assert at.multiselect(key="col_cards").value == [shut]
+
+
 def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     at = _boot(monkeypatch, tmp_path)
     run = at.session_state["result"]
@@ -160,6 +199,8 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     # Parquet on the switch: the copies land in the run folder and the zip follows
     _view(at, "Downloads")
     assert not any(p.suffix == ".parquet" for p in run["files"].values())
+    typed = tmp_path / "out" / "kept"                        # a folder the default would never be
+    at.text_input(key="save_all_dir").set_value(str(typed)); at.run()
     at.radio(key="out_fmt").set_value("parquet"); at.run()
     assert not at.exception, at.exception
     assert at.session_state["result"] is run                       # the format is not a setting: not stale
@@ -173,7 +214,8 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     # the rerun behind Write Parquet copies stops before the save box is drawn. Streamlit 1.56
     # dropped the box's state on that run and the app seeds it again; 1.64 keeps it. Either way
     # the box holds the run's own folder, not empty, and Save works at once
-    assert at.text_input(key="save_all_dir").value == str(saved)
+    assert at.text_input(key="save_all_dir").value == str(typed)     # not the default: what was typed
+    at.text_input(key="save_all_dir").set_value(str(saved)); at.run()
     at.button(key="save_all").click(); at.run()
     assert not any("Type a folder" in e.value for e in at.error)
     assert (saved / f"{pair}__paired.parquet").exists()

@@ -2,6 +2,7 @@
 from dataclasses import asdict
 from pathlib import Path
 
+import duckdb
 import pandas as pd
 
 from tablecmp.keys import key_uniqueness, suggest_keys, suggest_keys_single
@@ -307,6 +308,57 @@ def test_over_the_sample_a_level_is_cut_on_a_random_sample_then_verified(tmp_pat
     table, combos, note = suggest_keys(A, B, specs, "a", "b", OPTS)
     assert combos[0] == ["grp_id", "seq_no"] and all(table["Unique on both"] == "yes"), combos
     assert f"on a random sample of {KEY_SAMPLE:,} rows first" in note
+
+
+def test_a_combination_unique_only_on_the_sample_is_counted_on_every_row(monkeypatch):
+    """The sample cuts, it does not decide. `sampler` hands the search a chosen block of rows
+    rather than a random one, so `pick + alt` is unique in the block and has duplicates outside
+    it: it is counted on every row like the rest of its level, and it is no key. If the search
+    took the sample's word for it, it would be listed beside grp + seq, which holds everywhere."""
+    from tablecmp.keys import KEY_SAMPLE, search_keys, single_figures
+    from tablecmp.sql import scratch
+
+    n = KEY_SAMPLE + 2000
+    con = scratch()
+    con.execute(f"""CREATE TABLE t AS SELECT
+        CAST(i AS VARCHAR) AS pick, CAST(i % 2 AS VARCHAR) AS alt,
+        CAST(rn // 100 AS VARCHAR) AS grp, CAST(rn % 100 AS VARCHAR) AS seq, rn
+        FROM (SELECT CASE WHEN r < {KEY_SAMPLE} THEN r ELSE r - {KEY_SAMPLE} END AS i, r AS rn
+              FROM range({n}) AS x(r))""")
+    # pick repeats the first block's values outside the sample, and i - KEY_SAMPLE keeps the
+    # parity, so alt repeats with it: the pair is unique in the block and not on every row
+    cols = ["pick", "alt", "grp", "seq"]
+    totals = {"t": n}
+    singles, nulls = single_figures(con, ("t",), cols, totals)
+    assert singles["pick"]["t"] == KEY_SAMPLE                 # not unique on every row
+
+    seen = []
+    real = duckdb.DuckDBPyConnection.execute
+
+    def logged(self, sql, *a, **k):
+        seen.append(" ".join(str(sql).split()))
+        return real(self, sql, *a, **k)
+
+    def sampler(view, name, picks, rows):
+        """The first KEY_SAMPLE rows, where pick is unique - not a random sample."""
+        held = ", ".join(f'"{c}"' for c in picks)
+        con.execute(f"CREATE OR REPLACE TEMP TABLE {name} AS SELECT {held} FROM t "
+                    f"WHERE rn < {rows} ORDER BY rn")
+
+    monkeypatch.setattr(duckdb.DuckDBPyConnection, "execute", logged)
+    found, unique_sets, _note = search_keys(con, ("t",), totals, cols, singles, nulls,
+                                            {c: 1 for c in cols}, 2, 5, lambda _m: None,
+                                            sampler=sampler)
+    monkeypatch.undo()
+    unique = [sorted(c) for c, d, _ in found if d["t"] == n]
+    assert ["grp", "seq"] in unique, found              # holds everywhere: a key
+    assert ["alt", "pick"] not in unique, found         # holds on the sample alone: not a key
+    assert {"pick", "alt"} not in [set(u) for u in unique_sets]
+    # and pick + alt was counted on every row, not only on the sample that made it look unique
+    counted = [s for s in seen if "count(DISTINCT" in s and s.endswith("FROM t")
+               and '"pick"' in s and '"alt"' in s]
+    assert counted, [s[:140] for s in seen if "count(DISTINCT" in s][:4]
+    assert any(s.endswith("FROM __keys_0") for s in seen)     # the sample was counted first
 
 
 def test_a_measure_is_never_taken_beside_a_key(tmp_path):

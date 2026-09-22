@@ -173,6 +173,12 @@ def _profile_shown(keys: list[str], cols: list[str], res) -> list[str]:
     return (list(keys) + rest)[:PROFILE_COLS]
 
 
+def _shown_said(shown: list[str], cols: list[str], keys: list[str]) -> str:
+    """What a grid holds, said - a cap nobody is told about reads as the whole table."""
+    left = len(cols) - len([c for c in shown if c not in keys])
+    return f" · of {len(cols):,} compared columns, {left:,} not shown" if left > 0 else ""
+
+
 def _profile_grid(prof: dict, keys: list[str], top: int = 6) -> str:
     if not prof:
         return ""
@@ -432,7 +438,7 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
         parts.append(f"""<section class="sec" id="by-key"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Differences by <em>key value.</em></h2>
 <div class="sec-sub">the key is identical on both sides for these rows - this is where the differences sit, not what they are</div></div></div>
 <div class="body">{blocks}
-<h3 class="sec-sub" style="margin-top:26px">The key and the {len(shown) - len(keys)} columns that differ most, across the {res.diff_rows:,} rows that differ - top values, counted on each side{' · of ' + f'{len(cols):,}' + ' compared columns' if len(cols) > len(shown) else ''}</h3>{prof}</div></section>""")
+<h3 class="sec-sub" style="margin-top:26px">The key and the {max(len(shown) - len(keys), 0):,} columns that differ most, across the {res.diff_rows:,} rows that differ - top values, counted on each side{_shown_said(shown, cols, keys)}</h3>{prof}</div></section>""")
         df, marks = differing_rows(run, keys, cols, cap)
         parts.append(f"""<section class="sec" id="rows"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Rows that <em>differ.</em></h2>
 <div class="sec-sub">{esc(name_a)} above {esc(name_b)} · {min(res.diff_rows, cap):,} of {res.diff_rows:,} rows · capped at {limit:,} rows or {CELL_BUDGET:,} cells · differing cells marked</div></div></div>
@@ -446,7 +452,7 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
         frame = pd.read_csv(str(path), nrows=cap, dtype=str, keep_default_na=False, na_values=[""])
         parts.append(f"""<section class="sec" id="{sid}"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Only in <em>{esc(name)}.</em></h2>
 <div class="sec-sub">{min(total, cap):,} of {total:,} rows · capped at {limit:,} rows or {CELL_BUDGET:,} cells · no partner on the other side</div></div></div>
-<div class="body"><h3 class="sec-sub">Top values by column - the key columns are why these rows did not pair</h3>
+<div class="body"><h3 class="sec-sub">Top values by column - the key columns are why these rows did not pair{_shown_said(_profile_shown(keys, cols, res), cols, keys)}</h3>
 {_profile_grid(bucket_profile(run, keys, cols, "left" if tag == "left_only" else "right", only=_profile_shown(keys, cols, res)), keys)}
 <h3 class="sec-sub" style="margin-top:20px">The rows</h3>
 <div class="{"side-a" if tag == "left_only" else "side-b"}">{_table(frame)}</div></div></section>""")

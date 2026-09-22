@@ -519,16 +519,34 @@ def test_never_raises_on_odd_tables(tmp_path):
 
 def test_a_dependency_is_tried_on_a_sample_first_then_on_every_row(tmp_path, monkeypatch):
     """With the sample at a thousand rows: x determines y on the first thousand and not on
-    the second, so it is not listed; x determines z on every row, both ways, so the pair
-    is listed once as one-to-one. Every row is read for the ones that hold on the sample."""
+    the second, so it is not listed; x determines z on every row, both ways, so the pair is
+    listed once as one-to-one. What the statements say: the sample is held as a table of its
+    own, w - which fails inside the sample - is never asked about on every row, and y, which
+    holds on the sample, is asked about on both and only then let go. The sample cuts the
+    work; it does not decide."""
     import tablecmp.observe as observe_mod
+    from tablecmp.observe import dependencies, facts_of
     monkeypatch.setattr(observe_mod, "SAMPLE_ROWS", 1000)
-    rows = [[i, i // 10, (i // 10) if i < 1000 else -1 - (i % 3), i // 10] for i in range(2000)]
-    out = _measure(_side(_write(tmp_path / "dep.csv", ["id", "x", "y", "z"], rows)))
-    deps = out["deps"]
+    rows = [[i, i // 10, (i // 10) if i < 1000 else -1 - (i % 3), i // 10, i % 7]
+            for i in range(2000)]
+    side = _side(_write(tmp_path / "dep.csv", ["id", "x", "y", "z", "w"], rows))
+    con, specs, stats, freq, looks = _held(side)
+    con.sent.clear()
+    deps, _ = dependencies(con, "prof", [s.canon for s in specs], facts_of(stats), 2000)
     pairs = {(r["Determines"], r["Determined"]): r["Kind"] for _, r in deps.iterrows()}
     assert ("x", "z") in pairs and pairs[("x", "z")] == "one-to-one"
-    assert not any("y" in p for p in pairs), pairs
+    assert not any("y" in p or "w" in p for p in pairs), pairs
+    assert any("CREATE OR REPLACE TEMP TABLE __sample" in q for q in con.sent)
+    by_x = [q for q in con.sent if 'SELECT "x", count(*)' in q]
+    on_sample = [q for q in by_x if "FROM __sample" in q]
+    on_every = [q for q in by_x if "FROM prof" in q]
+    assert on_sample and on_every
+    assert any('"w"' in q for q in on_sample), on_sample        # fails inside the sample…
+    assert not any('"w"' in q for q in on_every), on_every      # …so every row is never read
+    for held in ('"y"', '"z"'):                                 # holds there: both are read
+        assert any(held in q for q in on_sample) and any(held in q for q in on_every), held
+
+    out = _measure(side)                                        # and as the page reads it
     assert any("x ↔ z: one-to-one" in n for n in out["notes"]), out["notes"]
     assert not any("x → y" in n for n in out["notes"])
 

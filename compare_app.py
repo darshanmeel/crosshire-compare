@@ -12,7 +12,6 @@ Everything else - colours, fonts, limits - is in tablecmp/theme.py.
 """
 from __future__ import annotations
 
-import inspect
 import json
 import os
 import re
@@ -299,14 +298,9 @@ def write_outputs(new_run: dict, cfg: dict, profile: dict | None, A: Side, B: Si
     so Save everything and the zip always hold the full set. The paired rows are the exception -
     they are written when they are asked for, and bring their own Parquet copy then."""
     limit = int(cfg["display_rows"])
-    extra = {}
-    accepts = inspect.signature(build_report).parameters
-    if "notes" in accepts:
-        extra["notes"] = cfg.get("notes") or []
-    if "profile" in accepts:
-        extra["profile"] = profile
     try:
-        html = build_report(new_run, A, B, NA, NB, limit=min(limit, 2000), **extra)
+        html = build_report(new_run, A, B, NA, NB, limit=min(limit, 2000),
+                            notes=cfg.get("notes") or [], profile=profile)
         new_run["_report"] = html
         new_run["_report_key"] = ("report", new_run["at"], limit)
         (Path(new_run["folder"]) / f"{new_run['pair']}__report.html").write_text(
