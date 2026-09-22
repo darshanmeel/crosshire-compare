@@ -295,7 +295,8 @@ def profile_section(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: Read
 # ---- Compare ------------------------------------------------------------------
 def write_outputs(new_run: dict, cfg: dict, profile: dict | None, A: Side, B: Side, NA: str, NB: str) -> None:
     """The report, the summary sheets and the Parquet copies land in the run folder right away,
-    so Save everything and the zip always hold the full set."""
+    so Save everything and the zip always hold the full set. The paired rows are the exception -
+    they are written when they are asked for, and bring their own Parquet copy then."""
     limit = int(cfg["display_rows"])
     extra = {}
     accepts = inspect.signature(build_report).parameters

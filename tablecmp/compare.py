@@ -603,7 +603,9 @@ def paired_path(run: dict) -> Path | None:
     over both sides joined and written out whole: on a 100,000-row, 200-column pair it was 19
     of the run's 80 seconds, and most runs are read on the page and never downloaded. So it is
     written on request, like the zip; once written it is in the folder, the file list and the
-    summary's listing like any other file. None when the run failed - nothing paired.
+    summary's listing like any other file - with its Parquet copy when the run keeps those,
+    since the copies were made before this file existed. None when the run failed - nothing
+    paired.
     """
     res, cfg = run["result"], run["cfg"]
     if res.error:
@@ -613,8 +615,11 @@ def paired_path(run: dict) -> Path | None:
         return have
     keys = list(res.keys or cfg["keys"]) if run["mode"] == "key" else []
     path = write_paired(run, keys, list(res.columns_compared or cfg["compare_columns"]))
-    from .outputs import refresh_listing
+    from .outputs import has_parquet, parquet_copy, refresh_listing
+    if has_parquet(run):
+        parquet_copy(run, "paired")
     refresh_listing(run)
+    run.pop("zip", None)              # a zip built before this file does not hold it
     return path
 
 

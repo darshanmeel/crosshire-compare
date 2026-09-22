@@ -175,11 +175,19 @@ def test_parquet_copies_and_zip(tmp_path, monkeypatch):
     from tablecmp.compare import paired_path
     run, A, B = _run(tmp_path, monkeypatch, fmt="both")
     out.write_summary(run, A, B, "hr", "payroll")
-    paired_path(run)                              # what the page writes before it copies or zips
-    written = out.write_parquet_copies(run)
+    written = out.write_parquet_copies(run)       # the order the app writes in: copies at run time…
     names = {p.name for p in written}
     assert {"hr_compare_payroll__cell_diffs.parquet", "hr_compare_payroll__left_only.parquet",
-            "hr_compare_payroll__paired.parquet", "hr_compare_payroll__columns.parquet"} <= names
+            "hr_compare_payroll__columns.parquet"} <= names
+    assert "hr_compare_payroll__paired.parquet" not in names      # …before the paired rows exist
+    # so the paired rows bring their own copy when they are asked for, and drop the stale zip
+    stale = out.zip_run(run)
+    paired_path(run)
+    assert not run.get("zip") and stale.exists()
+    pq = Path(run["folder"]) / "hr_compare_payroll__paired.parquet"
+    assert pq.exists() and run["files"][pq.name] == pq
+    js = json.loads(Path(run["folder"], "hr_compare_payroll__summary.json").read_text(encoding="utf-8"))
+    assert {"hr_compare_payroll__paired.csv", pq.name} <= {f["name"] for f in js["files"]}
     assert "hr_compare_payroll__cell_diffs.parquet" in run["files"]
     z = out.zip_run(run)
     assert z.name.startswith("hr_compare_payroll__") and z.suffix == ".zip"

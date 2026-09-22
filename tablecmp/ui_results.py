@@ -470,10 +470,12 @@ def downloads_tab(run, A, B, NA, NB, limit) -> None:
     if st.button("Zip the whole run", key="zip_run_btn",
                  help="Every file of this run in one archive - the paired rows written first when "
                       "they are not on disk yet - next to the run folder"):
-        with st.spinner("Writing the paired rows and zipping…" if not have_paired(run)
-                        else "Zipping the run folder…"):
+        wrote = not have_paired(run)
+        with st.spinner("Writing the paired rows and zipping…" if wrote else "Zipping the run folder…"):
             paired_path(run)
             zip_run(run)
+        if wrote:
+            st.rerun()      # the offer and the picker above were drawn without the file
     z = run.get("zip")
     if z and z.exists():
         st.download_button(f"Download {z.name} · {z.stat().st_size / 1e6:,.1f} MB", z.read_bytes(),

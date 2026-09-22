@@ -123,9 +123,16 @@ def test_downloads_tab_and_saves(monkeypatch, tmp_path):
     assert (folder / f"{pair}__paired.csv").exists()
     assert any(p.startswith("Paired rows") for p in at.selectbox(key=f"dl_pick_{rid}").options)
     assert not any(b.key == "write_paired_btn" for b in at.button)      # written once, then kept
+    # a file that went away - the sweep, or a hand - is offered again, and the zip writes it itself
+    (folder / f"{pair}__paired.csv").unlink()
+    at.run()
+    assert any(b.key == "write_paired_btn" for b in at.button)
     # the zip is built when it is asked for, and holds every file
     assert not run.get("zip")
     at.button(key="zip_run_btn").click(); at.run()
+    assert not at.exception, at.exception
+    assert (folder / f"{pair}__paired.csv").exists()                    # the zip wrote it first
+    assert not any(b.key == "write_paired_btn" for b in at.button)
     z = run["zip"]
     assert z.name == f"{pair}__{rid}.zip" and z.parent == folder.parent
     with zipfile.ZipFile(z) as zf:

@@ -2,8 +2,8 @@
 
 <pair>__<run_id>/ with <pair>__summary.json (the whole run for a script), __summary.csv
 (one row, fixed columns), __columns.csv, __profile.csv when a profile ran, the engine's
-__cell_diffs / __left_only / __right_only / __diff.html, __paired.csv, __report.html, the same
-tables as Parquet on a switch, and a zip of the lot. <pair> is <left>_compare_<right>, from the
+__cell_diffs / __left_only / __right_only / __diff.html, __report.html, __paired.csv when it is
+asked for, the same tables as Parquet on a switch, and a zip of the lot. <pair> is <left>_compare_<right>, from the
 side names - the Name box, else a database side's connection, else Left / Right.
 """
 from __future__ import annotations
@@ -230,20 +230,31 @@ def refresh_listing(run: dict) -> None:
     _relist_summary(run)
 
 
+def parquet_copy(run: dict, table: str) -> Path | None:
+    """One table of the run as Parquet next to its CSV - None when there is no such CSV yet.
+    Its own call so a table written later than the rest, the paired rows, gets its copy without
+    every other table being written again."""
+    folder, pair = Path(run["folder"]), run["pair"]
+    src = folder / f"{pair}__{table}.csv"
+    if not src.exists():
+        return None
+    dst = folder / f"{pair}__{table}.parquet"
+    con = duckdb.connect()
+    con.execute(f"COPY (SELECT * FROM read_csv({lit(str(src))}, all_varchar=true, header=true)) "
+                f"TO {lit(str(dst))} (FORMAT PARQUET)")
+    con.close()
+    return dst
+
+
+def has_parquet(run: dict) -> bool:
+    """Whether this run keeps Parquet copies - the switch it ran under, or copies already made."""
+    return ("parquet" in (run["cfg"].get("table_formats") or [])
+            or any(p.suffix == ".parquet" for p in run["files"].values()))
+
+
 def write_parquet_copies(run: dict) -> list[Path]:
     """Every CSV table of the run as Parquet next to it, through DuckDB."""
-    folder, pair = Path(run["folder"]), run["pair"]
-    con = duckdb.connect()
-    written = []
-    for t in TABLES:
-        src = folder / f"{pair}__{t}.csv"
-        if not src.exists():
-            continue
-        dst = folder / f"{pair}__{t}.parquet"
-        con.execute(f"COPY (SELECT * FROM read_csv({lit(str(src))}, all_varchar=true, header=true)) "
-                    f"TO {lit(str(dst))} (FORMAT PARQUET)")
-        written.append(dst)
-    con.close()
+    written = [p for p in (parquet_copy(run, t) for t in TABLES) if p]
     refresh_listing(run)
     run.pop("zip", None)                         # the zip, if one was built, is stale now
     return written
