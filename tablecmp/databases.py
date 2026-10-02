@@ -9,6 +9,7 @@ How read-only is kept, per kind: DuckDB opens the file with read_only=True; Post
 default_transaction_read_only=on for the session; Oracle runs SET TRANSACTION READ ONLY before
 the statement; SQL Server connects with read_only application intent, autocommit off and a
 rollback on close; Snowflake and Databricks rely on the role of the user in the connection.
+Snowflake logs in with a password, or with a key pair (see snowflake_key).
 On top of that check_read_only refuses anything that is not a single SELECT or WITH statement
 before a connection is even opened.
 """
@@ -189,6 +190,45 @@ def _import(kind: str):
         raise DriverMissing(f"{KINDS[kind]} needs the {pkg} package: pip install {pkg}") from exc
 
 
+_PEM = re.compile(r"-----BEGIN ([A-Z ]+)-----(.*?)-----END \1-----", re.S)
+
+
+def _pem(text: str) -> bytes:
+    """A PEM block put back together: a single-line box drops the newlines a pasted key had."""
+    m = _PEM.search(text)
+    if not m:
+        raise ValueError("The private key is not a PEM block (-----BEGIN ... PRIVATE KEY-----)")
+    body = "".join(m.group(2).split())
+    lines = [body[i:i + 64] for i in range(0, len(body), 64)]
+    return "\n".join([f"-----BEGIN {m.group(1)}-----", *lines, f"-----END {m.group(1)}-----", ""]).encode()
+
+
+def snowflake_key(c: Connection) -> bytes | None:
+    """The DER private key for Snowflake key-pair login, or None for a password login.
+
+    The key comes from the private_key_file extra, or is the password box itself when what
+    was typed there is a PEM block; private_key_pwd is its passphrase, when it has one."""
+    path = (c.extra.get("private_key_file") or "").strip()
+    if path:
+        try:
+            pem = Path(path).expanduser().read_bytes()
+        except OSError as e:
+            raise ValueError(f"Cannot read the private key file {path}: {e.strerror}") from None
+    elif c.password and "-----BEGIN" in c.password:
+        pem = _pem(c.password)
+    else:
+        return None
+    from cryptography.hazmat.primitives import serialization
+    pwd = c.extra.get("private_key_pwd") or None
+    try:
+        key = serialization.load_pem_private_key(pem, password=pwd.encode() if pwd else None)
+    except (ValueError, TypeError) as e:
+        hint = ("it is encrypted - give its passphrase" if "encrypted" in str(e) and not pwd else
+                "wrong passphrase, or not a PEM private key")
+        raise ValueError(f"The Snowflake private key could not be read: {hint}") from None
+    return key.private_bytes(serialization.Encoding.DER, serialization.PrivateFormat.PKCS8,
+                             serialization.NoEncryption())
+
 def connect(c: Connection):
     """A DB-API connection, read-only wherever the driver has a switch; never commits."""
     login = min(c.timeout, 10)
@@ -200,9 +240,12 @@ def connect(c: Connection):
         # read-only, and no reading of other files on the server through the SQL box
         return m.connect(c.host, read_only=True, config={"enable_external_access": "false"})
     if kind == "snowflake":
-        return m.connect(user=c.user, password=c.password, account=c.host, database=c.database or None,
+        key = snowflake_key(c)
+        auth = ({"private_key": key, "authenticator": "SNOWFLAKE_JWT"} if key is not None else
+                {"password": c.password, "authenticator": c.extra.get("authenticator") or "snowflake"})
+        return m.connect(user=c.user, account=c.host, database=c.database or None,
                          schema=c.schema or None, warehouse=c.extra.get("warehouse") or None,
-                         role=c.extra.get("role") or None, authenticator=c.extra.get("authenticator") or "snowflake",
+                         role=c.extra.get("role") or None, **auth,
                          login_timeout=login, network_timeout=c.timeout,
                          session_parameters={"STATEMENT_TIMEOUT_IN_SECONDS": c.timeout})
     if kind == "databricks":

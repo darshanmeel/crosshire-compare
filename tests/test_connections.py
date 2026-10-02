@@ -136,6 +136,24 @@ def test_redact():
     assert "postgresql://u:***@h/db" in r
 
 
+def test_resolve_snowflake_key_file_needs_no_password(tmp_path, monkeypatch):
+    monkeypatch.setenv("COMPARE_CONNECTIONS", str(tmp_path / "c.json"))
+    cx.save(cx.Connection(name="kp", kind="snowflake", host="acct", user="u",
+                          extra={"private_key_file": "C:/keys/rsa_key.p8"}))
+    assert cx.resolve("kp", {}).password is None
+    c = cx.from_uri("kp", "snowflake://u@acct/DB?private_key_file=C:/keys/rsa_key.p8")
+    assert c.extra["private_key_file"] == "C:/keys/rsa_key.p8" and cx.needs_no_password(c)
+
+
+def test_redact_private_keys():
+    s = ("bad key -----BEGIN PRIVATE KEY-----MIIEvQIBADANBg-----END PRIVATE KEY----- and "
+         "-----BEGIN ENCRYPTED PRIVATE KEY-----MIIFHz cut off private_key_pwd=hunter2")
+    r = cx.redact(s)
+    for word in ("MIIEvQ", "MIIFHz", "hunter2"):
+        assert word not in r
+    assert r.startswith("bad key ***")
+
+
 def test_redact_json_shaped_driver_message():
     s = ('{"headers": {"Authorization": "Bearer EXAMPLE_TOKEN"}, "password": "example-pw", '
          'api_key: sk-1, secret: s3} at snowflake://svc:p%40ss@acct/DB')

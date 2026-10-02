@@ -4,6 +4,7 @@ Made in the sidebar, kept in connections.json in the user's home folder (never i
 and overridable one by one with COMPARE_CONN_<NAME>=<uri>. The URI form is Airflow's:
 
     snowflake://USER:PASS@ACCOUNT/DB/SCHEMA?warehouse=WH&role=R
+    snowflake://USER@ACCOUNT/DB/SCHEMA?warehouse=WH&private_key_file=C:/keys/rsa_key.p8
     databricks://token:TOKEN@host/?http_path=/sql/1.0/warehouses/x&catalog=c&schema=s
     mssql://user:pass@server:1433/db
     oracle://user:pass@host:1521/?service_name=X
@@ -249,13 +250,18 @@ def delete(name: str) -> None:
     _write_file(conns)
 
 
+def needs_no_password(c: Connection) -> bool:
+    """DuckDB, or a Snowflake key-pair login from a key file: the key is the credential."""
+    return c.kind == "duckdb" or (c.kind == "snowflake" and bool((c.extra.get("private_key_file") or "").strip()))
+
+
 def resolve(name: str, passwords: dict[str, str] | None = None) -> Connection:
     """The connection with a password: saved, or typed this session, else PasswordNeeded."""
     conns = load_all()
     if name not in conns:
         raise KeyError(f"No connection called {name}")
     c = conns[name]
-    if c.password is None and c.kind != "duckdb":
+    if c.password is None and not needs_no_password(c):
         typed = (passwords or {}).get(name)
         if not typed:
             raise PasswordNeeded(name)
@@ -265,13 +271,15 @@ def resolve(name: str, passwords: dict[str, str] | None = None) -> Connection:
 
 # ---- redaction ------------------------------------------------------------------------
 
-_SECRET_KV = re.compile(r"(?i)\b(password|passwd|pwd|token|secret|api_key)\b[\"']?\s*[=:]\s*\S+")
+_SECRET_PEM = re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----.*?(-----END [A-Z ]*PRIVATE KEY-----|$)", re.S)
+_SECRET_KV = re.compile(r"(?i)\b(password|passwd|pwd|private_key_pwd|token|secret|api_key)\b[\"']?\s*[=:]\s*\S+")
 _SECRET_AUTH = re.compile(r"(?i)authorization[\"']?\s*:\s*\S+(\s+\S+)?")
 _SECRET_URI = re.compile(r"(\w+://[^:/@\s]+:)[^@\s]+(@)")
 
 
 def redact(text: str) -> str:
-    """Driver messages with every password, token and user:pass@ blanked."""
-    text = _SECRET_URI.sub(r"\1***\2", str(text))
+    """Driver messages with every password, token, private key and user:pass@ blanked."""
+    text = _SECRET_PEM.sub("***", str(text))
+    text = _SECRET_URI.sub(r"\1***\2", text)
     text = _SECRET_AUTH.sub("authorization: ***", text)
     return _SECRET_KV.sub(lambda m: m.group(1) + "=***", text)

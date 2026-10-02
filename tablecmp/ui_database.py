@@ -16,7 +16,7 @@ from . import databases as db
 from . import ui_log
 from .sources import Side, work_dir
 
-EXTRAS = {"snowflake": ["warehouse", "role", "authenticator"], "databricks": ["http_path", "token", "catalog"],
+EXTRAS = {"snowflake": ["warehouse", "role", "authenticator", "private_key_file", "private_key_pwd"], "databricks": ["http_path", "token", "catalog"],
           "oracle": ["service_name"], "mssql": [], "postgresql": [], "duckdb": []}
 FIELDS = {"snowflake": ["host", "user", "password", "database", "schema"],
           "databricks": ["host", "schema"], "mssql": ["host", "port", "database", "user", "password"],
@@ -24,7 +24,11 @@ FIELDS = {"snowflake": ["host", "user", "password", "database", "schema"],
           "duckdb": ["host"]}
 LABELS = {"host": "Host", "port": "Port", "database": "Database", "schema": "Schema", "user": "User",
           "password": "Password", "warehouse": "Warehouse", "role": "Role", "authenticator": "Authenticator (optional)",
-          "http_path": "HTTP path", "token": "Access token", "catalog": "Catalog", "service_name": "Service name"}
+          "http_path": "HTTP path", "token": "Access token", "catalog": "Catalog", "service_name": "Service name",
+          "private_key_file": "Private key file (key-pair login, optional)",
+          "private_key_pwd": "Private key passphrase (optional)"}
+PASSWORD_LABEL = {"snowflake": "Password - or paste the private key (PEM)"}
+SECRET_EXTRAS = {"token", "private_key_pwd"}
 HOST_LABEL = {"snowflake": "Account", "databricks": "Server hostname", "mssql": "Server", "duckdb": "File path"}
 NEW = "New connection"
 CAP_DEFAULT = 1_000_000
@@ -71,8 +75,9 @@ def source_panel(tag: str) -> tuple[str, str, Side | None]:
     if st.session_state.get(f"_pw_for_{tag}") != name:        # a password typed for another connection
         st.session_state.pop(f"pw_{tag}", None)
         st.session_state[f"_pw_for_{tag}"] = name
-    if c.password is None and c.kind != "duckdb":
-        pw = st.text_input("Password - kept for this session only", type="password", key=f"pw_{tag}")
+    if c.password is None and not cx.needs_no_password(c):
+        what_pw = "Password or private key" if c.kind == "snowflake" else "Password"
+        pw = st.text_input(f"{what_pw} - kept for this session only", type="password", key=f"pw_{tag}")
         if pw:
             _passwords()[name] = pw
     mode = st.radio("Read", ["Table", "SQL query"], horizontal=True, key=f"dbmode_{tag}", label_visibility="collapsed")
@@ -163,6 +168,7 @@ def manager() -> None:
             return
         for n, c in sorted(conns.items()):
             pw = ("env · read-only" if c.source == "env" else
+                  "private key file" if c.kind == "snowflake" and cx.needs_no_password(c) else
                   "password saved" if c.password is not None else "password asked each session")
             st.markdown(f"**{n}** · {c.label} · {c.where} · {pw}")
         if not conns:
@@ -185,14 +191,14 @@ def manager() -> None:
         for f in FIELDS[kind]:
             label = HOST_LABEL.get(kind, LABELS["host"]) if f == "host" else LABELS[f]
             if f == "password":
-                vals[f] = st.text_input(label, type="password", key="cf_password",
+                vals[f] = st.text_input(PASSWORD_LABEL.get(kind, label), type="password", key="cf_password",
                                         placeholder="unchanged" if cur and cur.password is not None else "")
             elif f == "port":
                 vals[f] = st.number_input(label, 0, 65535, key="cf_port")
             else:
                 vals[f] = st.text_input(label, key=f"cf_{f}")
         for e in EXTRAS[kind]:
-            vals[e] = st.text_input(LABELS[e], key=f"cf_{e}", type="password" if e == "token" else "default")
+            vals[e] = st.text_input(LABELS[e], key=f"cf_{e}", type="password" if e in SECRET_EXTRAS else "default")
         save_pw = st.checkbox("Save password", key="cf_save_pw",
                               help="Unticked: the password is asked for once per session and never written to disk.")
         timeout = int(st.number_input("Query timeout, seconds", 10, 86400, key="cf_timeout"))

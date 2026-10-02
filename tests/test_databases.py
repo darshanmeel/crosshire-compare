@@ -172,6 +172,63 @@ def test_connect_passes_the_read_only_switches(monkeypatch):
     assert ora["dsn"] == "h:1521/d" and con.call_timeout == 30_000
 
 
+def _rsa_pem(passphrase: bytes | None = None) -> tuple[str, bytes]:
+    """A fresh RSA key as PEM text, and its DER (PKCS#8, unencrypted) - what Snowflake is handed."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    enc = (serialization.BestAvailableEncryption(passphrase) if passphrase else serialization.NoEncryption())
+    pem = key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, enc).decode()
+    der = key.private_bytes(serialization.Encoding.DER, serialization.PrivateFormat.PKCS8,
+                            serialization.NoEncryption())
+    return pem, der
+
+
+def test_snowflake_password_login_is_unchanged(monkeypatch):
+    calls = []
+    _stub_driver(monkeypatch, "snowflake.connector", calls)
+    db.connect(Connection(name="p", kind="snowflake", host="acct", user="u", password="pw"))
+    assert calls[0]["password"] == "pw" and calls[0]["authenticator"] == "snowflake"
+    assert "private_key" not in calls[0]
+
+
+def test_snowflake_key_pair_from_a_file(tmp_path, monkeypatch):
+    calls = []
+    _stub_driver(monkeypatch, "snowflake.connector", calls)
+    pem, der = _rsa_pem(b"s3cret")
+    (tmp_path / "rsa_key.p8").write_text(pem)
+    db.connect(Connection(name="p", kind="snowflake", host="acct", user="u",
+                          extra={"private_key_file": str(tmp_path / "rsa_key.p8"), "private_key_pwd": "s3cret"}))
+    kw = calls[0]
+    assert kw["private_key"] == der and kw["authenticator"] == "SNOWFLAKE_JWT" and "password" not in kw
+
+
+def test_snowflake_key_pasted_into_the_password_box(monkeypatch):
+    """A single-line password box drops the newlines; the key still reads."""
+    calls = []
+    _stub_driver(monkeypatch, "snowflake.connector", calls)
+    pem, der = _rsa_pem()
+    db.connect(Connection(name="p", kind="snowflake", host="acct", user="u", password=pem.replace("\n", "")))
+    assert calls[0]["private_key"] == der and calls[0]["authenticator"] == "SNOWFLAKE_JWT"
+
+
+@pytest.mark.parametrize("pwd, says", [(None, "encrypted - give its passphrase"), ("wrong", "wrong passphrase")])
+def test_snowflake_key_errors_say_why_and_never_show_the_key(tmp_path, monkeypatch, pwd, says):
+    _stub_driver(monkeypatch, "snowflake.connector", [])
+    pem, _ = _rsa_pem(b"s3cret")
+    extra = {"private_key_pwd": pwd} if pwd else {}
+    with pytest.raises(ValueError) as e:
+        db.connect(Connection(name="p", kind="snowflake", host="acct", user="u", password=pem, extra=extra))
+    assert says in str(e.value) and "PRIVATE KEY" not in str(e.value)
+
+
+def test_snowflake_missing_key_file_is_a_clear_error(tmp_path, monkeypatch):
+    _stub_driver(monkeypatch, "snowflake.connector", [])
+    with pytest.raises(ValueError, match="Cannot read the private key file"):
+        db.connect(Connection(name="p", kind="snowflake", host="acct", user="u",
+                              extra={"private_key_file": str(tmp_path / "nope.p8")}))
+
+
 def test_oracle_sets_the_transaction_read_only_first(tmp_path, monkeypatch):
     fc = FakeConn(FakeCursor([]))
     monkeypatch.setattr(db, "connect", lambda c: fc)
