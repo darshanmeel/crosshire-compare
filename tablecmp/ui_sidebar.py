@@ -9,7 +9,7 @@ from pathlib import Path
 import duckdb
 import streamlit as st
 
-from . import ui_database
+from . import filepick, ui_database
 from .sources import (Side, apply_names, file_stamp, kind_of, looks_headerless, path_allowed,
                       quick_clause, row_count, short_header, snapshot, source_schema, work_dir)
 from .state import DEFAULT_NAMES, drop_result
@@ -54,8 +54,12 @@ def source_panel(tag: str) -> None:
     path, label, origin = "", "", ""
     db_side: Side | None = None
     if how == "Upload":
+        limit = int(st.get_option("server.maxUploadSize"))
         up = st.file_uploader("CSV or JSON file", type=["csv", "txt", "tsv", "dat", "json", "jsonl", "ndjson", "parquet"],
                               key=f"up_{tag}", help="CSV / delimited text, or JSON - an array of objects or one object per line")
+        st.caption(f"Up to {limit:,} MB. A bigger file - or any big one, since an upload is copied - "
+                   "is read where it lies: **Path on disk**"
+                   + (", then **Browse…**." if filepick.available() else "."))
         if up is not None:
             path, label = staged_upload(tag, up), up.name
     elif how == "Database":
@@ -65,7 +69,25 @@ def source_panel(tag: str) -> None:
             if name.strip() in ("", DEFAULT_NAMES[tag]):
                 name = db_side.conn
     else:
-        p = st.text_input("Path to CSV or JSON", key=f"pt_{tag}",
+        if f"_picked_{tag}" in st.session_state:          # Browse chose it last run, before the box existed
+            st.session_state[f"pt_{tag}"] = st.session_state.pop(f"_picked_{tag}")
+        if filepick.available():
+            c1, c2 = st.columns([3, 1])
+            c2.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
+            if c2.button("Browse…", key=f"browse_{tag}", width="stretch",
+                         help="Opens the file dialog on the machine the app runs on - the file is read "
+                              "where it lies, never copied, so it can be any size."):
+                try:
+                    chosen = filepick.pick_file(str(Path(st.session_state.get(f"pt_{tag}") or "").parent))
+                except RuntimeError as exc:
+                    st.error(str(exc))
+                else:
+                    if chosen:
+                        st.session_state[f"_picked_{tag}"] = chosen
+                        st.rerun()
+        else:
+            c1 = st.container()
+        p = c1.text_input("Path to CSV or JSON", key=f"pt_{tag}",
                           placeholder=r"C:\data\exports\employees_2026-09.csv").strip()
         if p:
             if not Path(p).is_file():

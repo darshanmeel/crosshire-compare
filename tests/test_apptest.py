@@ -418,3 +418,44 @@ def test_profiling_page_from_a_database(monkeypatch, tmp_path):
     assert at.text_input(key="save_profile_P_dir").value.startswith(os.environ["COMPARE_OUT_DIR"])
     assert [e["kind"] for e in at.session_state["log"][-3:]] == ["Fetch", "Profile", "Profile notes"]
     assert at.session_state["log"][-2]["label"].startswith("Profile ready - key: EmployeeId in ")
+
+
+def test_key_written_differently_is_fixed_or_offered(monkeypatch, tmp_path):
+    """Auto removes the spaces 'AB 7' has against 'AB7' and says so in the Key section; the
+    prefix ref carries on one side only is offered with Apply, and Apply puts it in the table."""
+    from tablecmp.values import steps_from_json
+    a, b = tmp_path / "a.csv", tmp_path / "b.csv"
+    a.write_text("emp_code,ref,salary\n" + "".join(f"AB {i},R-{i:03d}x,{i * 10}\n" for i in range(1, 41)))
+    b.write_text("emp_code,ref,salary\n" + "".join(f"AB{i},{i:03d}x,{i * 10}\n" for i in range(1, 41)))
+    at = _boot(monkeypatch, tmp_path)
+    for tag, path in (("A", a), ("B", b)):
+        at.radio(key=f"how_{tag}").set_value("Path on disk").run()
+        at.text_input(key=f"pt_{tag}").input(str(path)).run()
+        _ok(at.button(key=f"load_{tag}").click().run())
+    _ok(at.button(key="auto_btn").click().run())
+    at = _ok(at.run())
+    assert any(i.value.startswith("emp_code: the two sides write the key differently") for i in at.info)
+    assert any(w.value.startswith("ref: ") and "Suggested" in w.value for w in at.warning)
+    _ok(at.button(key="kf_apply_1").click().run())
+    row = at.session_state["cmap"].set_index("Common name")
+    assert steps_from_json(row.at["ref", "A steps"])[0]["op"] == "regex replace"
+    assert any(i.value.startswith("ref: ") for i in at.info)
+
+
+def test_profile_checks_key_like_columns_first(monkeypatch, tmp_path):
+    """Profile both files, no key ticked: emp_code reads like a key, so its spaces are removed
+    before the profile is measured - and the profile is current for the fixed table."""
+    from tablecmp.values import steps_from_json
+    a, b = tmp_path / "a.csv", tmp_path / "b.csv"
+    a.write_text("emp_code,salary\n" + "".join(f"AB {i},{i * 10}\n" for i in range(1, 41)))
+    b.write_text("emp_code,salary\n" + "".join(f"AB{i},{i * 10}\n" for i in range(1, 41)))
+    at = _boot(monkeypatch, tmp_path)
+    for tag, path in (("A", a), ("B", b)):
+        at.radio(key=f"how_{tag}").set_value("Path on disk").run()
+        at.text_input(key=f"pt_{tag}").input(str(path)).run()
+        _ok(at.button(key=f"load_{tag}").click().run())
+    _ok(at.button(key="do_profile").click().run())
+    row = at.session_state["cmap"].set_index("Common name")
+    assert steps_from_json(row.at["emp_code", "A steps"]) == [{"op": "remove spaces", "params": {}}]
+    assert any(i.value.startswith("emp_code: ") for i in at.info)
+    assert not [c for c in at.caption if c.value.startswith("This profile is from earlier settings")]

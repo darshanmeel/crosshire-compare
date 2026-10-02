@@ -59,6 +59,7 @@ def seed_table(A: Side, B: Side, opts: ReadOptions) -> None:
         st.session_state["cmap"] = build_table(A, B, st.session_state["looks_like"])
         st.session_state["cmap_seed"] = seed_key
         st.session_state.pop("auto_notes", None)
+        st.session_state.pop("key_formats", None)
         bump()
         forget_results()
 

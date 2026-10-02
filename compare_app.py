@@ -159,9 +159,10 @@ def auto_step(A: Side, B: Side, NA: str, NB: str, opts: ReadOptions) -> None:
             t0 = time.perf_counter()
             cm = st.session_state.get("cmap")
             before = current_profile(profile_key_for(A, B, specs_from(cm), opts) if cm is not None else None)
+            fixes: list = []
             new_map, notes, chosen, made = auto_configure(
                 A, B, NA, NB, opts, box.write, profile=before,
-                want_profile=bool(st.session_state["auto_profile"]))
+                want_profile=bool(st.session_state["auto_profile"]), found_fixes=fixes)
         except (duckdb.Error, RuntimeError) as exc:
             box.update(state="error")
             st.error(f"Auto stopped: {exc}")
@@ -174,6 +175,9 @@ def auto_step(A: Side, B: Side, NA: str, NB: str, opts: ReadOptions) -> None:
             st.session_state["auto_notes"] = notes          # the report's notes come from here
             ui_log.note("Auto decisions", f"{len(notes)} decisions - every one a cell in the column table", notes)
             st.session_state["auto_go"] = True
+            # what was fixed and what waits for Apply, in the Key section
+            st.session_state["key_formats"] = (tuple(dict.fromkeys(f.canon for f in fixes)),
+                                               [(f, f.simple) for f in fixes]) if fixes else None
             bump()
             forget_results()                     # drops the profile too - so store it after
             if made is not None:
@@ -246,10 +250,21 @@ def profile_section(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: Read
     if st.button("Profile both files", key="do_profile", type="primary"):
         try:
             with ui_log.running("Profiling…", "Profile", here=True) as box:
-                st.session_state["profile"] = (profile_key, profile_tables(A, B, setup.specs, opts, box.write))
+                specs, cols = setup.specs, ui_keys.key_like(A, B, setup)
+                if cols:
+                    # first, so the profile is measured on the key as it will be matched
+                    box.write(f"Checking whether {', '.join(cols)} is written differently on the two sides…")
+                    if ui_keys.check_formats(A, B, setup, opts, cols):
+                        specs = specs_from(st.session_state["cmap"])
+                        profile_key = profile_key_for(A, B, specs, opts)
+                        box.write("Fixed - see the Key section")
+                st.session_state["profile"] = (profile_key, profile_tables(A, B, specs, opts, box.write))
                 box.update(label="Profile ready", state="complete")
         except duckdb.Error as exc:
             st.error(f"Profile failed: {exc}")
+        else:
+            if specs is not setup.specs:
+                st.rerun()                       # the column table changed under this run
     prof = st.session_state.get("profile")
     if not prof:
         return

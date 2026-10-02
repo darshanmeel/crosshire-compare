@@ -5,11 +5,72 @@ import duckdb
 import streamlit as st
 
 from . import ui_log
-from .keys import MAX_KEY_COLS, key_uniqueness, suggest_keys
+from .columns import set_steps
+from .keyformat import Fix, applied, key_format_fixes
+from .keys import MAX_KEY_COLS, key_affinity, key_uniqueness, suggest_keys
 from .sources import Side
 from .state import bump, forget_results
 from .ui_columns import Setup
 from .values import ReadOptions
+
+
+# ---- key formats: a key the two sides write differently ----------------------------
+def _apply_fix(setup: Setup, fx: Fix) -> bool:
+    """The fix's steps after the column's own, into the column table; False when the column is gone."""
+    spec = next((sp for sp in setup.specs if sp.canon == fx.canon), None)
+    if spec is None:
+        return False
+    sa, sb = applied(spec, fx)
+    cm = st.session_state["cmap"]
+    set_steps(cm, fx.canon, "A", sa)
+    set_steps(cm, fx.canon, "B", sb)
+    return True
+
+
+def key_like(A: Side, B: Side, setup: Setup) -> list[str]:
+    """The key, or - with none ticked - the text columns whose names read like one."""
+    return setup.keys or [sp.canon for sp in setup.specs if sp.kind == "text" and key_affinity(
+        sp.canon, A.schema.get(sp.a_src, ""), B.schema.get(sp.b_src, "")) >= 3]
+
+
+def check_formats(A: Side, B: Side, setup: Setup, opts: ReadOptions, cols: list[str]) -> bool:
+    """Look for key columns written differently on the two sides: the simple fixes go into
+    the column table now, the rest wait in the Key section for Apply. True when the table
+    changed - the caller reruns."""
+    fixes = key_format_fixes(A, B, setup.specs, cols, opts)
+    done = [fx for fx in fixes if fx.simple and _apply_fix(setup, fx)]
+    st.session_state["key_formats"] = (tuple(cols), [(fx, fx in done) for fx in fixes])
+    if done:
+        bump()
+        forget_results()
+    return bool(done)
+
+
+def formats_panel(setup: Setup) -> None:
+    """What the last format check found: what was applied, and Apply for each suggestion."""
+    held = st.session_state.get("key_formats")
+    if not held:
+        return
+    cols, found = held
+    if not found:
+        st.caption(f"Key formats checked ({', '.join(cols)}): the two sides write them alike.")
+        return
+    for i, (fx, done) in enumerate(found):
+        if done:
+            st.info(f"{fx.said}. Applied - the steps are in the column table, change them there.")
+            continue
+        f1, f2 = st.columns([5, 1])
+        f1.warning(f"{fx.said}. Suggested - the values may mean something the steps would drop, "
+                   "so it waits for you.")
+        if f2.button("Apply", key=f"kf_apply_{i}", width="stretch", type="primary"):
+            if _apply_fix(setup, fx):
+                found[i] = (fx, True)
+                bump()
+                forget_results()
+            st.rerun()
+    if st.button("Dismiss", key="kf_dismiss"):
+        st.session_state.pop("key_formats", None)
+        st.rerun()
 
 
 def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
@@ -17,6 +78,12 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
     """Returns the pairing mode: key, hash or position. A current profile, when given, saves
     Suggest keys measuring the single columns again."""
     keys = setup.keys
+    if keys and st.session_state.pop("_check_formats", False):      # a key just picked
+        try:
+            if check_formats(A, B, setup, opts, keys):
+                st.rerun()
+        except duckdb.Error as exc:
+            st.error(f"Could not check the key's formats: {exc}")
     k1, k2, k3 = st.columns([4, 1, 1])
     with k1:
         if keys:
@@ -88,6 +155,7 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
                 paired = (cm["A column"] != "") & (cm["B column"] != "")
                 cm.loc[paired, "Key"] = cm.loc[paired, "Common name"].isin(chosen)
                 st.session_state.pop("key_suggestions", None)
+                st.session_state["_check_formats"] = True
                 bump()
                 forget_results()
                 st.rerun()
@@ -95,7 +163,14 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
                 st.session_state.pop("key_suggestions", None)
                 st.rerun()
 
+    check = check or (keys and st.session_state.pop("_check_again", False))
     if keys and check:
+        try:
+            if check_formats(A, B, setup, opts, keys):           # the key report counts the fixed values
+                st.session_state["_check_again"] = True
+                st.rerun()
+        except duckdb.Error as exc:
+            st.error(f"Could not check the key's formats: {exc}")
         try:
             with st.spinner("Counting distinct keys on both sides…"):
                 st.session_state["key_report"] = (tuple(keys),
@@ -123,4 +198,5 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
                     + ". Rows sharing a key are paired in file order, which can produce "
                       "differences that are really mis-pairing. Tick another column.")
             u2.warning(" ".join(said))
+    formats_panel(setup)
     return "key" if keys else st.session_state.get("nokey_mode", "hash")

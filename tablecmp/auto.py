@@ -7,7 +7,8 @@ from dataclasses import asdict
 import pandas as pd
 
 from .columns import build_table, match_columns_by_data, pair_rows, set_steps, specs_from
-from .keys import probe, suggest_keys
+from .keyformat import Fix, applied, key_format_fixes, suggestion
+from .keys import key_affinity, probe, suggest_keys
 from .profile import profile_tables
 from .sources import Side
 from .sql import ident, lit, scratch
@@ -116,13 +117,30 @@ def case_probe(A: Side, B: Side, specs: list[ColSpec], opts: ReadOptions,
     return out
 
 
+def _take_fixes(cmap: pd.DataFrame, specs: list[ColSpec], fixes: list[Fix], notes: list[str],
+                found: list | None) -> list[ColSpec]:
+    """Simple key-format fixes into the column table; every fix a note, and onto `found`."""
+    by = {sp.canon: sp for sp in specs}
+    for fx in fixes:
+        if fx.simple:
+            sa, sb = applied(by[fx.canon], fx)
+            set_steps(cmap, fx.canon, "A", sa)
+            set_steps(cmap, fx.canon, "B", sb)
+        notes.append(suggestion(fx))
+        if found is not None:
+            found.append(fx)
+    return specs_from(cmap)
+
+
 def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions, say,
-                   profile: dict | None = None, want_profile: bool = False
+                   profile: dict | None = None, want_profile: bool = False,
+                   found_fixes: list | None = None
                    ) -> tuple[pd.DataFrame, list[str], list[str], dict | None]:
     """Pair, type, key, compare - from the data. Returns the column table, the notes, the key,
     and the profile that fed the key search: the one passed in when it was measured on the
     specs Auto settled on, the one made here when `want_profile` is on and there was no such
-    profile, or None."""
+    profile, or None. Key columns written differently on the two sides are fixed when the
+    fix is simple and suggested when not; each fix goes onto `found_fixes` when given."""
     notes: list[str] = []
     say("Pairing columns by name…")
     cmap = build_table(A, B)
@@ -162,6 +180,14 @@ def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions
         notes.append(f"{canon}: the two files spell the same values in different case - compared upper-cased")
     specs = specs_from(cmap)
 
+    # before the key search: a key whose sides are written differently shares no values,
+    # and the search refuses a combination the other side shares nothing of
+    idlike = [sp.canon for sp in specs if sp.kind == "text" and not sp.a_steps and not sp.b_steps
+              and key_affinity(sp.canon, A.schema.get(sp.a_src, ""), B.schema.get(sp.b_src, "")) >= 3]
+    if idlike:
+        say(f"Checking whether {len(idlike)} key-like columns are written differently on the two sides…")
+        specs = _take_fixes(cmap, specs, key_format_fixes(A, B, specs, idlike, opts), notes, found_fixes)
+
     # a profile measured on other specs - the ones before the retyping, usually - would
     # feed the key search counts of differently typed values
     if profile is not None and profile.get("specs") != [asdict(s) for s in specs]:
@@ -193,6 +219,10 @@ def auto_configure(A: Side, B: Side, name_a: str, name_b: str, opts: ReadOptions
                         if runner is not None else ""))
         notes.append(f"key search: {how}")
         say(f"Key: {' + '.join(chosen)}" + ("" if good else " (not unique - closest found)"))
+        unchecked = [c for c in chosen if c not in idlike]
+        if unchecked:
+            say("Checking whether the key is written differently on the two sides…")
+            _take_fixes(cmap, specs, key_format_fixes(A, B, specs, unchecked, opts), notes, found_fixes)
     else:
         notes.append("key: none found - rows will be matched by hashing the compared columns")
         say("No key found - rows will be matched by hashing the compared columns")
