@@ -47,3 +47,4 @@ connections*.json
 
 # The app applies its theme in code and must never carry a Streamlit config folder
 .streamlit/
+*.stackdump
