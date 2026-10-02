@@ -175,8 +175,9 @@ def test_bucket_profile_measures_only_what_is_asked_for(tmp_path, monkeypatch):
     assert set(more) == set(keys) | {other}
     assert set(run["_profiles"]["differ"]) == set(keys) | {other}     # the one column, not the rest
     assert more[keys[0]] is prof[keys[0]]                             # measured once, then kept
-    every = bucket_profile(run, keys, cols, "differ")                 # no `only`: every column
-    assert set(every) == set(keys) | set(cols)
+    every = bucket_profile(run, keys, cols, "differ")                 # no `only`: every column,
+    one_sided = set(run["one_sided"]["A"]) | set(run["one_sided"]["B"])  # the one-sided ones too
+    assert one_sided and set(every) == set(keys) | set(cols) | one_sided
 
 
 def test_two_sides_with_one_name_stay_apart():
@@ -214,3 +215,43 @@ def test_signature_ignores_display_only_settings():
     assert signature(A, B, {**cfg, "filters": {"v": {"eq": "1"}}}) != sig
     assert signature(A, Side(label="b2.csv"), cfg) != sig
     assert ENGINE_HTML_ROWS == 2000
+
+
+def test_a_column_only_one_file_has_is_counted_for_that_sides_rows(tmp_path, monkeypatch):
+    """A column with no partner is never compared, but it is read with its side: the rows only
+    that file has, and the paired rows, count its values on that side alone - and the report
+    ends with what each one-sided column holds."""
+    from tablecmp.compare import bucket_profile, one_sided_summary
+    from tablecmp.report import build_report
+    monkeypatch.setenv("COMPARE_WORK_DIR", str(tmp_path / "work"))
+    A = _side(tmp_path / "a.csv", "Left", "id,amt,region\n1,10,north\n2,20,north\n3,30,south\n4,40,north\n")
+    B = _side(tmp_path / "b.csv", "Right", "id,amt,channel\n1,10,web\n2,25,shop\n5,50,web\n")
+    specs = [ColSpec(canon="id", a_src="id", b_src="id"), ColSpec(canon="amt", a_src="amt", b_src="amt")]
+    cfg = {"name": "Left_compare_Right", "mode": "key", "keys": ["id"],
+           "specs": [s.__dict__ for s in specs], "compare_columns": ["amt"],
+           "only_a": ["region"], "only_b": ["channel"],
+           "trim": True, "empty_as_null": True, "ignore_case": False, "tolerance": 0.0,
+           "column_rules": {"amt": {"type": "string", "tolerance": 0.0}},
+           "filters": {}, "left_filters": {}, "right_filters": {}, "display_rows": 100,
+           "null_tokens": ["NULL"], "table_formats": ["csv"], "matched_by": {}}
+    run = run_comparison(A, B, cfg, ReadOptions(tokens=("NULL", ""), trim=True), "sig")
+    res = run["result"]
+    assert not res.error and res.columns_compared == ["amt"]          # never compared
+    assert run["one_sided"] == {"A": ["region"], "B": ["channel"]}
+    left = bucket_profile(run, ["id"], ["amt"], "left")
+    assert "channel" not in left
+    assert left["region"].set_index("Value")["Rows"].to_dict() == {"north": 1, "south": 1}
+    assert set(bucket_profile(run, ["id"], ["amt"], "right")) == {"id", "amt", "channel"}
+    differ = bucket_profile(run, ["id"], ["amt"], "differ")           # id 2: 20 against 25
+    assert differ["region"]["Value"].tolist() == ["north"] and differ["channel"]["Value"].tolist() == ["shop"]
+    summary = one_sided_summary(run, "Left", "Right")
+    assert summary[["Column", "Only in", "Filled", "Top value"]].values.tolist() == [
+        ["region", "Left", 4, "north"], ["channel", "Right", 3, "web"]]
+    html = build_report(run, A, B, "Left", "Right", 100)
+    assert 'id="one-sided"' in html and "one file only" in html and "only in Left" in html
+
+
+def test_a_one_sided_name_a_paired_column_has_takes_its_sides_letter():
+    from tablecmp.compare import one_sided
+    cfg = {"specs": [{"canon": "id"}], "only_a": ["id", "note"], "only_b": ["note"]}
+    assert one_sided(cfg) == {"A": [("id__A", "id"), ("note", "note")], "B": [("note__B", "note")]}

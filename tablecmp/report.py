@@ -6,7 +6,8 @@ import time
 
 import pandas as pd
 
-from .compare import (bucket_profile, column_ledger, ledger_counts, Outcome, differing_rows, diffs_by_key_value,
+from .compare import (MAX_ONE_SIDED, ONE_SIDED_SHOWN, bucket_columns, bucket_profile, column_ledger,
+                      ledger_counts, one_sided_summary, Outcome, differing_rows, diffs_by_key_value,
                       value_pairs)
 from .outputs import summary_payload
 from .sources import Side
@@ -14,7 +15,7 @@ from .theme import APP_NAME, CELL_BUDGET, FONTS, esc, tokens_css
 from .values import ColSpec
 
 # the section anchors, in page order; a section that is not emitted leaves its id unused
-IDS = ["setup", "counts", "columns", "by-key", "rows", "only-a", "only-b"]
+IDS = ["setup", "counts", "columns", "by-key", "rows", "only-a", "only-b", "one-sided"]
 OP_WORDS = {"eq": "=", "ne": "!=", "gt": ">", "ge": ">=", "lt": "<", "le": "<=", "in": "in", "not_in": "not in",
             "between": "between", "like": "like", "is_null": "is null", "not_null": "is not null"}
 
@@ -173,19 +174,29 @@ def _profile_shown(keys: list[str], cols: list[str], res) -> list[str]:
     return (list(keys) + rest)[:PROFILE_COLS]
 
 
+def _with_own(run: dict, bucket: str, shown: list[str], keys: list[str], cols: list[str]) -> list[str]:
+    """A grid's columns and, after them, the columns only this bucket's side has - up to
+    ONE_SIDED_SHOWN: on the rows one file alone holds they are half of what there is to see."""
+    own = [c for c in bucket_columns(run, bucket) if c not in keys and c not in cols]
+    return shown + own[:ONE_SIDED_SHOWN]
+
+
 def _shown_said(shown: list[str], cols: list[str], keys: list[str]) -> str:
     """What a grid holds, said - a cap nobody is told about reads as the whole table."""
-    left = len(cols) - len([c for c in shown if c not in keys])
+    left = len(cols) - len([c for c in shown if c in cols and c not in keys])
     return f" · of {len(cols):,} compared columns, {left:,} not shown" if left > 0 else ""
 
 
-def _profile_grid(prof: dict, keys: list[str], top: int = 6) -> str:
+def _profile_grid(prof: dict, keys: list[str], top: int = 6, own: dict[str, str] | None = None) -> str:
+    """One card per column; `own` names the side of a column only one file has."""
     if not prof:
         return ""
     cards = []
     for col, df in prof.items():
         numeric = {c for c in df.columns if c.startswith("Rows") or c == "%"}
-        cards.append(f'<div class="pcard"><div class="k">{esc(col)}{" · key" if col in keys else ""}</div>'
+        tag = (" · key" if col in keys else
+               f' · <span class="warn">only in {esc(own[col])}</span>' if own and col in own else "")
+        cards.append(f'<div class="pcard"><div class="k">{esc(col)}{tag}</div>'
                      f'{_table(df.head(top), numeric=numeric)}</div>')
     return '<div class="pgrid">' + "".join(cards) + "</div>"
 
@@ -343,6 +354,10 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
         have.add("only-a")
     if res.only_right and run["files"].get(f"{cfg['name']}__right_only.csv"):
         have.add("only-b")
+    sided = one_sided_summary(run, name_a, name_b)
+    if len(sided):
+        have.add("one-sided")
+    side_of = {"A": name_a, "B": name_b}
     present = [i for i in IDS if i in have]
 
     # settings card
@@ -434,7 +449,9 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
                          + _table(t, numeric={"Matched rows", "Rows that differ", "% of those rows", "Cells that differ"})
                          for k, t in by_val.items())
         shown = _profile_shown(keys, cols, res)
-        prof = _profile_grid(bucket_profile(run, keys, cols, "differ", only=shown), keys)
+        own = {c: side_of[w] for c, w in bucket_columns(run, "differ").items()}
+        prof = _profile_grid(bucket_profile(run, keys, cols, "differ",
+                                            only=_with_own(run, "differ", shown, keys, cols)), keys, own=own)
         parts.append(f"""<section class="sec" id="by-key"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Differences by <em>key value.</em></h2>
 <div class="sec-sub">the key is identical on both sides for these rows - this is where the differences sit, not what they are</div></div></div>
 <div class="body">{blocks}
@@ -449,13 +466,21 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
         if sid not in present:
             continue
         path = run["files"][f"{cfg['name']}__{tag}.csv"]
+        bucket = "left" if tag == "left_only" else "right"
         frame = pd.read_csv(str(path), nrows=cap, dtype=str, keep_default_na=False, na_values=[""])
         parts.append(f"""<section class="sec" id="{sid}"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Only in <em>{esc(name)}.</em></h2>
 <div class="sec-sub">{min(total, cap):,} of {total:,} rows · capped at {limit:,} rows or {CELL_BUDGET:,} cells · no partner on the other side</div></div></div>
 <div class="body"><h3 class="sec-sub">Top values by column - the key columns are why these rows did not pair{_shown_said(_profile_shown(keys, cols, res), cols, keys)}</h3>
-{_profile_grid(bucket_profile(run, keys, cols, "left" if tag == "left_only" else "right", only=_profile_shown(keys, cols, res)), keys)}
+{_profile_grid(bucket_profile(run, keys, cols, bucket, only=_with_own(run, bucket, _profile_shown(keys, cols, res), keys, cols)), keys, own={c: name for c in bucket_columns(run, bucket)})}
 <h3 class="sec-sub" style="margin-top:20px">The rows</h3>
 <div class="{"side-a" if tag == "left_only" else "side-b"}">{_table(frame)}</div></div></section>""")
+
+    if "one-sided" in present:
+        cut = [f"{len(cfg.get(k) or []) - MAX_ONE_SIDED:,} more in {esc(n)} not measured"
+               for k, n in (("only_a", name_a), ("only_b", name_b)) if len(cfg.get(k) or []) > MAX_ONE_SIDED]
+        parts.append(f"""<section class="sec" id="one-sided"><div class="sec-head"><div class="sec-num">{sec()}</div><div><h2 class="sec-h">Columns in <em>one file only.</em></h2>
+<div class="sec-sub">no partner on the other side, so never compared · measured on every row of their own file{(" · " + " · ".join(cut)) if cut else ""}</div></div></div>
+<div class="body">{_table(sided, numeric={"Rows", "Filled", "Filled %", "Distinct", "Top %"})}</div></section>""")
 
     as_json = esc(json.dumps({k: payload[k] for k in ("sources", "settings")}, indent=1, default=str))
     parts.append(f"""<div class="foot">Built {esc(run['at'])} in {run['seconds']:.1f}s · run {esc(run['run_id'])} · rows shown are capped at {limit:,} per section and {CELL_BUDGET:,} cells; the downloads hold everything · values are the canonical form both sides were compared on · self-contained apart from the web fonts, which fall back when offline

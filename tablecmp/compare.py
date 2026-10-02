@@ -40,6 +40,8 @@ BOOL_WORDS = {"true": "true", "t": "true", "yes": "true", "y": "true", "1": "tru
 # settings that change what is shown, not what the answer is
 DISPLAY_KEYS = ("name", "notes", "table_formats", "display_rows", "matched_by")
 ENGINE_HTML_ROWS = 2000                 # rows per tab in the engine's own diff.html
+MAX_ONE_SIDED = 100                     # one-sided columns read along with their side, each side
+ONE_SIDED_SHOWN = 6                     # of them counted for a bucket without being asked for
 # A rows sit on the page's bg with its text colour, B rows the other way round - the two sides
 # read as black and cream. The differing cells use the theme's four diff tokens.
 LEFT_BG, RIGHT_BG = THEME["bg"], THEME["text"]
@@ -250,6 +252,24 @@ def signature(a: Side, b: Side, cfg: dict) -> str:
 
 
 # ---- running ---------------------------------------------------------------
+def one_sided(cfg: dict) -> dict[str, list[tuple[str, str]]]:
+    """The columns only one file has, read along with that side - never compared, but there
+    to count for that side's rows: {"A": [(name in the run, column in the file)], "B": [...]}.
+    A name already taken by a paired column, or by the other side's own, gets the side's
+    letter, so every column of a run has one name. At most MAX_ONE_SIDED a side."""
+    taken = {d["canon"] for d in cfg.get("specs") or []}
+    out: dict[str, list[tuple[str, str]]] = {}
+    for which, cols in (("A", cfg.get("only_a") or []), ("B", cfg.get("only_b") or [])):
+        out[which] = []
+        for c in cols[:MAX_ONE_SIDED]:
+            name = c
+            while name in taken:
+                name = f"{name}__{which}"
+            taken.add(name)
+            out[which].append((name, c))
+    return out
+
+
 def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = "",
                    previous: dict | None = None, progress=None) -> dict:
     """One run: <work_dir>/<pair>__<run_id>/ holding every file the engine and we write,
@@ -271,11 +291,14 @@ def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = ""
     folder.mkdir(parents=True, exist_ok=True)
     t0 = time.perf_counter()
 
-    say(f"Reading {A.name or 'A'} - {len(specs)} columns, canonical values…")
-    register(con, A, "src_a", specs, "A", opts, materialize=True)
+    extra = one_sided(cfg)          # as text, under their own names: nothing compares them
+    side_a = specs + [ColSpec(name, c, "") for name, c in extra["A"]]
+    side_b = specs + [ColSpec(name, "", c) for name, c in extra["B"]]
+    say(f"Reading {A.name or 'A'} - {len(side_a)} columns, canonical values…")
+    register(con, A, "src_a", side_a, "A", opts, materialize=True)
     n_a = con.execute("SELECT count(*) FROM src_a").fetchone()[0]
     say(f"{A.name or 'A'}: {n_a:,} rows. Reading {B.name or 'B'}…")
-    register(con, B, "src_b", specs, "B", opts, materialize=True)
+    register(con, B, "src_b", side_b, "B", opts, materialize=True)
     n_b = con.execute("SELECT count(*) FROM src_b").fetchone()[0]
     say(f"{B.name or 'B'}: {n_b:,} rows.")
 
@@ -292,7 +315,8 @@ def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = ""
     run = {"result": res, "folder": out, "files": {p.name: p for p in out.glob("*")}, "seconds": elapsed,
            "con": con, "left": "src_a", "right": "src_b", "cfg": cfg, "signature": sig,
            "at": started.strftime("%H:%M:%S"), "mode": mode, "run_id": rid, "pair": cfg["name"],
-           "started_at": started.isoformat(timespec="seconds"), "verdict": verdict_of(res, mode)}
+           "started_at": started.isoformat(timespec="seconds"), "verdict": verdict_of(res, mode),
+           "one_sided": {w: [name for name, _ in pairs] for w, pairs in extra.items()}}
     return run              # the paired rows are written when they are asked for: see paired_path
 
 
@@ -494,6 +518,25 @@ def column_ledger(run: dict, name_a: str, name_b: str) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
+def one_sided_summary(run: dict, name_a: str, name_b: str) -> pd.DataFrame:
+    """The columns only one file has, one row each, measured on all of that side's rows:
+    filled, distinct, the most frequent value. Empty when every column is paired."""
+    con, rows = run["con"], []
+    files = dict(one_sided(run["cfg"]))
+    for which, table, name in (("A", run["left"], name_a), ("B", run["right"], name_b)):
+        for c, src in files.get(which, []):
+            q = ident(c)
+            n, filled, uniq = con.execute(f"SELECT count(*), count({q}), count(DISTINCT {q}) "
+                                          f"FROM {ident(table)}").fetchone()
+            top = con.execute(f"SELECT {q}, count(*) FROM {ident(table)} WHERE {q} IS NOT NULL "
+                              f"GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 1").fetchone()
+            rows.append({"Column": src, "Only in": name, "Rows": int(n), "Filled": int(filled),
+                         "Filled %": round(filled / max(n, 1) * 100, 2), "Distinct": int(uniq),
+                         "Top value": "" if top is None else str(top[0]),
+                         "Top %": 0.0 if top is None else round(top[1] / max(n, 1) * 100, 2)})
+    return pd.DataFrame(rows)
+
+
 def ledger_counts(df: pd.DataFrame, name_a: str, name_b: str) -> dict[str, int]:
     roles = df["Role"].tolist() if len(df) else []
     return {"key": roles.count("key"), "compared": roles.count("compared"),
@@ -644,16 +687,27 @@ def value_pairs(run: dict, n: int = 5) -> dict[str, pd.DataFrame]:
     return {col: sub.drop(columns=["col"]).reset_index(drop=True) for col, sub in df.groupby("col", sort=False)}
 
 
+def bucket_columns(run: dict, bucket: str) -> dict[str, str]:
+    """The one-sided columns a bucket's rows carry, each with its side ("A" or "B"): the
+    left-only rows have A's own, the right-only rows B's, the paired rows both."""
+    own = run.get("one_sided") or {}
+    sides = {"left": ["A"], "right": ["B"]}.get(bucket, ["A", "B"])
+    return {c: w for w in sides for c in own.get(w, [])}
+
+
 def bucket_profile(run: dict, keys: list[str], cols: list[str], bucket: str,
                    n: int = 10, only: list[str] | None = None) -> dict[str, pd.DataFrame]:
     """Top values per column for one bucket of rows: 'matched' (paired on the key),
     'differ' (paired but not equal), 'left' (only in A) or 'right' (only in B). Key columns
-    first. For paired buckets each value is counted on both sides, since a non-key column
-    can differ. `only` names the columns to profile - nothing else is measured, which is
-    what keeps a wide pair from counting hundreds of columns nobody asked to see; without
-    it every column is. Each column is measured once per bucket and kept on the run."""
+    first, then the compared ones, then the columns only one file has (bucket_columns) -
+    counted on their own side. For paired buckets each compared value is counted on both
+    sides, since a non-key column can differ. `only` names the columns to profile - nothing
+    else is measured, which is what keeps a wide pair from counting hundreds of columns
+    nobody asked to see; without it every column is. Each column is measured once per
+    bucket and kept on the run."""
     con, cfg = run["con"], run["cfg"]
-    every = list(keys) + [c for c in cols if c not in keys]
+    every = (list(keys) + [c for c in cols if c not in keys]
+             + [c for c in bucket_columns(run, bucket) if c not in keys and c not in cols])
     wanted = every if only is None else [c for c in every if c in set(only)]
     cache: dict[str, pd.DataFrame] = run.setdefault("_profiles", {}).setdefault(bucket, {})
     todo = [c for c in wanted if c not in cache]
@@ -698,12 +752,20 @@ def _one_side_profile(run: dict, bucket: str, todo: list[str], cache: dict, n: i
 def _paired_profile(run: dict, keys: list[str], bucket: str, todo: list[str],
                     cache: dict, n: int) -> None:
     """The paired rows - matched on the key, or matched but not equal. The rows are held
-    once per bucket with the key and the columns asked for, a side each."""
+    once per bucket with the key and the columns asked for, a side each - a column only one
+    file has, its own side only."""
     con = run["con"]
     pair_views(run, keys)
+    own = bucket_columns(run, bucket)
+
+    def pick(c: str) -> str:
+        if own.get(c) == "A":
+            return f"l.{ident(c)} AS {ident('a_' + c)}"
+        if own.get(c) == "B":
+            return f"r.{ident(c)} AS {ident('b_' + c)}"
+        return f"l.{ident(c)} AS {ident('a_' + c)}, r.{ident(c)} AS {ident('b_' + c)}"
     picks = ", ".join([f"l.{ident(k)} AS {ident(k)}" for k in keys]
-                      + [f"l.{ident(c)} AS {ident('a_' + c)}, r.{ident(c)} AS {ident('b_' + c)}"
-                         for c in todo if c not in keys])
+                      + [pick(c) for c in todo if c not in keys])
     if bucket == "matched":                       # every row that paired on the key
         con.execute(f"CREATE OR REPLACE TABLE differ AS SELECT {picks} "
                     f"FROM cmp_l l JOIN cmp_r r ON {join_on(keys)}")
@@ -716,8 +778,9 @@ def _paired_profile(run: dict, keys: list[str], bucket: str, todo: list[str],
                     f"WHERE {row_key(keys, 'l.', '__occ' if occ else None)} IN (SELECT {row_key(keys, '', occ)} FROM cd)")
     total = con.execute("SELECT count(*) FROM differ").fetchone()[0]
     for c in todo:
-        if c in keys:
-            df = con.execute(f"SELECT {ident(c)} AS v, count(*) AS n FROM differ "
+        if c in keys or c in own:
+            v = ident(c if c in keys else ("a_" if own[c] == "A" else "b_") + c)
+            df = con.execute(f"SELECT {v} AS v, count(*) AS n FROM differ "
                              f"GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT {int(n)}").fetchdf()
             cache[c] = _counts_frame(df, total, ["Value", "Rows", "%"])
         else:

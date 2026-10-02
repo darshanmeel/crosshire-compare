@@ -8,7 +8,8 @@ import duckdb
 import streamlit as st
 
 from .columns import key_chips_html, PAINTED_ROWS, row_css
-from .compare import (bucket_profile, column_ledger, have_paired, ledger_counts, Outcome,
+from .compare import (ONE_SIDED_SHOWN, bucket_columns, bucket_profile, column_ledger, have_paired,
+                      ledger_counts, Outcome,
                       differing_rows, diffs_by_key_value, near_match, paired_path, side_labels,
                       style_pairs, value_pairs)
 from .outputs import default_save_folder, save_target, table_formats, verdict_of, write_parquet_copies, zip_run
@@ -237,6 +238,11 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
     tips("Pick a bucket to see the top values of its rows",
          "Key columns are counted; add any other column below · paired rows count both sides",
          key="buckets")
+    sided = run.get("one_sided") or {}
+    if sided.get("A") or sided.get("B"):
+        tips(f":orange[Only in {label_a}] columns count for {label_a}'s rows, "
+             f":orange[only in {label_b}] for {label_b}'s - both on the paired rows",
+             key="buckets_sided")
     names = dict(buckets)                        # bucket -> its label, carrying this run's counts
     # what is held is the bucket, not the label: the label has row counts in it, so the next run's
     # label is a different string and the pick would be lost. bucket_id is no widget's key, so
@@ -262,13 +268,19 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
                 st.markdown(f"**{k}** - top {len(tbl)} values by rows that differ")
                 st.dataframe(tbl, width="stretch", hide_index=True, height=min(420, 45 + 35 * len(tbl)))
         st.markdown("**Every column across these rows** - top values, counted on each side")
-    others = [c for c in cols if c not in keys]
-    shown = list(keys) if keys else others[:3]
+    # the columns only this bucket's side has come first: nothing else says what those rows are
+    own = bucket_columns(run, bucket)
+    mine = [c for c in own if c not in keys and c not in cols]
+    others = [c for c in cols if c not in keys] + mine[ONE_SIDED_SHOWN:]
+    shown = (list(keys) if keys else [c for c in cols if c not in keys][:3]) + mine[:ONE_SIDED_SHOWN]
+    side_name = {"A": label_a, "B": label_b}
     if others:
         kept_picks(f"bucket_cols_{bucket}", others)
         with st.expander(f"Other columns - {len(others)} to add", expanded=False):
             extra = st.multiselect("Columns to count", others,
                                    key=f"bucket_cols_{bucket}", label_visibility="collapsed",
+                                   format_func=lambda c: (f"{c} · only in {side_name[own[c]]}"
+                                                          if c in own else c),
                                    placeholder="pick the columns to count for these rows")
         shown = shown + [c for c in others if c in extra]
     with st.spinner("Profiling…"):
@@ -279,7 +291,8 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
     grid = st.columns(3)
     for i, (col, df) in enumerate(prof.items()):
         with grid[i % 3]:
-            st.markdown(f"**{col}**" + (" · key" if col in keys else ""))
+            st.markdown(f"**{col}**" + (" · key" if col in keys else
+                                        f" · :orange[only in {side_name[own[col]]}]" if col in own else ""))
             cfg = {c: st.column_config.NumberColumn(c, format="localized")
                    for c in df.columns if c.startswith("Rows")}
             st.dataframe(df, width="stretch", hide_index=True, column_config=cfg,

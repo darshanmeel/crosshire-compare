@@ -162,7 +162,8 @@ def test_hash_mode_writes_whole_rows(tmp_path, monkeypatch):
     folder = Path(run["folder"])
     with open(folder / "hr_compare_payroll__left_only.csv", newline="", encoding="utf-8") as fh:
         header = next(csv.reader(fh))
-    assert header == ["emp_id", "department", "active"]     # every column, no __h / __k helpers
+    # every column - the one only this file has too - and no __h / __k helpers
+    assert header == ["emp_id", "department", "active", "salary"]
     from tablecmp.compare import paired_path
     assert paired_path(run).name == "hr_compare_payroll__paired.csv"   # a header, nothing pairs by key
     with open(folder / "hr_compare_payroll__paired.csv", newline="", encoding="utf-8") as fh:
