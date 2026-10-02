@@ -17,7 +17,7 @@ from streamlit import config
 from streamlit.web import bootstrap
 def fake_run(path, is_hello, args, flag_options, **kw):
     keys = ("server.maxUploadSize", "browser.gatherUsageStats", "server.headless", "server.port",
-            "server.address", "logger.level", "theme.primaryColor", "theme.base", "client.allowedOrigins")
+            "server.address", "logger.level", "theme.dark.primaryColor", "theme.light.primaryColor", "client.allowedOrigins")
     print("SETTINGS " + json.dumps({k: [config.get_option(k), config.get_where_defined(k)] for k in keys}))
 bootstrap.run = fake_run
 try:
@@ -42,7 +42,8 @@ def test_python_start_applies_the_settings():
     flag = "command-line argument or environment variable"
     assert got["server.maxUploadSize"] == [4096, flag]        # not Streamlit's 200 MB default
     assert got["browser.gatherUsageStats"] == [False, flag]
-    assert got["theme.primaryColor"][1] == flag and got["theme.base"] == ["dark", flag]
+    # both modes, so the settings menu offers Light and Dark
+    assert got["theme.dark.primaryColor"][1] == flag and got["theme.light.primaryColor"][1] == flag
     assert got["server.headless"] == [True, flag]              # typed as the `streamlit` command types them
     assert got["server.port"] == [8597, flag]
     assert got["logger.level"] == ["warning", flag]

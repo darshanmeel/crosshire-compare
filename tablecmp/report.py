@@ -402,7 +402,7 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(cfg['name'])} - {esc(APP_NAME)} report</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="{FONTS}" rel="stylesheet">
-<style>{tokens_css()}{CSS}</style></head><body><main class="main">
+<style>{tokens_css(light_when="media")}{CSS}</style></head><body><main class="main">
 <header class="hero">
   <div class="eyebrow">{esc(APP_NAME)} · <span>{esc(name_a)} against {esc(name_b)}</span> · {esc(time.strftime('%d %b %Y %H:%M'))}</div>
   <h1>{esc(name_a)} against {esc(name_b)}, <em>every difference.</em></h1>

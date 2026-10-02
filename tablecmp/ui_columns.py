@@ -14,6 +14,7 @@ from .sniff import looks_like
 from .sources import Side
 from .state import bump, forget_results
 from .theme import card, esc
+from .ui_text import tips
 from .values import CASES, TYPES, ColSpec, ReadOptions
 
 LOOKS_HELP = ("What a sample of this side's values looks like - a type, and the date format or "
@@ -70,20 +71,16 @@ def render(A: Side, B: Side, NA: str, NB: str, opts: ReadOptions) -> Setup:
     prev: pd.DataFrame = fill_looks(st.session_state["cmap"], looks)    # Auto's table has none
     n_pairs = int(((prev["A column"] != "") & (prev["B column"] != "")).sum())
     with st.expander(f"Column table - {n_pairs} pairs · every column from either file", expanded=True):
-        st.caption(
-            f"One row per column from either file. Pick the counterpart in the *{NA} column* "
-            f"or *{NB} column* dropdown - blank means no counterpart. Give the pair its "
-            "**common name**, choose the **Type** both sides are converted to, tick **Key** "
-            "on what identifies a row and **Compare** on what to compare. Double-click a cell "
-            "to change it. **Role** says what each row is, and its cell and the chips under the "
-            "table carry the colour: green for a key, red for a column that is not compared or is "
-            "only in one file (the editable cells take no colour). **Case** on a text "
-            "pair says whether case matters for it - blank follows the *Ignore case in values* "
-            "switch under *How values are read*. Transforms live in the next section. "
-            "A column may be used in more than one pair - split a full name into first and "
-            "last with a step on each pair. The *looks like* cells are suggestions from a "
-            "sample of the values - the Type stays what you set; to take one, change Type or "
-            "add a to date / to number step with that format in the next section.")
+        tips(f"Pick each column's partner under **{NA} column** / **{NB} column** - blank: none. "
+             "Double-click a cell to change it",
+             ":green[**Key**] what identifies a row · **Compare** what to check · "
+             "**Type** what both sides become",
+             "**Case** blank follows *Ignore case* · *looks like* is a hint from the values, "
+             "not applied",
+             "Colour: :green[key] · :red[not compared, or in one file only] · "
+             "steps and conversions: **Values** below",
+             "A column can sit in more than one pair - split a full name into first and last",
+             key="columns")
         tcol, bcol = st.columns([4, 1.25])
         with tcol:
             shown = prev.copy()                     # the Role column is for the eye: not stored

@@ -11,6 +11,7 @@ from .keys import MAX_KEY_COLS, key_affinity, key_uniqueness, suggest_keys
 from .sources import Side
 from .state import bump, forget_results
 from .ui_columns import Setup
+from .ui_text import tips
 from .values import ReadOptions
 
 
@@ -57,11 +58,11 @@ def formats_panel(setup: Setup) -> None:
         return
     for i, (fx, done) in enumerate(found):
         if done:
-            st.info(f"{fx.said}. Applied - the steps are in the column table, change them there.")
+            st.success(f":green[**Applied**] · {fx.said}. The steps are in the column table.")
             continue
         f1, f2 = st.columns([5, 1])
-        f1.warning(f"{fx.said}. Suggested - the values may mean something the steps would drop, "
-                   "so it waits for you.")
+        f1.warning(f":orange[**Suggested**] · {fx.said}. It may drop something that matters - "
+                   "your call.")
         if f2.button("Apply", key=f"kf_apply_{i}", width="stretch", type="primary"):
             if _apply_fix(setup, fx):
                 found[i] = (fx, True)
@@ -96,10 +97,9 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
                      format_func=lambda m: {
                          "hash": "match identical rows by hashing the compared columns",
                          "position": "pair by position - line 1 against line 1"}[m])
-            st.caption("Hashing finds the rows that are identical on every compared column and "
-                       "reports the rest as one-sided, with the columns whose values only exist "
-                       "on one side - useful when there is no key at all. Position only works "
-                       "when both files are sorted identically.")
+            tips("**hash** - rows identical on every compared column match; the rest are one-sided",
+                 "**position** - line 1 against line 1: :orange[only when both files are sorted the same]",
+                 key="nokey")
     with k2:
         suggest = st.button("Suggest keys", width="stretch", key="sugg_btn",
                             help="Finds the column combinations that identify a row on both sides, "
@@ -110,14 +110,12 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions,
     with k3:
         check = st.button("Check key", width="stretch", disabled=not keys, key="check_btn",
                           help="Counts distinct key values against rows on each side.")
-    st.caption("Suggest keys measures every column and, when none is unique, every pair of the "
-               "most key-like columns, then combinations of three and of four - each level only "
-               "when the one before found no key. The counting reads one side: over 5,000 rows a "
-               "level is counted on a random sample of 5,000 rows of it first, only the "
-               "combinations unique there are counted on every row - a full count each, which is "
-               "where the time goes on a wide or big pair with no obvious key: minutes - and what "
-               "is unique there is verified on the other side, where it has to be unique too and "
-               "to share values before it is the key.")
+    tips("**Suggest keys** tries single columns, then pairs, threes, fours - stopping at the first "
+         "level with a key",
+         "Over 5,000 rows: a 5,000-row sample first, then a full count of what survived · the other "
+         "side must agree",
+         "A wide or big pair with no obvious key: :orange[minutes]",
+         key="keysearch")
     if suggest:                                   # under the row, so the disc has the width
         try:
             with ui_log.running("Looking for keys…", "Key search", here=True) as box:

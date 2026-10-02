@@ -305,4 +305,4 @@ def test_rows_filters_on_the_page(monkeypatch, tmp_path):
     assert not at.exception, at.exception
     assert [e.value for e in at.error if "not a date" in e.value] == ["filter on 'hire_date': 'not-a-date' is not a date"]
     assert at.session_state["result"] is new
-    assert any("Ignore case switch does not apply to filters" in c.value for c in at.caption)
+    assert any("*Ignore case* does not apply" in m.value for m in at.markdown)

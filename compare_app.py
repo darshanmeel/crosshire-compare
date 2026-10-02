@@ -68,7 +68,7 @@ import pandas as pd                               # noqa: E402
 import streamlit as st                            # noqa: E402
 from streamlit import config as _cfg              # noqa: E402
 
-if _cfg.get_option("theme.primaryColor") != THEME["accent"]:    # under `streamlit run`
+if _cfg.get_option("theme.dark.primaryColor") != THEME["accent"]:    # under `streamlit run`
     for _k, _v in STREAMLIT_THEME.items():
         try:
             _cfg.set_option(_k, _v)
@@ -106,8 +106,9 @@ from tablecmp.profile import profile_tables                                     
 from tablecmp.report import build_report                                          # noqa: E402
 from tablecmp.sources import Side, preview_rows                                   # noqa: E402
 from tablecmp.state import bump, forget_results, init_state, kept_picks           # noqa: E402
-from tablecmp.theme import css, status_strip                                      # noqa: E402
+from tablecmp.theme import MODE_JS, css, status_strip                                      # noqa: E402
 from tablecmp.ui_columns import Setup                                             # noqa: E402
+from tablecmp.ui_text import tips                                                 # noqa: E402
 from tablecmp.values import ReadOptions                                           # noqa: E402
 
 BLANK_FILTER = {"Apply to": "Both", "Column": "", "Operator": "=", "Value": "", "Type": "auto"}
@@ -227,9 +228,9 @@ def filters_section(setup: Setup, NA: str, NB: str) -> pd.DataFrame:
     held = st.session_state.get("filter_rows")
     rows = held[1] if held and held[0] == made_for else pd.DataFrame([BLANK_FILTER])
     with st.expander("Filters - which rows take part, on the common names", expanded=False):
-        st.caption("Applied to both sides after types. Values are matched exactly - the Ignore case "
-                   "switch does not apply to filters. To shrink a big file before it is even read, "
-                   "use *Rows to read* under that file in the sidebar.")
+        tips("Both sides, after types · values match exactly (*Ignore case* does not apply)",
+             "To shrink a big file before it is read: **Rows to read** in the sidebar",
+             key="filters")
         edited = st.data_editor(
             rows, num_rows="dynamic", width="stretch", hide_index=True, key="filters",
             column_config={
@@ -470,6 +471,7 @@ def compare_page(strip, opts: ReadOptions) -> None:
 _sweep_once()
 init_state()
 st.markdown(css(), unsafe_allow_html=True)
+st.html(MODE_JS, unsafe_allow_javascript=True)      # light or dark: follows the mode Streamlit paints
 hero(st.session_state.get("page", "Compare"))    # the radio's value is known before it is drawn
 page = st.radio("Page", ["Compare", "Profiling"], horizontal=True, key="page", label_visibility="collapsed")
 strip = st.empty()                                # the status strip - the Compare page's; empty on Profiling

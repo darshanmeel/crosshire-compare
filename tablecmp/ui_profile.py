@@ -20,6 +20,7 @@ from .sniff import looks_like
 from .state import kept_picks
 from .sources import Side, preview_rows, slug
 from .ui_results import save_row
+from .ui_text import tips
 from .values import ReadOptions
 
 DEP_FILE_COLS = ["Column A", "Column B", "Kind", "Distinct", "r"]   # dependencies.csv: deps then corr
@@ -54,13 +55,9 @@ def render(P: Side, NP: str, opts: ReadOptions) -> None:
             # a measure that cannot be taken - a query DuckDB refuses, a date past Python's
             # range - is a line on the page, not a traceback
             st.error(f"Profile failed: {exc}")
-    st.caption("A wide or big table takes minutes rather than seconds: every column is measured, "
-               "and when no single column is unique the key search counts every pair of the most "
-               "key-like columns, then combinations of three and of four - each level only when the "
-               "one before found no key. Over 5,000 rows a level is counted on a random sample of 5,000 "
-               "rows first and only the combinations unique there are verified on every row - a "
-               "full count each, which is where the time goes when no key is obvious. To try a "
-               "slice, cut *Rows to read* in the sidebar.")
+    tips("Every column is measured; with no single-column key, pairs, threes and fours are tried",
+         "A wide or big table: :orange[minutes] - to try a slice, cut **Rows to read** in the sidebar",
+         key="profile_P")
     prof = st.session_state.get("profile_P")
     if not prof:
         return

@@ -86,10 +86,39 @@ THEMES: dict[str, dict[str, Any]] = {
     },
 }
 
+# each flavour's light mode: the same accent family, darkened until it reads on paper
+LIGHT: dict[str, dict[str, Any]] = {
+    "aurora": {              # warm paper, burnt amber
+        "bg": "#faf6ee", "panel": "#f3ecdf", "surface": "#ebe2d0", "surface2": "#e0d5bf",
+        "line": "#ddd1b9",
+        "text": "#1f1a10", "text2": "#4a4130", "text3": "#7a6e55", "text4": "#a89a7c",
+        "accent": "#a85a17", "accent_h": "#8f4c12",
+        "accent_dim": "rgba(168,90,23,0.12)", "accent_subtle": "rgba(168,90,23,0.06)",
+        "accent_border": "rgba(168,90,23,0.28)", "accent_line": "rgba(168,90,23,0.32)",
+        "border": "rgba(168,90,23,0.12)", "border2": "rgba(168,90,23,0.2)",
+        "pos": "#3f7a32", "neg": "#b0473b", "warn": "#94650f",
+        "diff_left_bg": "#f6d9d3", "diff_left_fg": "#5a1f18",
+        "diff_right_bg": "#5a2a24", "diff_right_fg": "#f8e3dc",
+    },
+    "violet": {              # cool paper, deep indigo
+        "bg": "#f7f7fb", "panel": "#efeff7", "surface": "#e6e6f2", "surface2": "#dadaeb",
+        "line": "#d6d6e8",
+        "text": "#16162a", "text2": "#3e3e60", "text3": "#6a6a90", "text4": "#9a9abb",
+        "accent": "#5443cf", "accent_h": "#4536b3",
+        "accent_dim": "rgba(84,67,207,0.12)", "accent_subtle": "rgba(84,67,207,0.06)",
+        "accent_border": "rgba(84,67,207,0.28)", "accent_line": "rgba(84,67,207,0.32)",
+        "border": "rgba(84,67,207,0.12)", "border2": "rgba(84,67,207,0.2)",
+        "pos": "#2f7d55", "neg": "#b0473b", "warn": "#866611",
+        "diff_left_bg": "#f3d8dc", "diff_left_fg": "#4a1f2a",
+        "diff_right_bg": "#4a2a36", "diff_right_fg": "#f6e2e8",
+    },
+}
+
 THEME_NAME = os.environ.get("COMPARE_THEME", "aurora").strip().lower()
 if THEME_NAME not in THEMES:
     THEME_NAME = "aurora"
-THEME = THEMES[THEME_NAME]   # the active tokens - everything else reads from this
+THEME = THEMES[THEME_NAME]   # the active tokens (the dark mode) - everything else reads from this
+THEME_LIGHT = {**THEME, **LIGHT[THEME_NAME]}     # the light mode: the same fonts, other colours
 
 # token -> CSS custom property, in the order the web apps declare them
 _CSS_VARS = (
@@ -107,10 +136,43 @@ _CSS_VARS = (
 )
 
 
-def tokens_css(theme: dict[str, Any] | None = None) -> str:
-    """The :root block that puts the active tokens on a page - the app and the report both start with it."""
-    t = theme or THEME
-    return ":root{" + ";".join(f"{var}:{t[key]}" for key, var in _CSS_VARS) + "}"
+def _vars(t: dict[str, Any]) -> str:
+    return ";".join(f"{var}:{t[key]}" for key, var in _CSS_VARS)
+
+
+def tokens_css(theme: dict[str, Any] | None = None, light_when: str = "") -> str:
+    """The :root block that puts the active tokens on a page - the app and the report both start
+    with it. The dark mode is the default; `light_when` is the selector under which the light
+    mode's tokens take over: the app marks its <html> (MODE_JS), the report follows the reader's
+    system setting."""
+    out = ":root{" + _vars(theme or THEME) + "}"
+    if light_when == "media":
+        out += "@media (prefers-color-scheme: light){:root{" + _vars(THEME_LIGHT) + "}}"
+    elif light_when:
+        out += light_when + "{" + _vars(THEME_LIGHT) + "}"
+    return out
+
+
+# Streamlit paints the page with the light or the dark palette below, from its own menu
+# (⋮ → Settings: Light, Dark, or the system's). It says which in nothing CSS can read, so this
+# looks at the background it painted and marks <html data-fs-mode="light|dark"> - every --fs-*
+# rule follows. Checked twice a second: changing the theme in the menu does not rerun the script.
+MODE_ATTR = "data-fs-mode"
+MODE_JS = f"""<script>
+(function () {{
+  const doc = document;
+  function mode() {{
+    const app = doc.querySelector('[data-testid="stApp"]') || doc.body;
+    const m = getComputedStyle(app).backgroundColor.match(/\\d+(\\.\\d+)?/g);
+    if (!m) return;
+    const lum = (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255;
+    const want = lum > 0.5 ? "light" : "dark";
+    if (doc.documentElement.getAttribute("{MODE_ATTR}") !== want) doc.documentElement.setAttribute("{MODE_ATTR}", want);
+  }}
+  mode();
+  if (!window.__fsMode) window.__fsMode = setInterval(mode, 500);
+}})();
+</script>"""
 
 
 TINT_ALPHA = 0.22            # the wash behind a coloured row of the column table and a coloured chip
@@ -129,21 +191,28 @@ def row_tint(tone: str) -> str:
     return f"background-color: {rgba(tone, TINT_ALPHA)}; color: {THEME[tone]}" if tone else ""
 
 
+def _streamlit_mode(mode: str, t: dict[str, Any]) -> dict[str, Any]:
+    """One mode's colours, as Streamlit's theme.light.* / theme.dark.* options."""
+    return {f"theme.{mode}.{k}": v for k, v in {
+        "primaryColor": t["accent"], "backgroundColor": t["bg"],
+        "secondaryBackgroundColor": t["panel"], "textColor": t["text"], "borderColor": t["line"],
+        "codeBackgroundColor": t["surface"],                # inline code and code blocks Streamlit draws itself
+        "codeTextColor": t["accent_h"],
+        "dataframeHeaderBackgroundColor": t["panel"],      # st.dataframe / data_editor headers
+        "dataframeBorderColor": t["line"],
+        # :green[...] / :red[...] / :orange[...] in the page's text: the house colours
+        "greenColor": t["pos"], "redColor": t["neg"], "orangeColor": t["accent"],
+        "greenTextColor": t["pos"], "redTextColor": t["neg"], "orangeTextColor": t["accent"],
+    }.items()}
+
+
 STREAMLIT_THEME = {          # what Streamlit itself draws with: grids, menus, focus rings
-    "theme.base": "dark",
-    "theme.primaryColor": THEME["accent"],
-    "theme.backgroundColor": THEME["bg"],
-    "theme.secondaryBackgroundColor": THEME["panel"],
-    "theme.textColor": THEME["text"],
     "theme.font": "Inter, sans-serif",
     "theme.codeFont": "JetBrains Mono, monospace",
     "theme.headingFont": THEME["heading_font"],
-    "theme.borderColor": THEME["line"],
-    "theme.codeBackgroundColor": THEME["surface"],           # inline code and code blocks Streamlit draws itself
-    "theme.codeTextColor": THEME["accent_h"],
-    "theme.dataframeHeaderBackgroundColor": THEME["panel"],  # st.dataframe / data_editor headers
-    "theme.dataframeBorderColor": THEME["line"],
     "theme.baseRadius": THEME["r_sm"],
+    # both modes, so the menu offers Light and Dark - and the system's, which it starts on
+    **_streamlit_mode("dark", THEME), **_streamlit_mode("light", THEME_LIGHT),
 }
 
 
@@ -151,9 +220,10 @@ def css() -> str:
     return f"""
 <style>
     @import url('{FONTS}');
-    {tokens_css()}
+    {tokens_css(light_when=f':root[{MODE_ATTR}="light"]')}
+    /* no background here: Streamlit paints it from the mode picked, and MODE_JS reads it back */
     html, body, .stApp {{
-        background: var(--fs-bg); color: var(--fs-text2);
+        color: var(--fs-text2);
         font-family: var(--font-sans); font-weight: 400; font-size: 15.5px; line-height: 1.6;
         letter-spacing: .005em; -webkit-font-smoothing: antialiased; font-variant-numeric: tabular-nums;
     }}
@@ -343,6 +413,13 @@ def css() -> str:
     .runbox .rl .m:empty {{ display: none; }}
     @keyframes runpulse {{ 0% {{ box-shadow: 0 0 0 0 var(--fs-neg); }} 70% {{ box-shadow: 0 0 0 20px transparent; }} 100% {{ box-shadow: 0 0 0 0 transparent; }} }}
     @media (prefers-reduced-motion: reduce) {{ .runbox.running .disc {{ animation: none; }} }}
+
+    /* tips (ui_text.tips): a few short points, muted and tight, in place of a paragraph */
+    [class*="st-key-tips_"] ul {{ margin: .1rem 0 .7rem; padding-left: 1.1rem; }}
+    [class*="st-key-tips_"] li {{ font-size: 13.5px; line-height: 1.5; color: var(--fs-text3); margin: 0 0 .15rem; max-width: 92ch; }}
+    [class*="st-key-tips_"] li::marker {{ color: var(--fs-accent); }}
+    [class*="st-key-tips_"] strong {{ color: var(--fs-text2); }}
+    .stMarkdownColoredText strong, [class*="st-key-tips_"] .stMarkdownColoredText strong {{ color: inherit; }}   /* :green[**Key**] stays green */
 
     /* the log: one entry per run, newest first - when, what kind, how it ended, then its lines */
     .logbook {{ font-family: var(--font-mono) !important; font-size: 12px; line-height: 1.7; color: var(--fs-text2); }}

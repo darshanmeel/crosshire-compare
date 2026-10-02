@@ -10,6 +10,7 @@ from .sources import Side
 from .state import bump, forget_results
 from .theme import esc
 from .ui_columns import Setup
+from .ui_text import tips
 from .values import (FORMAT_PRESETS, NUMERIC_PARAMS, PARAM_LABELS, STEPS, TYPES,
                      ReadOptions, blank_param, conversion_report, describe_step, final_kind,
                      function_catalog, has_x, try_steps)
@@ -30,12 +31,11 @@ def render(A: Side, B: Side, NA: str, NB: str, setup: Setup, opts: ReadOptions) 
                      "step by step, previewed on the first five rows"
                      + (f" · {len(with_steps)} column(s) have steps" if with_steps else ""),
                      expanded=False):
-        st.caption(
-            "Pick a column and a side, then add steps: each one runs on the result of the "
-            "one before - trim → left 10 → to timestamp (format) → to date. Steps run before "
-            "the pair's **Type**; a conversion step sets the Type for you. A value a "
-            "conversion cannot read keeps its text, so it shows up as a difference and in "
-            "**Check this column**. The preview is the first five rows of that file.")
+        tips("Pick a column and a side, add steps - each runs on the one before: "
+             "`trim → left 10 → to date`",
+             "Steps run before **Type**; a conversion step sets the Type",
+             "A value that will not convert keeps its text - :red[it shows as a difference]",
+             key="steps")
         h1, h2, h3 = st.columns([3, 2, 2])
         canon = h1.selectbox("Column", setup.canon, key="tx_col")
         labels = dict(zip("AB", side_labels(NA, NB)))      # the tag is the value: two SAMPLEs stay apart

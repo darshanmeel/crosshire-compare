@@ -10,6 +10,7 @@ import duckdb
 import streamlit as st
 
 from . import filepick, ui_database
+from .ui_text import tips
 from .sources import (Side, apply_names, file_stamp, kind_of, looks_headerless, path_allowed,
                       quick_clause, row_count, short_header, snapshot, source_schema, work_dir)
 from .state import DEFAULT_NAMES, drop_result
@@ -57,9 +58,8 @@ def source_panel(tag: str) -> None:
         limit = int(st.get_option("server.maxUploadSize"))
         up = st.file_uploader("CSV or JSON file", type=["csv", "txt", "tsv", "dat", "json", "jsonl", "ndjson", "parquet"],
                               key=f"up_{tag}", help="CSV / delimited text, or JSON - an array of objects or one object per line")
-        st.caption(f"Up to {limit:,} MB. A bigger file - or any big one, since an upload is copied - "
-                   "is read where it lies: **Path on disk**"
-                   + (", then **Browse…**." if filepick.available() else "."))
+        st.caption(f"Up to {limit:,} MB · bigger: **Path on disk**"
+                   + (" → **Browse…**" if filepick.available() else ""))
         if up is not None:
             path, label = staged_upload(tag, up), up.name
     elif how == "Database":
@@ -71,24 +71,20 @@ def source_panel(tag: str) -> None:
     else:
         if f"_picked_{tag}" in st.session_state:          # Browse chose it last run, before the box existed
             st.session_state[f"pt_{tag}"] = st.session_state.pop(f"_picked_{tag}")
-        if filepick.available():
-            c1, c2 = st.columns([3, 1])
-            c2.markdown("<div style='height:1.9rem'></div>", unsafe_allow_html=True)
-            if c2.button("Browse…", key=f"browse_{tag}", width="stretch",
-                         help="Opens the file dialog on the machine the app runs on - the file is read "
-                              "where it lies, never copied, so it can be any size."):
-                try:
-                    chosen = filepick.pick_file(str(Path(st.session_state.get(f"pt_{tag}") or "").parent))
-                except RuntimeError as exc:
-                    st.error(str(exc))
-                else:
-                    if chosen:
-                        st.session_state[f"_picked_{tag}"] = chosen
-                        st.rerun()
-        else:
-            c1 = st.container()
-        p = c1.text_input("Path to CSV or JSON", key=f"pt_{tag}",
+        p = st.text_input("Path to CSV or JSON", key=f"pt_{tag}",
                           placeholder=r"C:\data\exports\employees_2026-09.csv").strip()
+        if filepick.available() and st.button(
+                "Browse…", key=f"browse_{tag}", width="stretch",
+                help="Opens the file dialog on the machine the app runs on - the file is read "
+                     "where it lies, never copied, so it can be any size."):
+            try:
+                chosen = filepick.pick_file(str(Path(p).parent) if p else "")
+            except RuntimeError as exc:
+                st.error(str(exc))
+            else:
+                if chosen:
+                    st.session_state[f"_picked_{tag}"] = chosen
+                    st.rerun()
         if p:
             if not Path(p).is_file():
                 st.error("File not found.")
@@ -118,12 +114,11 @@ def source_panel(tag: str) -> None:
     rev = st.session_state.get(f"where_rev_{tag}", 0)
     with st.expander("Rows to read - filter, order, top N", expanded=False):
         if how == "Database":
-            st.caption("Applied to the fetched rows - to cut at the database, put a WHERE in the SQL. "
-                       "Values are text here: `hire_date >= '2026-07-20'`.")
+            tips("On the fetched rows - to cut at the database, put a WHERE in the SQL",
+                 "Values are text: `hire_date >= '2026-07-20'`", key=f"rows_{tag}")
         else:
-            st.caption("Applied as the file is read, on its own column names, before anything "
-                       "else - how a huge file is made small. Values are text here: "
-                       "`hire_date >= '2026-07-20'`.")
+            tips("As the file is read, on its own column names - :green[how a huge file is made small]",
+                 "Values are text: `hire_date >= '2026-07-20'`", key=f"rows_{tag}")
         if cols:
             qc = st.selectbox("Column", cols, key=f"qf_col_{tag}")
             qo = st.selectbox("Condition", QUICK_OPS, key=f"qf_op_{tag}")
@@ -195,7 +190,7 @@ def source_panel(tag: str) -> None:
 
     side: Side = st.session_state[tag]      # re-read: it may have just been loaded
     if side.loaded:
-        st.caption(f"**{side.name}** · {side.origin or side.label} - {side.rows:,} rows, "
+        st.caption(f":green[**✓ {side.name}**] · {side.origin or side.label} · {side.rows:,} rows × "
                    f"{len(side.schema)} columns"
                    + (f"  ·  {side.cut}" if side.cut else "")
                    + (f"  ·  fetched {side.fetched_at}" if side.fetched_at else "")
@@ -226,11 +221,9 @@ def name_hint(tag: str, side: Side) -> None:
     box = (st.session_state.get(f"nick_{tag}") or "").strip()
     other = side_name("B" if tag == "A" else "A")
     if side_name(tag) == other:              # two database sides on one connection, typically
-        st.caption(f"Both sides are called {other}, so the page shows them as A · {other} and "
-                   f"B · {other} - name this one to tell them apart in the tables and on every "
-                   "output file (left_compare_right).")
+        st.caption(f":orange[Both sides are called {other}] - name this one to tell them apart")
     elif not side.is_database and box in ("", DEFAULT_NAMES[tag]):
-        st.caption("Name this side - it names every output file (left_compare_right).")
+        st.caption("Tip: name this side - it names the output files")
 
 
 def finish(tag: str, side: Side) -> None:
@@ -254,8 +247,8 @@ def auto_panel() -> None:
     st.markdown("#### Auto")
     A, B = st.session_state.A, st.session_state.B
     both_in = A.loaded and B.loaded
-    st.caption("Auto does everything by itself - pairs the columns, finds the key, "
-               "compares, and lists each decision so you can change it.")
+    tips("Pairs the columns, finds the key, compares", "Lists every decision - change any of them",
+         key="auto")
     st.checkbox("Profile both sides first", key="auto_profile",
                 help="Off by default: it measures every column of both files - minutes on a big "
                      "or wide pair - and Auto finds the key without it. Tick it and the counts, "

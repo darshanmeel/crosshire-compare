@@ -578,7 +578,7 @@ Compose mounts four things: `./data` read-only at `/data` (the files to compare)
 
 ## Theme
 
-The look is the Crosshire apps theme - the same colour and type tokens the Crosshire web apps use, carried here as `--fs-*` CSS variables: a warm near-black ground, cream text, an amber accent, Fraunces for headlines, Inter for text and JetBrains Mono for figures, labels and code. **Aurora** is the default; **violet** is the second palette (`COMPARE_THEME=violet`), with Inter for the headlines as well.
+The look is the Crosshire apps theme - the same colour and type tokens the Crosshire web apps use, carried here as `--fs-*` CSS variables: a warm near-black ground, cream text, an amber accent, Fraunces for headlines, Inter for text and JetBrains Mono for figures, labels and code. **Aurora** is the default; **violet** is the second palette (`COMPARE_THEME=violet`), with Inter for the headlines as well. Each comes **light and dark**: the app starts on your system's setting, and **⋮ → Settings** switches between Light, Dark and System - the page, the tables and Streamlit's own widgets all follow. The light modes are the same accents darkened until they read on paper. The report follows the reader's system setting the same way.
 
 Every colour and font is defined once, in `THEMES` in `tablecmp/theme.py`. `tokens_css()` turns the active palette into a `:root` block; the app's CSS, the report and `README.html` all start with it and refer only to the variables, so the three read as one thing and a palette change is one edit. Streamlit's own widgets (grids, menus, code, focus rings) take the same colours through `STREAMLIT_THEME`, which `compare_app.py` passes to Streamlit at start - no `.streamlit/config.toml`.
 

@@ -151,7 +151,7 @@ def test_app_shows_the_cells_and_leaves_the_type_alone(monkeypatch, tmp_path):
     assert by_b.at["IsActive", "B looks like"] == "boolean · Y/N"
     assert list(cm["Type"]) == list(build_table(A, B)["Type"])
     assert by_b.at["IsActive", "Type"] == "text" and by_b.at["Salary", "Type"] == "number"
-    assert any("looks like" in c.value and "the Type stays what you set" in c.value for c in at.caption)
+    assert any("*looks like* is a hint from the values, not applied" in m.value for m in at.markdown)
     page = "\n".join(m.value for m in at.markdown)
     assert "Right looks like boolean (Y/N) - read as text" in page
     assert "looks like number" not in page                  # Salary is read as number already

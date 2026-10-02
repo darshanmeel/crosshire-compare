@@ -195,7 +195,7 @@ def test_app_runs_with_a_column_paired_twice(monkeypatch, tmp_path):
     assert _pairs(cm) == [(c["a"], c["b"]) for c in MAPPING["columns"]]
     page = "\n".join(m.value for m in at.markdown)
     assert "name used 2 times on the Directory" in page
-    assert any("more than one pair" in c.value for c in at.caption)
+    assert any("more than one pair" in m.value for m in at.markdown)
     at = _ok(at.button(key="go").click().run())
     res = at.session_state["result"]["result"]
     assert (res.matched_rows, res.only_left, res.only_right) == (2970, 30, 20)
@@ -428,8 +428,8 @@ def test_page_column_table_shows_roles_and_chips(monkeypatch, tmp_path):
     assert not [b for b in at.button if b.label in ("Confirm columns", "Edit columns")]
     assert "confirmed" not in at.session_state
     assert list(at.session_state["cmap"].columns) == MAP_COLS         # the Role column is not stored
-    caption = next(c.value for c in at.caption if "One row per column" in c.value)
-    assert "**Role**" in caption and "green for a key" in caption and "greyed" not in caption
+    tips = next(m.value for m in at.markdown if "Pick each column's partner" in m.value)
+    assert ":green[key]" in tips and ":red[not compared" in tips and "greyed" not in tips
 
 
 def test_apply_mapping_json_skips_an_identical_pair_listed_twice():

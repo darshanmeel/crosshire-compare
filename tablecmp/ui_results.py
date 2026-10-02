@@ -15,6 +15,7 @@ from .outputs import default_save_folder, save_target, table_formats, verdict_of
 from .report import build_report
 from .sources import Side
 from .state import kept_picks
+from .ui_text import tips
 from .theme import THEME, esc
 from .values import ColSpec
 
@@ -85,11 +86,10 @@ def summary_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode) -> None:
         st.markdown(key_chips_html(keys), unsafe_allow_html=True)
         st.markdown(f"Rows are matched on **{' + '.join(keys)}** - **{res.matched_rows:,}** rows matched")
         if res.duplicate_keys_left or res.duplicate_keys_right:
-            st.warning(f"The key **{' + '.join(keys)}** is not unique: **{res.duplicate_keys_left:,}** rows in "
-                       f"{NA} and **{res.duplicate_keys_right:,}** in {NB} share their key with an earlier row. "
-                       "Rows with the same key were paired in file order - first with first, second with "
-                       "second - so a difference reported under a repeated key may be two rows swapped rather "
-                       "than a changed value. Add a column to the key to make it unique (Suggest keys helps).")
+            st.warning(f":orange[**Key not unique**] · **{' + '.join(keys)}** repeats on "
+                       f"**{res.duplicate_keys_left:,}** rows of {NA} and **{res.duplicate_keys_right:,}** of {NB}\n"
+                       "- repeats were paired in file order, so a difference there may be two rows swapped\n"
+                       "- add a column to the key - **Suggest keys** helps")
     elif mode == "hash":
         st.markdown(f"No key - rows were matched by hashing the {len(cols)} compared columns")
     else:
@@ -168,13 +168,11 @@ def columns_tab(run, res: Outcome, NA, NB, keys, cols, specs, mode, limit) -> No
     order = differing + agreeing
     shown = (differing or order)[:COLUMN_CARDS]
     rest = [c for c in order if c not in shown]
-    st.caption(f"Each compared column on the **{res.matched_rows:,} rows that paired"
-               f"{' on ' + ' + '.join(keys) if keys else ' by position'}**. Columns that "
-               "differ come first, worst first"
-               + (f" - the first {len(shown)} of {len(order)} are open; the rest are under "
-                  "*Other columns*." if rest else ".")
-               + " What each column holds across a set of rows is counted in one place: "
-                 "*Profile by bucket* on the Summary.")
+    tips(f"Each compared column on the **{res.matched_rows:,}** rows paired"
+         f"{' on ' + ' + '.join(keys) if keys else ' by position'} - :red[differing first], worst first",
+         (f"{len(shown)} of {len(order)} open; the rest under *Other columns*" if rest else ""),
+         "What a set of rows holds: *Profile by bucket* on the Summary",
+         key="colcards")
     if differing:
         st.error(f"**{len(differing)} column(s) differ**: "
                  + ", ".join(f"{c} ({res.diffs_by_column[c]:,})" for c in differing[:10])
@@ -236,11 +234,9 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
     if not buckets:
         return
     st.markdown("#### Profile by bucket")
-    st.caption("Pick a bucket - keys matched, matched but different, only in one file - and see the "
-               "top values for those rows. The key columns are counted; any other column is counted "
-               "when you add it, so a wide pair does not count hundreds of columns nobody asked to "
-               "see. For paired rows each value is counted on both sides, so a non-key column shows "
-               "what it held in each file.")
+    tips("Pick a bucket to see the top values of its rows",
+         "Key columns are counted; add any other column below · paired rows count both sides",
+         key="buckets")
     names = dict(buckets)                        # bucket -> its label, carrying this run's counts
     # what is held is the bucket, not the label: the label has row counts in it, so the next run's
     # label is a different string and the pick would be lost. bucket_id is no widget's key, so
@@ -257,9 +253,8 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
     bucket = next(b for b, lab in names.items() if lab == label)
     st.session_state["bucket_id"] = bucket
     if bucket == "differ":
-        st.markdown(f"**By key value** - the {res.diff_rows:,} rows that paired on **{' + '.join(keys)}** "
-                    "but disagree on a compared column, grouped by each key column. The key is identical "
-                    "on both sides for these rows, so this is *where* the differences sit.")
+        st.markdown(f"**By key value** - where the :red[{res.diff_rows:,} differing rows] sit, "
+                    f"per key column of **{' + '.join(keys)}**")
         by_val = diffs_by_key_value(run, keys)
         kcols = st.columns(min(len(by_val), 2) or 1)
         for i, (k, tbl) in enumerate(by_val.items()):
@@ -384,10 +379,9 @@ def report_tab(run, A, B, NA, NB, limit) -> None:
     h1, h2 = st.columns([4, 1])
     with h1:
         st.markdown("#### Report")
-        st.caption("One self-contained HTML file in the house style - sources, setup, counts, column "
-                   "by column with the value pairs behind each count, differences by key value, the "
-                   "rows that differ with the cells marked, the one-sided rows. Open it anywhere, "
-                   "attach it to a ticket.")
+        tips("One HTML file: setup, counts, every column, the differing rows marked, the one-sided rows",
+             "Opens anywhere - attach it to a ticket",
+             key="report")
     with h2:
         # on_click="ignore": the click must not rerun the page, or the browser's fetch of the
         # file can race the rerun and the button is left stuck in its disabled "downloading" state
@@ -433,9 +427,9 @@ def paired_row(run, NA: str, NB: str) -> None:
         return
     p1, p2 = st.columns([2, 1])
     with p1:
-        st.caption(f"**Paired rows** - every matched row with {NA} beside {NB} - are written when "
-                   "you ask for them. On a wide pair that file takes longer than the comparison "
-                   "did, and most runs are read here rather than downloaded.")
+        tips(f"**Paired rows** - every matched row, {NA} beside {NB} - written when asked for",
+             "On a wide pair: :orange[slower than the comparison was]",
+             key="paired")
     with p2:
         st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
         if st.button("Write the paired rows", key="write_paired_btn", width="stretch"):

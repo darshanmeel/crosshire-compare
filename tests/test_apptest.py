@@ -68,7 +68,7 @@ def _finish(at):
 
 
 def _name_hints(at) -> list[str]:
-    return [c.value for c in at.sidebar.caption if "Name this side" in c.value]
+    return [c.value for c in at.sidebar.caption if "name this side" in c.value]
 
 
 def _files_line(at) -> str:
@@ -126,10 +126,8 @@ def test_database_flow(monkeypatch, tmp_path):
     # ... so both are SAMPLE here, and each panel says so (A's from the run after B loaded);
     # the names still name the run
     at = _ok(at.run())
-    assert [c.value for c in at.sidebar.caption if c.value.startswith("Both sides are called SAMPLE")] == [
-        "Both sides are called SAMPLE, so the page shows them as A · SAMPLE and B · SAMPLE - name "
-        "this one to tell them apart in the tables and on every output file "
-        "(left_compare_right)."] * 2
+    assert [c.value for c in at.sidebar.caption if "Both sides are called SAMPLE" in c.value] == [
+        ":orange[Both sides are called SAMPLE] - name this one to tell them apart"] * 2
     # the page's Files line names the tables, like the sidebar and the report - not a made-up
     # file - with the tag in front, since one name for both sides names neither
     assert _files_line(at) == (
@@ -434,12 +432,13 @@ def test_key_written_differently_is_fixed_or_offered(monkeypatch, tmp_path):
         _ok(at.button(key=f"load_{tag}").click().run())
     _ok(at.button(key="auto_btn").click().run())
     at = _ok(at.run())
-    assert any(i.value.startswith("emp_code: the two sides write the key differently") for i in at.info)
-    assert any(w.value.startswith("ref: ") and "Suggested" in w.value for w in at.warning)
+    assert any("emp_code: the two sides write the key differently" in i.value and "Applied" in i.value
+               for i in at.success)
+    assert any("ref: " in w.value and "Suggested" in w.value for w in at.warning)
     _ok(at.button(key="kf_apply_1").click().run())
     row = at.session_state["cmap"].set_index("Common name")
     assert steps_from_json(row.at["ref", "A steps"])[0]["op"] == "regex replace"
-    assert any(i.value.startswith("ref: ") for i in at.info)
+    assert any("ref: " in i.value and "Applied" in i.value for i in at.success)
 
 
 def test_profile_checks_key_like_columns_first(monkeypatch, tmp_path):
@@ -457,5 +456,5 @@ def test_profile_checks_key_like_columns_first(monkeypatch, tmp_path):
     _ok(at.button(key="do_profile").click().run())
     row = at.session_state["cmap"].set_index("Common name")
     assert steps_from_json(row.at["emp_code", "A steps"]) == [{"op": "remove spaces", "params": {}}]
-    assert any(i.value.startswith("emp_code: ") for i in at.info)
+    assert any("emp_code: " in i.value and "Applied" in i.value for i in at.success)
     assert not [c for c in at.caption if c.value.startswith("This profile is from earlier settings")]
