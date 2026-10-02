@@ -248,7 +248,10 @@ def where_they_sit(run, res: Outcome, NA, NB, keys, cols) -> None:
     want = st.session_state.get("bucket_id")
     if want not in names:
         want = "differ" if "differ" in names else next(iter(names))
-    st.session_state["bucket_pick"] = names[want]
+    # only when the radio holds no label of this run - a click just made is its value, and
+    # writing the held bucket over it would undo the click
+    if st.session_state.get("bucket_pick") not in names.values():
+        st.session_state["bucket_pick"] = names[want]
     label = st.radio("Bucket", list(names.values()), horizontal=True, key="bucket_pick",
                      label_visibility="collapsed")
     bucket = next(b for b, lab in names.items() if lab == label)

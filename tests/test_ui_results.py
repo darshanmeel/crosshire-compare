@@ -121,6 +121,17 @@ def test_one_view_is_drawn_and_what_it_counts_is_what_was_asked_for(monkeypatch,
     _view(at, "Summary")
     assert at.multiselect(key="bucket_cols_differ").value == [other]
     assert at.session_state["bucket_id"] == "differ"
+    # a click on another bucket stays picked - the held bucket once overwrote it every rerun
+    labels = at.radio(key="bucket_pick").options
+    at.radio(key="bucket_pick").set_value(labels[0]); at.run()
+    at.run()
+    assert at.radio(key="bucket_pick").value == labels[0] and at.session_state["bucket_id"] == "matched"
+    _view(at, "Downloads")
+    _view(at, "Summary")
+    assert at.radio(key="bucket_pick").value == labels[0]
+    differ = next(lbl for lbl in labels if lbl.startswith("Matched but different"))
+    at.radio(key="bucket_pick").set_value(differ); at.run()
+    assert at.session_state["bucket_id"] == "differ"
     # the same for the column cards: 12 are open, the rest are a pick that is kept
     _view(at, "Columns & values")
     cards = at.multiselect(key="col_cards")
