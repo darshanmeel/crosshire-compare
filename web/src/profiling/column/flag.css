@@ -1,0 +1,9 @@
+/* web/src/profiling/column/flag.css - the boolean column's page */
+.flag-kv li.t .bar i { background: var(--fs-pos); }
+.flag-kv li.f .bar i { background: var(--fs-text2); }
+.flag-kv li.n .bar i { background: var(--fs-text4); }
+.flag-chips { list-style: none; margin: 0; padding: 0; }
+.flag-chips li { display: contents; }
+.flag-by { display: inline-flex; align-items: center; gap: 10px; font: inherit; }
+.flag-by .sel { width: auto; min-height: 36px; }
+.flag-rates .panel-head { align-items: center; flex-wrap: wrap; }

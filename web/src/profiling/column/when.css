@@ -1,0 +1,13 @@
+/* The date and timestamp column page: the rows-per-bin chart's labels, a denser chart for many
+   bins, weekend days marked in the weekday list, the weekday after a repeated date. */
+.when-hist { height: 150px; }
+.when-hist.dense { gap: 1px; }
+.when-hist.dense i { border-radius: 1px 1px 0 0; border-width: 0; }
+.when-x { display: flex; margin-top: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--fs-text3); font-variant-numeric: tabular-nums; }
+.when-x span { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: visible; }
+.when-bins td.m { white-space: nowrap; }
+.when-kv li .v { font-variant-numeric: tabular-nums; }
+.when-kv li > .m.when-we { color: var(--fs-accent); }
+.when-wd { font-family: var(--font-sans); font-size: 12px; color: var(--fs-text3); margin-left: 6px; }
+.when-cal { display: flex; flex-direction: column; gap: 8px; }
+.when-cal .kv + .eyebrow { margin-top: 12px; }

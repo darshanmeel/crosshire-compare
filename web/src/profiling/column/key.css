@@ -1,0 +1,4 @@
+/* web/src/profiling/column/key.css - the key column's page: the sections spaced as the other
+   column pages, the compare button under its points. */
+.key-view { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.key-view .key-open { margin-top: 4px; }

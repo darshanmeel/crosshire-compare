@@ -163,4 +163,17 @@
 .prof-parts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px 24px; }
 .prof-parts h4 { margin: 0 0 6px; }
 .prof-parts .kv.prof-kv li { grid-template-columns: minmax(0, 1fr) minmax(60px, 1fr) minmax(104px, auto); }
-.prof-shapes li > .m { white-space: normal; }
+.prof-shapes li > .m { white-space: normal; line-height: 1.45; }
+.prof-shapes li > .m .eg { display: block; font-size: 11.5px; color: var(--fs-text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kv.prof-kv.prof-shapes li { grid-template-columns: minmax(0, 2fr) minmax(60px, 1fr) minmax(104px, auto); }
+
+/* column detail: the read-as picker, a stack of panels in one grid cell, near-keys, clean / warn words */
+.prof-readas { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fs-text3); }
+.prof-readas .sel { width: auto; height: 36px; min-height: 36px; }
+.prof-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.dep-col { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.dep-col .near { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; color: var(--fs-text2); border: 1px solid var(--fs-line); border-radius: 4px; padding: 0 4px; }
+.ok-t { color: var(--fs-pos); }
+.warn-t { color: var(--fs-warn); }
+.prof-points.plain .v { font-family: inherit; font-size: 13px; color: var(--fs-text2); white-space: normal; }
+.readas-form { font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--fs-surface2); border: 1px solid var(--fs-line); color: var(--fs-text2); }

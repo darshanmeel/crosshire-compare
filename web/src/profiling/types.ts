@@ -24,4 +24,5 @@ export type CastRow = { column: string; kind: string; filled: number; number?: C
 export type CastsBody = { columns: CastRow[] };
 /** One column taken apart (GET /api/profiling/parts). */
 export type PartGroup = { title: string; total: number; rows: { label: string; n: number }[] };
-export type PartsBody = { column: string; kind: string; groups: PartGroup[] };
+export type SpellingBody = { column: string; distinct: number; folded: number; padded: number };
+export type PartsBody = { column: string; kind: string; reads_as?: string; groups: PartGroup[] };

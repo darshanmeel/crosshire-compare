@@ -30,10 +30,11 @@ function stub(calls: Call[], over: (url: string) => Response | undefined = () =>
     if (url === "/api/profiling/casts") return json(CASTS);
     if (url.startsWith("/api/profiling/parts?column=salary")) return json({ column: "salary", kind: "number", groups: [
       { title: "Digits before the point", total: 3000, rows: [{ label: "4-6", n: 3000 }] }, { title: "Places after the point", total: 3000, rows: [{ label: "1-3", n: 3000 }] }] });
-    if (url.startsWith("/api/profiling/parts?column=department&n=2")) return json({ column: "department", kind: "text", groups: [
-      { title: "First 2 characters", total: 3000, rows: [{ label: "Su", n: 412 }] }] });
-    if (url.startsWith("/api/profiling/parts?column=department")) return json({ column: "department", kind: "text", groups: [
-      { title: "First 3 characters", total: 3000, rows: [{ label: "Sup", n: 412 }] }] });
+    if (url.startsWith("/api/profiling/keycheck?column=emp_id")) return json({ column: "emp_id", rows: 3000, filled: 3000, nulls: 0, blanks: 0,
+      distinct: 3000, duplicates: 0, case_variants: 0, spaces: 0, width: { min: 6, max: 6 }, shapes: [{ shape: "A99999", n: 3000, example: "E10001" }],
+      prefix: { text: "E", n: 3000 }, number: { min: 10001, max: 13000, distinct: 3000, gaps: 0, leading_zeros: 0 }, order: "ascending", next_id: "E13001" });
+    if (url.startsWith("/api/profiling/spelling?column=department")) return json({ column: "department", distinct: 8, folded: 8, padded: 0 });
+    if (url.startsWith("/api/profiling/spelling?")) return json({ column: "emp_id", distinct: 3000, folded: 3000, padded: 0 });
     if (url.startsWith("/api/profiling/hist?")) return json({ column: "salary", kind: "number", bins: [{ lo: 0, hi: 5, n: 2 }, { lo: 5, hi: 10, n: 8 }] });
     return json({ entries: [], last: {} });
   }));
@@ -135,17 +136,10 @@ test("a column name opens its detail: stats, histogram, outliers, frequencies, d
   for (const [label, value] of [["Q1", "5,384.16"], ["Median", "8,672.87"], ["Mean", "8,619.01"], ["Q3", "11,826.14"], ["Std dev", "3,714.93"], ["Max", "14,979.57"]])
     expect(within(document.querySelector<HTMLElement>(".stat-grid")!).getByText(label).nextSibling).toHaveTextContent(value);
   // the histogram from /hist
-  expect(await screen.findByRole("img", { name: /Histogram of salary: 0 – 5 2, 5 – 10 8/ })).toBeInTheDocument();
+  expect(await screen.findByRole("img", { name: /Histogram of salary: 0 - 5 2, 5 - 10 8/ })).toBeInTheDocument();
   expect(calls.map(([u]) => u)).toContain("/api/profiling/hist?column=salary&bins=10");
-  expect(screen.getByText(/Clustered - the fullest bin holds 8 rows, the emptiest 2/)).toBeInTheDocument();
-  // outliers: none, with the fences
-  const pts = screen.getByRole("list", { name: "Outlier findings" });
-  expect(pts).toHaveTextContent("Outside the fencenone");
-  expect(pts).toHaveTextContent("-4,278.82 … 21,489.11");
-  // its parts: digits before and after the point
-  expect(await screen.findByRole("list", { name: "Digits before the point" })).toHaveTextContent("4-6");
-  // most and least frequent, from /freq
-  expect(await screen.findByRole("list", { name: "Least frequent values of salary" })).toHaveTextContent("Legal");
+  // a number column has its own page (NumberView, tested there): the form from /numform
+  expect(calls.map(([u]) => u)).toContain("/api/profiling/numform?column=salary");
   // dependencies: the key trivially, and the one the profile found
   expect(screen.getByText(/trivially, emp_id is the key/)).toBeInTheDocument();
   expect(screen.getByText(/many-to-one · 8 distinct/)).toBeInTheDocument();
@@ -154,18 +148,23 @@ test("a column name opens its detail: stats, histogram, outliers, frequencies, d
   await userEvent.click(screen.getByRole("button", { name: "Previous · department" }));
   expect(await screen.findByRole("heading", { name: "department" })).toBeInTheDocument();
   expect(screen.queryByRole("img", { name: /Histogram/ })).toBeNull();           // text: no distribution
-  expect(screen.getByRole("list", { name: "Shapes" })).toHaveTextContent("7 letters");
+  // a category of 8 values: a verdict, its shapes folded into its values, parts and outliers said to be left out
+  expect(await screen.findByText("A clean category.")).toBeInTheDocument();
+  expect(screen.getByRole("list", { name: "Shape findings" })).toHaveTextContent("7 letters");
+  expect(screen.getByRole("list", { name: "Not shown for this column" })).toHaveTextContent(/Parts.*Outliers/);
+  expect(await screen.findByText("clean")).toBeInTheDocument();                 // case · spaces
   // read as text, but its values would read as numbers: how many, and the type they would take
   const could = await screen.findByRole("list", { name: "Could be read as" });
   expect(could).toHaveTextContent("2,990");
   expect(could).toHaveTextContent("DECIMAL(6, 2) · with , removed · 10 would not convert");
-  // text parts: the first characters, as many as picked
-  expect(await screen.findByRole("list", { name: "First 3 characters" })).toHaveTextContent("Sup");
-  await userEvent.click(within(screen.getByRole("group", { name: "Characters" })).getByRole("button", { name: "2" }));
-  expect(await screen.findByRole("list", { name: "First 2 characters" })).toHaveTextContent("Su");
+  // read as: its own type, or the number its values would take
+  expect(screen.getByRole("combobox", { name: /read as/ })).toHaveValue("text");
+  // the key (emp_id) has its own page (KeyView, tested there): the key check from /keycheck
+  await userEvent.click(screen.getByRole("button", { name: "Previous · emp_id" }));
+  expect(await screen.findByRole("list", { name: "Key check" })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "All columns" }));
   expect(await screen.findByRole("table", { name: "Columns" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "department - open its detail" })).toBeInTheDocument();   // the last one opened stays marked
+  expect(screen.getByRole("button", { name: "emp_id - open its detail" })).toBeInTheDocument();   // the last one opened stays marked
 });
 
 test("a column the profile no longer has goes back to the list", async () => {
@@ -178,5 +177,7 @@ test("a column the profile no longer has goes back to the list", async () => {
 test("a shape reads as runs of letters and digits", async () => {
   const { readShape } = await import("./ColumnDetail");
   expect(readShape("AA999999AA999999999999999")).toBe("2 letters · 6 digits · 2 letters · 15 digits");
-  expect(readShape("A9-99 A")).toBe("1 letter · 1 digit · \"-\" · 2 digits · space · 1 letter");
+  expect(readShape("A9-99 A")).toBe("1 letter · 1-2 digits · space · 1 letter");
+  expect(readShape("99999999 99:99:99.999999A")).toBe("8 digits · space · 2:2:2 digits · point · 6 digits · 1 letter");
+  expect(readShape("9999-99-99")).toBe("4-2-2 digits");
 });

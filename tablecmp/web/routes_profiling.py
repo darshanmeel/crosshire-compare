@@ -229,11 +229,16 @@ def hist(column: str = Query(..., max_length=1000), bins: int = Query(10, ge=1, 
     return {"column": column, "kind": spec.kind, "bins": histogram(P, spec, read_options(ws), bins)}
 
 
-# the forms a text value is tried in: ISO by a plain cast, then these, the best one kept
+# the forms a text value is tried in: ISO by a plain cast, then these, the best one kept - a
+# trailing Z (UTC) is dropped first, and a time to the second is tried with a fraction too - %n
+# takes 1 to 9 digits after the point, so .NET's 7 and nanoseconds' 9 read as well as 3 or 6
 DATE_FORMATS = ("%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%d.%m.%Y", "%Y/%m/%d", "%d %b %Y", "%Y%m%d")
-TIME_FORMATS = ("%d/%m/%Y %H:%M:%S", "%m/%d/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%m/%d/%Y %H:%M",
-                "%Y/%m/%d %H:%M:%S", "%d-%m-%Y %H:%M:%S", "%Y%m%d%H%M%S")
+_TIMES = ("%d/%m/%Y %H:%M:%S", "%m/%d/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%m/%d/%Y %H:%M",
+          "%Y/%m/%d %H:%M:%S", "%d-%m-%Y %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y%m%d-%H:%M:%S",
+          "%Y%m%dT%H%M%S", "%Y%m%d%H%M%S")
+TIME_FORMATS = _TIMES + tuple(f + ".%n" for f in _TIMES if f.endswith("%S"))
 CASTS = "profile_casts_P"     # (profile, answer) - worked out once per profile
+READS_AS = 0.9                # of the filled values: a column read as a date or a timestamp from this share
 
 
 def _when_ok(t: str) -> str:
@@ -242,22 +247,39 @@ def _when_ok(t: str) -> str:
     return f"year({t}) BETWEEN 1900 AND 2100"
 
 
+def _reads(v: str, kind: str) -> list[tuple[str, str]]:
+    """(form, the value read as a TIMESTAMP in it) for a date or a timestamp."""
+    iso = (f"CASE WHEN length({v}) {'<=' if kind == 'date' else '>'} 10 THEN try_cast({v} AS TIMESTAMP) END")
+    return [("ISO", iso)] + [(f, f"try_strptime(rtrim({v}, 'Z'), {lit(f)})")
+                             for f in (DATE_FORMATS if kind == "date" else TIME_FORMATS)]
+
+
+def read_when(v: str, kind: str, form: str = "") -> str:
+    """The value read as a date or a timestamp: `form` first (the one /casts found most values
+    take, so 03/04 is not read day-first in a month-first column), then the others - each form
+    kept only for a plausible year, so a later form still gets its turn."""
+    reads = sorted(_reads(v, kind), key=lambda r: r[0] != form)
+    return f"coalesce({', '.join(f'CASE WHEN {_when_ok(e)} THEN {e} END' for _, e in reads)})"
+
+
 def _tries(v: str, number: bool = False) -> dict[str, list[tuple[str, str]]]:
     """For one value: (form, condition) pairs per type the value might be read as - a number
     column is only tried as a date or a timestamp (20260504 or 20260504004217)."""
     # a plain cast reads '2026-05-06 08:00' as a DATE too, so the length tells a date from a timestamp
-    iso_ts = f"length({v}) > 10 AND try_cast({v} AS TIMESTAMP) IS NOT NULL"
-    ok = {
-        "number": [("plain", f"isfinite(try_cast({v} AS DOUBLE))"),
-                   ("with , removed", f"isfinite(try_cast(replace({v}, ',', '') AS DOUBLE))")],
-        "date": [("ISO", f"length({v}) <= 10 AND try_cast({v} AS DATE) IS NOT NULL")]
-                + [(f, _when_ok(f"try_strptime({v}, {lit(f)})")) for f in DATE_FORMATS],
-        "timestamp": [("ISO", iso_ts)]
-                     + [(f, _when_ok(f"try_strptime({v}, {lit(f)})")) for f in TIME_FORMATS],
-    }
+    ok = {"number": [("plain", f"isfinite(try_cast({v} AS DOUBLE))"),
+                     ("with , removed", f"isfinite(try_cast(replace({v}, ',', '') AS DOUBLE))")]}
+    for kind in ("date", "timestamp"):
+        ok[kind] = [(f, _when_ok(t)) for f, t in _reads(v, kind)]
     if number:
         ok.pop("number")
     return ok
+
+
+def _value(s: ColSpec) -> str:
+    """A text or number column's value as the casts try it: trimmed text, or the number as text."""
+    c = ident(s.canon)
+    return (f"nullif(trim({c}), '')" if s.kind == "text"
+            else f"regexp_replace(CAST({c} AS VARCHAR), '[.]0$', '')")
 
 
 def casts(P, specs: list[ColSpec], opts: ReadOptions) -> list[dict]:
@@ -274,9 +296,7 @@ def casts(P, specs: list[ColSpec], opts: ReadOptions) -> list[dict]:
         register(con, P, "prof", text, "A", opts)
         aggs, keys = [], []
         for s in text:
-            c = ident(s.canon)
-            v = (f"nullif(trim({c}), '')" if s.kind == "text"
-                 else f"regexp_replace(CAST({c} AS VARCHAR), '[.]0$', '')")
+            v = _value(s)
             aggs.append(f"count({v})")
             keys.append((s.canon, "filled", ""))
             for kind, tries in _tries(v, s.kind == "number").items():
@@ -316,6 +336,10 @@ def cast_counts(ws: Workspace = Depends(workspace)) -> dict:
     """Text and number columns that could be read as another type, and how many of their values would -
     read-only, counted in DuckDB on the loaded table with its steps applied."""
     _, prof, _ = _held(ws)
+    return _casts_held(ws, prof)
+
+
+def _casts_held(ws: Workspace, prof: dict) -> dict:
     held = ws.data.get(CASTS)
     if held and held[0] is prof:
         return held[1]
@@ -325,6 +349,14 @@ def cast_counts(ws: Workspace = Depends(workspace)) -> dict:
     answer = {"columns": casts(P, [ColSpec(**s) for s in prof.get("specs", [])], read_options(ws))}
     ws.data[CASTS] = (prof, answer)
     return answer
+
+
+def reads_as(row: dict | None) -> str:
+    """'timestamp' or 'date' when that many of a text or number column's filled values read as one."""
+    for kind in ("timestamp", "date"):
+        if row and kind in row and row[kind]["any"] >= READS_AS * row["filled"]:
+            return kind
+    return ""
 
 
 PART_TOP = 10
@@ -338,7 +370,15 @@ def _band(x: str, top: int) -> str:
             f"CAST((({x} - 1) // 3) * 3 + 1 AS VARCHAR) || '-' || CAST((({x} - 1) // 3) * 3 + 3 AS VARCHAR) END")
 
 
-def parts(P, spec: ColSpec, opts: ReadOptions, n: int) -> list[dict]:
+def _when_groups(kind: str) -> list[tuple[str, str, str]]:
+    groups = [("Year", "CAST(year(v) AS VARCHAR)", "k"), ("Month", "month(v)", "m"), ("Weekday", "isodow(v)", "w")]
+    if kind == "timestamp":
+        groups.append(("Hour", "lpad(CAST(hour(v) AS VARCHAR), 2, '0')", "k"))
+    return groups
+
+
+def parts(P, spec: ColSpec, opts: ReadOptions, n: int, when: str = "", as_number: bool = False,
+          form: str = "") -> list[dict]:
     """One column taken apart: a number by its digits before and after the point, a date or a
     timestamp by year, month, weekday (and hour), text by its first and last `n` characters -
     [{title, total, rows: [{label, n}]}] - total counts every value, the top ten shown or not - each group's rows in their natural order or by count."""
@@ -346,10 +386,16 @@ def parts(P, spec: ColSpec, opts: ReadOptions, n: int) -> list[dict]:
     try:
         register(con, P, "prof", [spec], "A", opts)
         c = ident(spec.canon)
-        if spec.kind == "number":
+        if when:            # text or a number that reads as a date or a timestamp: taken apart as one
+            # parsed once into a table: the forms are tried per value, the groups below read it 3-4 times
+            con.execute(f"CREATE TEMP TABLE t AS SELECT v FROM (SELECT {read_when(_value(spec), when, form)} AS v "
+                        "FROM prof) WHERE v IS NOT NULL")
+            groups = _when_groups(when)
+        elif spec.kind == "number" or as_number:
             # as the shapes read it: the number as text, a trailing .0 dropped, the sign ignored
-            con.execute(f"CREATE TEMP VIEW t AS SELECT regexp_replace(CAST({c} AS VARCHAR), '[.]0$', '') AS v "
-                        f"FROM prof WHERE isfinite(try_cast({c} AS DOUBLE))")
+            x = f"replace(trim({c}), ',', '')" if as_number else c      # text read as a number: its , dropped
+            con.execute(f"CREATE TEMP VIEW t AS SELECT regexp_replace(CAST({x} AS VARCHAR), '[.]0$', '') AS v "
+                        f"FROM prof WHERE isfinite(try_cast({x} AS DOUBLE))")
             b = "length(regexp_replace(split_part(v, '.', 1), '[^0-9]', '', 'g'))"
             a = "length(split_part(v, '.', 2))"
             groups = [("Digits before the point", _band(b, 15), "k"), ("Places after the point", _band(a, 9), "k"),
@@ -357,10 +403,7 @@ def parts(P, spec: ColSpec, opts: ReadOptions, n: int) -> list[dict]:
         elif spec.kind in ("date", "timestamp"):
             con.execute(f"CREATE TEMP VIEW t AS SELECT v FROM (SELECT try_cast({c} AS TIMESTAMP) AS v FROM prof) "
                         "WHERE v IS NOT NULL")
-            groups = [("Year", "CAST(year(v) AS VARCHAR)", "k"), ("Month", "month(v)", "m"),
-                      ("Weekday", "isodow(v)", "w")]
-            if spec.kind == "timestamp":
-                groups.append(("Hour", "lpad(CAST(hour(v) AS VARCHAR), 2, '0')", "k"))
+            groups = _when_groups(spec.kind)
         else:
             con.execute(f"CREATE TEMP VIEW t AS SELECT CAST({c} AS VARCHAR) AS v FROM prof WHERE {c} IS NOT NULL AND {c} <> ''")
             groups = [(f"First {n} characters", f"left(v, {n})", "n"), (f"Last {n} characters", f"right(v, {n})", "n")]
@@ -381,20 +424,61 @@ def parts(P, spec: ColSpec, opts: ReadOptions, n: int) -> list[dict]:
     return out
 
 
+READ_AS = ("text", "number", "date", "timestamp")
+
+
 @router.get("/parts")
 def column_parts(column: str = Query(..., max_length=1000), n: int = Query(3, ge=1, le=10),
+                 read: str = Query("", alias="as", max_length=20),
                  ws: Workspace = Depends(workspace)) -> dict:
-    """One column taken apart for its detail - read-only, counted in DuckDB on the loaded table."""
+    """One column taken apart for its detail - read-only, counted in DuckDB on the loaded table.
+    `as` reads a text or number column as another type first (the page picks it from /casts),
+    so the parts never wait on the casts."""
     _, prof, _ = _held(ws)
-    spec = next((ColSpec(**s) for s in prof.get("specs", []) if s["canon"] == column), None)
-    if spec is None:
-        raise HTTPException(404, f"No column called {column} in this profile.")
+    spec = _spec(prof, column)
     P = side(ws, "P")
     if not P.loaded:
         raise HTTPException(409, "Load a table first.")
-    if spec.kind not in ("number", "date", "timestamp", "text"):
-        return {"column": column, "kind": spec.kind, "groups": []}
-    return {"column": column, "kind": spec.kind, "groups": parts(P, spec, read_options(ws), n)}
+    if spec.kind not in READ_AS:
+        return {"column": column, "kind": spec.kind, "reads_as": "", "groups": []}
+    if read and read not in READ_AS:
+        raise HTTPException(400, f"Read as one of {', '.join(READ_AS)}.")
+    when = read if read in ("date", "timestamp") and spec.kind in ("text", "number") else ""
+    num = read == "number" and spec.kind == "text"
+    # the form the casts found most values take - held once worked out, so this rarely waits
+    form = (next((r for r in _casts_held(ws, prof)["columns"] if r["column"] == column), None) or {}
+            ).get(when, {}).get("form", "") if when else ""
+    return {"column": column, "kind": spec.kind, "reads_as": when or ("number" if num else ""),
+            "groups": parts(P, spec, read_options(ws), n, when, num, form)}
+
+
+def _spec(prof: dict, column: str) -> ColSpec:
+    spec = next((ColSpec(**s) for s in prof.get("specs", []) if s["canon"] == column), None)
+    if spec is None:
+        raise HTTPException(404, f"No column called {column} in this profile.")
+    return spec
+
+
+@router.get("/spelling")
+def column_spelling(column: str = Query(..., max_length=1000), ws: Workspace = Depends(workspace)) -> dict:
+    """How clean a text column's spelling is: its distinct values, how many are left once case
+    and outer spaces are ignored, and how many filled values carry outer spaces - read-only."""
+    _, prof, _ = _held(ws)
+    spec = _spec(prof, column)
+    P = side(ws, "P")
+    if not P.loaded:
+        raise HTTPException(409, "Load a table first.")
+    if spec.kind != "text":
+        return {"column": column, "distinct": 0, "folded": 0, "padded": 0}
+    con = scratch()
+    try:
+        register(con, P, "prof", [spec], "A", read_options(ws))
+        v = f"CAST({ident(spec.canon)} AS VARCHAR)"
+        d, f, pad = con.execute(f"SELECT count(DISTINCT {v}), count(DISTINCT lower(trim({v}))), "
+                                f"count(*) FILTER (WHERE {v} <> trim({v})) FROM prof").fetchone()
+    finally:
+        con.close()
+    return {"column": column, "distinct": int(d), "folded": int(f), "padded": int(pad)}
 
 
 @router.get("/profile.csv")

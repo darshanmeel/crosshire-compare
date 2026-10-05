@@ -12,11 +12,11 @@ type Hit = { col: string; v: number };
 
 /** For one column, the TOP columns it decides most and the TOP that decide it most - under SHOWN% too,
  *  for the page to mark as not conclusive. */
-export function strongest(m: Frame, column: string): { decides: Hit[]; decidedBy: Hit[] } {
+export function strongest(m: Frame, column: string, n = TOP): { decides: Hit[]; decidedBy: Hit[] } {
   const ys = m.columns.slice(1);
   const top = (hits: { col: string; v: unknown }[]) => hits
     .filter((h): h is Hit => typeof h.v === "number")
-    .sort((a, b) => b.v - a.v).slice(0, TOP);
+    .sort((a, b) => b.v - a.v).slice(0, n);
   const row = m.rows.find((r) => r[0] === column);
   const at = ys.indexOf(column);
   return {

@@ -141,6 +141,9 @@ def create_app() -> FastAPI:
     app.include_router(routes_setup.router)
     from . import routes_profiling
     app.include_router(routes_profiling.router)
+    from . import routes_col_flag, routes_col_key, routes_col_number, routes_col_when
+    for r in (routes_col_when, routes_col_number, routes_col_flag, routes_col_key):
+        app.include_router(r.router)          # one column's page, a module per kind of column
     from . import routes_compare
     app.include_router(routes_compare.router)
     from . import routes_results

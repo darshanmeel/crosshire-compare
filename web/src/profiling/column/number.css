@@ -1,0 +1,6 @@
+/* web/src/profiling/column/number.css - the number column's page: the distribution's bars and axis. */
+.num-hist { height: 140px; }
+.num-hist-x { display: flex; gap: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--fs-text3); font-variant-numeric: tabular-nums; }
+.num-hist-x span { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
+.num-once { margin: 8px 0 0; }
+.num-once .m { font-family: var(--font-mono); color: var(--fs-text2); font-variant-numeric: tabular-nums; }

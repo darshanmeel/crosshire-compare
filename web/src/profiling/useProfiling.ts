@@ -1,7 +1,7 @@
 // web/src/profiling/useProfiling.ts
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { CastsBody, FreqBody, HistBody, PartsBody, ProfilingView, SaveDefaults } from "./types";
+import type { CastsBody, FreqBody, HistBody, PartsBody, SpellingBody, ProfilingView, SaveDefaults } from "./types";
 
 /** The held profile as the page draws it - it does not depend on the Name. */
 export function useProfiling(enabled: boolean) {
@@ -33,7 +33,13 @@ export function useCasts(made: string) {
 }
 
 /** One column taken apart: digits, years and months, or its first and last `n` characters. */
-export function useParts(column: string, made: string, n: number) {
-  return useQuery({ queryKey: ["profiling-parts", made, column, n], placeholderData: keepPreviousData,
-                    queryFn: () => api.get<PartsBody>(`/api/profiling/parts?column=${encodeURIComponent(column)}&n=${n}`) });
+export function useParts(column: string, made: string, n: number, as = "") {
+  return useQuery({ queryKey: ["profiling-parts", made, column, n, as], placeholderData: keepPreviousData,
+                    queryFn: () => api.get<PartsBody>(`/api/profiling/parts?column=${encodeURIComponent(column)}&n=${n}${as ? `&as=${as}` : ""}`) });
+}
+
+/** A text column's spelling: distinct values, how many once case and outer spaces are ignored. */
+export function useSpelling(column: string, made: string, on: boolean) {
+  return useQuery({ queryKey: ["profiling-spelling", made, column], enabled: on, staleTime: Infinity,
+                    queryFn: () => api.get<SpellingBody>(`/api/profiling/spelling?column=${encodeURIComponent(column)}`) });
 }
