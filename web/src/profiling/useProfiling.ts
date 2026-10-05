@@ -1,7 +1,7 @@
 // web/src/profiling/useProfiling.ts
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { FreqBody, HistBody, ProfilingView, SaveDefaults } from "./types";
+import type { CastsBody, FreqBody, HistBody, PartsBody, ProfilingView, SaveDefaults } from "./types";
 
 /** The held profile as the page draws it - it does not depend on the Name. */
 export function useProfiling(enabled: boolean) {
@@ -24,4 +24,16 @@ export function useFreq(column: string | null, made: string) {
 export function useHist(column: string | null, made: string, enabled = true) {
   return useQuery({ queryKey: ["profiling-hist", made, column], enabled: !!column && enabled,
                     queryFn: () => api.get<HistBody>(`/api/profiling/hist?column=${encodeURIComponent(column!)}&bins=10`) });
+}
+
+/** Text columns that could be read as a number, a date or a timestamp - one read of the table. */
+export function useCasts(made: string) {
+  return useQuery({ queryKey: ["profiling-casts", made], enabled: !!made, staleTime: Infinity,
+                    queryFn: () => api.get<CastsBody>("/api/profiling/casts") });
+}
+
+/** One column taken apart: digits, years and months, or its first and last `n` characters. */
+export function useParts(column: string, made: string, n: number) {
+  return useQuery({ queryKey: ["profiling-parts", made, column, n], placeholderData: keepPreviousData,
+                    queryFn: () => api.get<PartsBody>(`/api/profiling/parts?column=${encodeURIComponent(column)}&n=${n}`) });
 }

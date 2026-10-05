@@ -22,9 +22,11 @@ hr { border: 0; border-top: 1px solid var(--fs-border); margin: 4px 0; }
 
 /* header */
 .app-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 8px 28px; min-height: 56px; background: var(--fs-panel); border-bottom: 1px solid var(--fs-line); }
-.brand { text-decoration: none; color: var(--fs-text); font-family: var(--font-display); font-size: 21px; line-height: 1; white-space: nowrap; }
+.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--fs-text); font-family: var(--font-display); font-size: 21px; line-height: 1; white-space: nowrap; }
 .brand em { font-style: italic; color: var(--fs-accent); }
 .brand:hover { color: var(--fs-text); }
+.brand .logo { flex: none; color: var(--fs-accent); }
+.brand .logo-plus { stroke: var(--fs-bg); }
 .mode { display: flex; gap: 2px; padding: 3px; background: var(--fs-surface2); border-radius: 999px; }
 .mode label { position: relative; display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 999px; color: var(--fs-text2); font-weight: 500; font-size: 13px; cursor: pointer; }
 .mode label.on { background: var(--fs-panel); color: var(--fs-text); box-shadow: 0 1px 2px var(--fs-shadow); }

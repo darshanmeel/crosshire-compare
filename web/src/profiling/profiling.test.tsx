@@ -13,6 +13,8 @@ import { defaults, entry, profile, profiling, T } from "./testkit";
 beforeEach(() => { resetForms(); resetView(); resetPicks(); resetKept(); });
 
 const FREQ = { column: "emp_id", title: "", top: T(["Value", "Count", "%"], [["Support", 412, 13.73]]), bottom: T(["Value", "Count", "%"], [["Legal", 355, 11.83]]) };
+const CASTS = { columns: [{ column: "department", kind: "text", filled: 3000,
+  number: { any: 2990, form: "with , removed", n: 2990, before: 4, after: 2 } }] };
 const loaded = () => body({ sides: { ...body().sides,
   P: view("P", { loaded: true, label: "hr.csv", rows: 3000, columns: ["emp_id", "department"] }) } });
 
@@ -25,6 +27,13 @@ function stub(calls: Call[], over: (url: string) => Response | undefined = () =>
     if (url.startsWith("/api/profiling/defaults?")) return json(defaults());
     if (url === "/api/profiling") return json(profiling());
     if (url.startsWith("/api/profiling/freq?")) return json(FREQ);
+    if (url === "/api/profiling/casts") return json(CASTS);
+    if (url.startsWith("/api/profiling/parts?column=salary")) return json({ column: "salary", kind: "number", groups: [
+      { title: "Digits before the point", total: 3000, rows: [{ label: "4-6", n: 3000 }] }, { title: "Places after the point", total: 3000, rows: [{ label: "1-3", n: 3000 }] }] });
+    if (url.startsWith("/api/profiling/parts?column=department&n=2")) return json({ column: "department", kind: "text", groups: [
+      { title: "First 2 characters", total: 3000, rows: [{ label: "Su", n: 412 }] }] });
+    if (url.startsWith("/api/profiling/parts?column=department")) return json({ column: "department", kind: "text", groups: [
+      { title: "First 3 characters", total: 3000, rows: [{ label: "Sup", n: 412 }] }] });
     if (url.startsWith("/api/profiling/hist?")) return json({ column: "salary", kind: "number", bins: [{ lo: 0, hi: 5, n: 2 }, { lo: 5, hi: 10, n: 8 }] });
     return json({ entries: [], last: {} });
   }));
@@ -65,6 +74,8 @@ test("the profile: verdict with the engine's headline, columns, key candidates, 
   expect(within(deps).getByText("No column determines another.")).toBeInTheDocument();
   expect(within(deps).getByText("No correlated number columns.")).toBeInTheDocument();
   expect(screen.queryByText(STALE)).toBeNull();
+  // a text column that could be another type, listed on the overview
+  expect(await screen.findByRole("list", { name: "Could be another type" })).toHaveTextContent("DECIMAL(6, 2)");
 });
 
 test("a failed Profile says why and keeps the last profile; a stale one says so; no key is a warning", async () => {
@@ -128,7 +139,11 @@ test("a column name opens its detail: stats, histogram, outliers, frequencies, d
   expect(calls.map(([u]) => u)).toContain("/api/profiling/hist?column=salary&bins=10");
   expect(screen.getByText(/Clustered - the fullest bin holds 8 rows, the emptiest 2/)).toBeInTheDocument();
   // outliers: none, with the fences
-  expect(screen.getByText(/Every value sits inside -4,278.82 … 21,489.11/)).toBeInTheDocument();
+  const pts = screen.getByRole("list", { name: "Outlier findings" });
+  expect(pts).toHaveTextContent("Outside the fencenone");
+  expect(pts).toHaveTextContent("-4,278.82 … 21,489.11");
+  // its parts: digits before and after the point
+  expect(await screen.findByRole("list", { name: "Digits before the point" })).toHaveTextContent("4-6");
   // most and least frequent, from /freq
   expect(await screen.findByRole("list", { name: "Least frequent values of salary" })).toHaveTextContent("Legal");
   // dependencies: the key trivially, and the one the profile found
@@ -139,7 +154,15 @@ test("a column name opens its detail: stats, histogram, outliers, frequencies, d
   await userEvent.click(screen.getByRole("button", { name: "Previous · department" }));
   expect(await screen.findByRole("heading", { name: "department" })).toBeInTheDocument();
   expect(screen.queryByRole("img", { name: /Histogram/ })).toBeNull();           // text: no distribution
-  expect(screen.getByRole("list", { name: "Shapes" })).toHaveTextContent("AAAAAAA");
+  expect(screen.getByRole("list", { name: "Shapes" })).toHaveTextContent("7 letters");
+  // read as text, but its values would read as numbers: how many, and the type they would take
+  const could = await screen.findByRole("list", { name: "Could be read as" });
+  expect(could).toHaveTextContent("2,990");
+  expect(could).toHaveTextContent("DECIMAL(6, 2) · with , removed · 10 would not convert");
+  // text parts: the first characters, as many as picked
+  expect(await screen.findByRole("list", { name: "First 3 characters" })).toHaveTextContent("Sup");
+  await userEvent.click(within(screen.getByRole("group", { name: "Characters" })).getByRole("button", { name: "2" }));
+  expect(await screen.findByRole("list", { name: "First 2 characters" })).toHaveTextContent("Su");
   await userEvent.click(screen.getByRole("button", { name: "All columns" }));
   expect(await screen.findByRole("table", { name: "Columns" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "department - open its detail" })).toBeInTheDocument();   // the last one opened stays marked
@@ -150,4 +173,10 @@ test("a column the profile no longer has goes back to the list", async () => {
   act(() => setView({ column: "gone" }));
   mount(<ProfilingPage />);
   expect(await screen.findByRole("table", { name: "Columns" })).toBeInTheDocument();
+});
+
+test("a shape reads as runs of letters and digits", async () => {
+  const { readShape } = await import("./ColumnDetail");
+  expect(readShape("AA999999AA999999999999999")).toBe("2 letters · 6 digits · 2 letters · 15 digits");
+  expect(readShape("A9-99 A")).toBe("1 letter · 1 digit · \"-\" · 2 digits · space · 1 letter");
 });

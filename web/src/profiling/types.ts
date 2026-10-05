@@ -17,3 +17,11 @@ export type FreqBody = { column: string; title: string; top: Frame; bottom: Fram
 export type Saved = { text: string; folder: string };
 export type HistBin = { lo: number | string; hi: number | string; n: number };
 export type HistBody = { column: string; kind: string; bins: HistBin[] };
+/** A text or number column that could be read as another type (GET /api/profiling/casts): how many filled
+ *  values would, in any form tried, and the form most of them take. */
+export type CastHit = { any: number; form: string; n: number; before?: number; after?: number };
+export type CastRow = { column: string; kind: string; filled: number; number?: CastHit; date?: CastHit; timestamp?: CastHit };
+export type CastsBody = { columns: CastRow[] };
+/** One column taken apart (GET /api/profiling/parts). */
+export type PartGroup = { title: string; total: number; rows: { label: string; n: number }[] };
+export type PartsBody = { column: string; kind: string; groups: PartGroup[] };

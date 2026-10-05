@@ -50,6 +50,11 @@ td{padding:10px 16px 10px 0;border-bottom:1px solid var(--fs-border);vertical-al
 ul{padding-left:20px;margin:0 0 18px;max-width:72ch}li{margin-bottom:6px}
 .steps{font-family:var(--font-mono);font-size:12.5px;color:var(--fs-text2);line-height:2}.steps .n{color:var(--fs-warn);margin-right:8px}.steps .a{color:var(--fs-text3);margin:0 8px}
 .tree{font-family:var(--font-mono);font-size:13px;line-height:1.9;color:var(--fs-text2)}.tree b{color:var(--fs-text);font-weight:500}.tree i{color:var(--fs-text3);font-style:normal}
+.shot{margin:22px 0 26px;max-width:980px}.shot img{display:block;width:100%;height:auto;border:1px solid var(--fs-line);border-radius:var(--r-md);box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.shot figcaption{font-family:var(--font-mono);font-size:11px;color:var(--fs-text3);margin-top:10px}
+.shot.half{max-width:620px}.shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin:22px 0}.shots .shot{margin:0}
+.pts{list-style:none;padding:0;margin:0 0 20px;max-width:78ch}.pts li{position:relative;padding:7px 0 7px 18px;border-bottom:1px solid var(--fs-border);margin:0}.pts li:last-child{border-bottom:0}
+.pts li::before{content:"";position:absolute;left:0;top:16px;width:6px;height:6px;border-radius:50%;background:var(--fs-accent)}.pts li b{font-weight:500;color:var(--fs-text)}
 </style>
 </head>
 <body>
@@ -97,450 +102,573 @@ ul{padding-left:20px;margin:0 0 18px;max-width:72ch}li{margin-bottom:6px}
 pip install desbordante           # optional - exact key discovery (HyUCC / PyroUCC)
 
 python compare_app.py             # the page at http://127.0.0.1:8501</code></pre>
-    <p><code>--port 8600</code> (or <code>COMPARE_WEB_PORT</code>) for another port, <code>--no-browser</code> to not open a tab. Stop it with Ctrl+C. It answers on this machine only (<code>127.0.0.1</code>). A port already in use is said in one sentence. To compare without the page at all, see <a href="#rerun">Run it again from a config</a> - section 12.</p>
-    <p>Python 3.12 to 3.14; DuckDB 1.2 is the floor the app checks at start. Node is not needed to run it: the page is built into <code>tablecmp/web_dist/</code>, which is in the repo. Restart the app after updating files in <code>tablecmp/</code>. One <code>pip install</code> is the whole install: every database driver is a plain wheel - <code>snowflake-connector-python</code>, <code>databricks-sql-connector</code>, <code>pymssql</code> (FreeTDS is inside the wheel, no ODBC driver), <code>oracledb</code> (thin mode, no Oracle client), <code>psycopg[binary]</code> - so there is no system package and nothing outside pip. <code>requirements.lock</code> is the pinned set the Docker image installs; <code>pip install -r requirements.lock</code> reproduces it exactly. A driver is only imported when a connection of its kind is used, so a missing one stops that kind alone, with a message naming the package.</p>
-    <p>Keep <code>compare_app.py</code>, <code>csvdiff.py</code> (the comparison engine) and the <code>tablecmp/</code> folder together. There is no config file: the app applies its theme itself when it starts. Every colour and font lives in <code>tablecmp/theme.py</code>; <strong>the name</strong> is set there too, as <code>APP_NAME</code>, and can be overridden per deployment without touching the code: <code>set COMPARE_APP_NAME=Employee Table Check</code> before starting the app (and <code>COMPARE_APP_TAGLINE</code> for the line under it). The look is <strong>paper</strong> by default: a warm off-white ground, dark ink, an amber accent, Fraunces for headlines, IBM Plex Sans for text and IBM Plex Mono for figures, labels and code. It comes <strong>light and dark</strong>, with the light / dark button in the header. <strong>Aurora</strong> (a warm near-black ground, cream text) and <strong>violet</strong> are the other palettes (<code>set COMPARE_THEME=aurora</code> or <code>violet</code>), and open dark. <code>/theme.css</code> serves the tokens from <code>tokens_css()</code> to the page; the report follows the reader's system setting the same way. Side A is blue and side B is brown everywhere the two sides sit together - the column table, the grids, the report, the legends - and the two also differ in lightness, so they can be told apart without colour.</p>
-    <p>The page is a header and a step rail. The header holds the <strong>Compare</strong> | <strong>Profile</strong> switch, <strong>Connections</strong>, <strong>Run from config</strong>, the <strong>Log</strong> and the light / dark button; the rail under it says where things stand - <em>Sources</em>, <em>Columns</em>, <em>Rows</em>, <em>Results</em> - each with a one-line summary, and carries <strong>Auto · figure it all out</strong> and <strong>Compare</strong> on the right. Before anything is loaded the page is the two source cards.</p>
-    <div class="run">
-      <div class="row"><div class="k">01</div><div><div class="t">Load A and B on the source cards</div><div class="d">Upload, give a path, or fetch from a database. Each side has a name (Left and Right by default) that is shown everywhere and names every output file - <code>&lt;left&gt;_compare_&lt;right&gt;__report.html</code> - so name them; the card reminds you while a side is still called Left or Right. For a big file open <em>Rows to read</em> first and cut it down. Each card offers a 10-row preview and nothing else runs.</div></div></div>
-      <div class="row"><div class="k">02</div><div><div class="t">Check the column table under the cards</div><div class="d">Pairs by name are already made. Fix the rest with the dropdowns, set <em>Read as</em>, and set each row to <strong>Key</strong>, <strong>Compare</strong> or <strong>Skip</strong>. The line under the table says what it amounts to: the key, how many columns are compared, what is skipped and which pairs are guesses to check.</div></div></div>
-      <div class="row"><div class="k">03</div><div><div class="t">Transform where a side needs it</div><div class="d">Section 05: click a pair's Transform cell and add steps - trim → left 10 → to date (%d/%m/%Y) - previewed on the first five rows, on one side or on both at once. <strong>Add a column</strong> makes a new one from an expression, such as the date out of a datetime.</div></div></div>
-      <div class="row"><div class="k">04</div><div><div class="t">Press Compare</div><div class="d">While it runs, a panel at the top lists every step done so far, the one running now and the seconds since it started; the steps stay in the Log. The result opens on its tabs and stays until the next run - a failure never wipes it, and a settings change only marks it stale.</div></div></div>
-    </div>
-    <div class="note ok"><div class="note-t">Or</div><p>Press <strong>Auto · figure it all out</strong>. Auto pairs the columns, works out every type and date spelling, finds the key and compares, narrating each step; every decision is a cell in the column table or a step in the values editor, and the list of them is in the Log. To measure one table on its own - its key, what stands out, the statistics, outliers, patterns and dependencies - switch to <strong>Profile</strong> in the header - section 13.</p></div>
+    <ul class="pts">
+      <li><b>Port</b> - <code>--port 8600</code> or <code>COMPARE_WEB_PORT</code>; <code>--no-browser</code> opens no tab; Ctrl+C stops it.</li>
+      <li><b>This machine only</b> - it answers on <code>127.0.0.1</code> unless <code>--host</code> says otherwise; a port in use is said in one sentence.</li>
+      <li><b>Python</b> - 3.12 to 3.14, DuckDB 1.2 or newer. No Node needed: the built page is in <code>tablecmp/web_dist/</code>.</li>
+      <li><b>Drivers</b> - all plain wheels, nothing outside pip; a missing one stops only its own connection kind.</li>
+      <li><b>Pinned set</b> - <code>pip install -r requirements.lock</code> reproduces the Docker image exactly.</li>
+      <li><b>Name and look</b> - <code>COMPARE_APP_NAME</code> renames the app; <code>COMPARE_THEME=aurora</code> or <code>violet</code> swaps the default <b>paper</b> look.</li>
+      <li><b>No page at all</b> - see <a href="#rerun">Run it again from a config</a>, section 12.</li>
+    </ul>
+    <figure class="shot"><img src="docs/app-home.png" alt="The empty Compare page: header, step rail, a welcome panel and the two source cards" loading="lazy"><figcaption>The page before anything is loaded - header, step rail, welcome panel, source cards A and B</figcaption></figure>
+    <ul class="pts">
+      <li><b>Header</b> - <b>Compare</b> | <b>Profile</b> switch, <b>Connections</b>, <b>Run from config</b>, <b>Log</b> and the light / dark button.</li>
+      <li><b>Step rail</b> - Sources, Columns, Rows, Results, each with a one-line summary.</li>
+      <li><b>Rail buttons</b> - <b>Auto · figure it all out</b> and <b>Compare</b>, on the right.</li>
+      <li><b>Try the HR vs Payroll example</b> - loads the sample pair, named HR and Payroll, in one click.</li>
+      <li><b>Source cards</b> - Upload, Path on disk or Database for each side, with a Name box.</li>
+    </ul>
+    <div class="note ok"><div class="note-t">The usual run</div><p>Load A and B, check the column table, transform where a side needs it, press <strong>Compare</strong>. Or press <strong>Auto · figure it all out</strong> and it does all of that, step by step.</p></div>
   </div>
 </section>
 
 <section class="sec" id="sample">
-  <div class="sec-head"><div class="sec-num">01</div><div><h2 class="sec-h">Try it on the <em>sample pair.</em></h2><div class="sec-sub">examples/ · the same 3,000 employees from three systems, and a database</div></div></div>
+  <div class="sec-head"><div class="sec-num">01</div><div><h2 class="sec-h">Try it on the <em>sample pair.</em></h2><div class="sec-sub">examples/ · 3,000 employees from three systems, and a database</div></div></div>
   <div class="body">
     <table>
       <tr><th>File</th><th>What it is</th><th>What was planted</th></tr>
-      <tr><td>hr_employees.csv</td><td>The HR system, 3,000 rows: <code>emp_id, first_name, last_name, department, salary, hire_date, active</code></td><td>ISO dates, <code>True</code>/<code>False</code> - the clean side.</td></tr>
-      <tr><td>payroll_employees.csv</td><td>Payroll, 2,985 rows: <code>EmployeeId, FullName, Dept, Salary, HireDate, IsActive, CostCenter</code></td><td>Every column renamed; the two names joined into <code>FullName</code>; three departments spelled its own way on about 30% of rows (<code>Finance &amp; Control</code>, <code>Eng</code>, <code>Sales EMEA</code>); salaries as <code>4,739.85</code>; dates as <code>12/01/2026</code>; <code>Y</code>/<code>N</code>; a column HR does not have; the last 40 employees missing; 25 of its own; a few changed salaries and active flags.</td></tr>
-      <tr><td>directory_employees.json</td><td>The staff directory, 2,990 objects: <code>id, name, dept, salary, hire_date, active, manager_id</code> - numbers and booleans as JSON types</td><td>3% of ids in lower case; one <code>name</code> for both names; 10% of departments spelled the directory's way, 5% with stray spaces; 8% of salaries changed and 5% with float noise inside a 0.01 tolerance; dates as <code>06-Nov-2019</code>; <code>manager_id</code> null for 10%; the first 30 HR employees missing; 20 of its own; 1% of active flags flipped.</td></tr>
-      <tr><td>sample.duckdb</td><td>A DuckDB file with <code>hr.employees</code> and <code>payroll.employees</code> - the two CSVs as text columns</td><td>The database route, with no server to set up.</td></tr>
-      <tr><td>mapping_hr_directory.json</td><td>The column mapping that reads the directory correctly</td><td>Used in the third walkthrough.</td></tr>
+      <tr><td>hr_employees.csv</td><td>HR, 3,000 rows, key <code>emp_id</code></td><td>The clean side: ISO dates, <code>True</code>/<code>False</code>.</td></tr>
+      <tr><td>payroll_employees.csv</td><td>Payroll, 2,985 rows, every column renamed</td><td><code>FullName</code>, own department names, <code>4,739.85</code>, <code>12/01/2026</code>, <code>Y</code>/<code>N</code>; 40 missing, 25 extra.</td></tr>
+      <tr><td>directory_employees.json</td><td>Staff directory, 2,990 objects</td><td>Lower-case ids, one <code>name</code>, float noise, <code>06-Nov-2019</code>; 30 missing, 20 extra.</td></tr>
+      <tr><td>sample.duckdb</td><td><code>hr.employees</code>, <code>payroll.employees</code> as text</td><td>The database route, no server.</td></tr>
+      <tr><td>mapping_hr_directory.json</td><td>The mapping that reads the directory</td><td>Used in walkthrough 3.</td></tr>
     </table>
-    <p><code>examples/make_sample.py</code> regenerates all four data files (seed 7).</p>
+    <p><code>examples/make_sample.py</code> regenerates the four data files (seed 7).</p>
+
     <h3 style="font-family:var(--font-display);font-weight:400;font-size:1.3rem;color:var(--fs-text);margin:28px 0 8px">1 · HR against Payroll, with Auto</h3>
-    <div class="run">
-      <div class="row"><div class="k">01</div><div><div class="t">Name and load</div><div class="d">On the <strong>A</strong> card type <code>HR</code> in the <strong>Name</strong> box, pick <strong>Path on disk</strong>, give the full path to <code>examples/hr_employees.csv</code>, press <strong>Load A</strong>. Same for File B: <code>Payroll</code>, <code>payroll_employees.csv</code>, <strong>Load B</strong>. The names are what every output file is called after - <code>HR_compare_Payroll__report.html</code>; leave them and the files are <code>Left_compare_Right__*</code>.</div></div></div>
-      <div class="row"><div class="k">02</div><div><div class="t">Press Auto · figure it all out</div><div class="d">In the bar at the top. Auto pairs six columns - <code>salary</code> by name, <code>hire_date</code> with <code>HireDate</code> and <code>active</code> with <code>IsActive</code> by similar name, <code>emp_id</code> with <code>EmployeeId</code> as a guess it flags to check, <code>department</code> with <code>Dept</code> by their values - reads <code>salary</code> as a number with a <em>remove thousands separators</em> step on Payroll, <code>hire_date</code> as a date with <em>to date (%d/%m/%Y)</em> on Payroll, <code>active</code> as a boolean, finds the key <code>emp_id</code> (<em>name says identifier · no nulls · 3,000 distinct of 3,000 in HR, 2,985 of 2,985 in Payroll · 98.7% of HR's values found in Payroll · unique by itself</em>) and compares - the running panel narrating each step, then ending on <em>Worked out in 1.6s - key: emp_id - comparing now</em> (the seconds are the machine's own).</div></div></div>
-    </div>
+    <ol>
+      <li>Card A: Name <code>HR</code>, <b>Path on disk</b>, <code>examples/hr_employees.csv</code>, <b>Load A</b>.</li>
+      <li>Card B: Name <code>Payroll</code>, <code>examples/payroll_employees.csv</code>, <b>Load B</b>. Output files are named <code>HR_compare_Payroll__*</code>.</li>
+      <li>Press <b>Auto · figure it all out</b>.</li>
+    </ol>
+    <figure class="shot"><img src="docs/app-loaded.png" alt="Both source cards loaded: HR 3,000 rows and Payroll 2,985 rows, the rail showing 6 pairs and key emp_id" loading="lazy"><figcaption>Both sides loaded - the rail says HR 3,000 · Payroll 2,985, 6 pairs, key emp_id</figcaption></figure>
+    <ul class="pts">
+      <li><b>Pairs</b> - six columns, by name, similar name or values; <code>emp_id</code> ↔ <code>EmployeeId</code> flagged as a guess to check.</li>
+      <li><b>Types</b> - <code>salary</code> number (thousands separators removed on Payroll), <code>hire_date</code> date (<em>%d/%m/%Y</em>), <code>active</code> boolean.</li>
+      <li><b>Key</b> - <code>emp_id</code>, unique and never null on both sides.</li>
+    </ul>
 <pre><code>Differences · 2,960 rows matched on emp_id · 5 columns compared · 2,960 rows (100.0%) differ in 3,647 cells · 40 only in HR · 25 only in Payroll</code></pre>
-    <div class="note bad"><div class="note-t">Every matched row differs</div><p>That is Auto's one wrong guess, flagged as such: it paired <code>last_name</code> with <code>FullName</code> by similar name (<em>Matched by</em> says <code>guess - check</code>), and <code>Okafor</code> is never <code>Omar Okafor</code>. The tell is in its decisions, in the Log at the foot of the page - <em>last_name: 18 distinct values on HR against 361 on Payroll - spelled differently, or a different field</em> - and the column's expander under Columns &amp; values says <em>every matched row differs on this column</em>.</p></div>
-    <p>In the column table, click <strong>+ Add</strong> in <code>last_name</code>'s Transform cell - the values editor opens on that pair - pick <strong>Payroll steps</strong>, add the step <em>part N split by S</em> with the separator a single space and N = 2, press <strong>Add</strong>, then <strong>Compare</strong>:</p>
+    <div class="note bad"><div class="note-t">Every matched row differs</div><p>Auto paired <code>last_name</code> with <code>FullName</code> as a <code>guess - check</code>, and <code>Okafor</code> is never <code>Omar Okafor</code>. The Log says so: 18 distinct values on HR against 361 on Payroll.</p></div>
+    <ol start="4">
+      <li>Click <b>+ Add</b> in <code>last_name</code>'s Transform cell.</li>
+      <li>Pick <b>Payroll steps</b>, add <em>part N split by S</em> - separator a space, N = 2 - press <b>Add</b>.</li>
+      <li>Press <b>Compare</b>.</li>
+    </ol>
 <pre><code>Differences · 2,960 rows matched on emp_id · 5 columns compared · 649 rows (21.93%) differ in 687 cells · 40 only in HR · 25 only in Payroll</code></pre>
-    <p><code>department</code> differs on 337 rows (the renamed departments), <code>salary</code> on 319, <code>active</code> on 31, <code>last_name</code> and <code>hire_date</code> on none. The Auto-only counts - 2,960 matched, 40 and 25 one-sided, 2,960 differing rows, 3,647 cells - are what the tests assert.</p>
+    <figure class="shot"><img src="docs/app-result.png" alt="The result: 2,960 rows matched on emp_id, 649 rows (21.93%) differ in 687 cells, 40 only in HR, 25 only in Payroll" loading="lazy"><figcaption>The result - headline, row outcome bar and the Summary tab</figcaption></figure>
+    <ul class="pts">
+      <li><b>By column</b> - <code>department</code> 337 rows, <code>salary</code> 319, <code>active</code> 31, <code>last_name</code> and <code>hire_date</code> none.</li>
+      <li><b>Row outcome</b> - 2,311 fully matched, 649 differ, 40 only in HR, 25 only in Payroll.</li>
+      <li><b>Tabs</b> - Summary, Differing rows, One-sided rows, Report, Downloads.</li>
+    </ul>
+
     <h3 style="font-family:var(--font-display);font-weight:400;font-size:1.3rem;color:var(--fs-text);margin:28px 0 8px">2 · The same pair through a database</h3>
-    <p>Set one environment variable before starting the app - the path is taken as written, so make it absolute or relative to the folder you start from:</p>
+    <p>Set one variable before starting the app; the path is taken as written.</p>
 <pre><code>set COMPARE_CONN_SAMPLE=duckdb:///D:/data/crosshire-compare/examples/sample.duckdb     (Windows)
 export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.duckdb  (macOS / Linux)</code></pre>
-    <div class="run">
-      <div class="row"><div class="k">01</div><div><div class="t">Fetch A</div><div class="d">For File A pick <strong>Database</strong>. The connection <code>SAMPLE · DuckDB file · …</code> is already selected; leave <strong>Table</strong> ticked, type <code>hr.employees</code>, press <strong>Fetch A</strong>. The rows land as a Parquet file in the work folder and the panel says <em>Fetched at 10:12:38 - 3,000 rows</em>; press <strong>Load A</strong>.</div></div></div>
-      <div class="row"><div class="k">02</div><div><div class="t">Fetch B</div><div class="d">For File B pick <strong>Database</strong> too, press <strong>Same SQL as A</strong>, change the table to <code>payroll.employees</code>, <strong>Fetch B</strong>, <strong>Load B</strong>. The caption under each Load button reads <code>SAMPLE · DuckDB file · hr.employees - 3,000 rows, 7 columns · fetched 10:12:38</code>.</div></div></div>
-      <div class="row"><div class="k">03</div><div><div class="t">Auto</div><div class="d">Press <strong>Auto · figure it all out</strong> - the same verdict as the file route, and the files are <code>A_SAMPLE_compare_B_SAMPLE__*</code>, because a database side left at its default name takes the connection's name - and when both sides take the same one, the tag tells them apart.</div></div></div>
-    </div>
-    <p>The DuckDB file holds every column as text, so here the column table's <em>looks like</em> cells have something to say - <code>hire_date</code> looks like <code>date · 2023-03-04 → %Y-%m-%d</code> on one side and <code>date · 04/03/2023 → %d/%m/%Y</code> on the other, <code>active</code> <code>boolean · True/False</code> and <code>boolean · Y/N</code>, <code>salary</code> <code>number · 12,686.95 has thousands separators</code> - which is exactly what Auto then decides. Loaded from the CSV, DuckDB's own sniffer types <code>hire_date</code> DATE on both sides, and a column DuckDB already typed gets no suggestion.</p>
+    <ol>
+      <li>Card A: <b>Database</b>, connection <code>SAMPLE</code>, <b>Table</b> <code>hr.employees</code>, <b>Fetch A</b>, then <b>Load A</b>.</li>
+      <li>Card B: <b>Database</b>, <b>Same SQL as A</b>, table <code>payroll.employees</code>, <b>Fetch B</b>, <b>Load B</b>.</li>
+      <li>Press <b>Auto · figure it all out</b> - the same verdict as the file route.</li>
+    </ol>
+    <ul class="pts">
+      <li><b>Fetch</b> - rows land as a Parquet file in the work folder, with the fetch time and row count.</li>
+      <li><b>File names</b> - a database side left unnamed takes the connection's name: <code>A_SAMPLE_compare_B_SAMPLE__*</code>.</li>
+      <li><b>Looks like</b> - every column is text here, so the column table suggests the date, boolean and number readings Auto then applies.</li>
+    </ul>
+
     <h3 style="font-family:var(--font-display);font-weight:400;font-size:1.3rem;color:var(--fs-text);margin:28px 0 8px">3 · HR against the directory JSON</h3>
-    <p>Name the sides <code>HR</code> and <code>Directory</code>, load <code>examples/hr_employees.csv</code> and <code>examples/directory_employees.json</code>, press Auto. This time Auto walks into every trap on purpose:</p>
+    <ol>
+      <li>Name the sides <code>HR</code> and <code>Directory</code>; load <code>hr_employees.csv</code> and <code>directory_employees.json</code>.</li>
+      <li>Press <b>Auto · figure it all out</b> - it walks into every trap on purpose.</li>
+    </ol>
 <pre><code>Differences · 2,874 rows matched on emp_id · 5 columns compared · 2,874 rows (100.0%) differ in 3,377 cells · 126 only in HR · 116 only in Directory</code></pre>
-    <p><code>emp_id</code> and <code>id</code> were paired by their values, but the 3% of ids the directory writes in lower case find no partner, so 96 employees show up as one-sided on each side instead of 30 and 20; <code>first_name</code> was paired with the directory's single <code>name</code> (<code>guess - check</code> again, and every row differs on it); <code>salary</code> differs on 369 rows because the float noise counts; <code>department</code> on 105, <code>active</code> on 29.</p>
-    <p>Now load the mapping: in the column table press <strong>Upload</strong> in the box under <strong>Save mapping</strong> and give it <code>examples/mapping_hr_directory.json</code>; open <strong>How values are read</strong> and set <em>Numeric tolerance</em> to <code>0.01</code>; press <strong>Compare</strong>:</p>
+    <ul class="pts">
+      <li><b>Lower-case ids</b> - 96 employees per side find no partner, so 126 and 116 one-sided instead of 30 and 20.</li>
+      <li><b>first_name ↔ name</b> - a <code>guess - check</code> pair; every row differs on it.</li>
+      <li><b>Other columns</b> - <code>salary</code> 369 rows (float noise counts), <code>department</code> 105, <code>active</code> 29.</li>
+    </ul>
+    <ol start="3">
+      <li>Above the column table press <b>Load mapping…</b> and pick <code>examples/mapping_hr_directory.json</code>.</li>
+      <li>Open <b>How values are read</b>, set <em>Numeric tolerance</em> to <code>0.01</code>.</li>
+      <li>Press <b>Compare</b>.</li>
+    </ol>
 <pre><code>Differences · 2,970 rows matched on emp_id · 6 columns compared · 357 rows (12.02%) differ in 362 cells · 30 only in HR · 20 only in Directory</code></pre>
-    <p><code>salary</code> differs on 225 rows, <code>department</code> on 107, <code>active</code> on 30; <code>first_name</code>, <code>last_name</code> and <code>hire_date</code> on none - the planted differences and nothing else. What each entry in the mapping does, and why:</p>
+    <p><code>salary</code> differs on 225 rows, <code>department</code> on 107, <code>active</code> on 30 - the planted differences and nothing else.</p>
     <table>
       <tr><th>Pair</th><th>Type and steps</th><th>Why</th></tr>
-      <tr><td>emp_id ↔ id, key</td><td>text · Directory: <em>upper</em></td><td>The directory writes 3% of ids as <code>e10042</code>. Upper-casing that side pairs them; the one-sided counts drop to the real 30 and 20.</td></tr>
-      <tr><td>first_name ↔ name</td><td>text · Directory: <em>part N split by S</em> (separator a space, N = 1)</td><td>The directory has one <code>name</code> for both names. Part 1 is the first name.</td></tr>
-      <tr><td>last_name ↔ name</td><td>text · Directory: <em>part N split by S</em> (separator a space, N = 2)</td><td>The same source column in a second pair - part 2 is the last name. The setup card says <em>name used 2 times on the Directory</em>.</td></tr>
-      <tr><td>department ↔ dept</td><td>text · case: ignore</td><td>The pair's own Case cell, carried in the file as <code>"case": "ignore"</code>. The stray spaces go with <em>Trim whitespace</em>; the 107 that remain are the directory's own department names, which differ by more than case - real differences, reported as such.</td></tr>
-      <tr><td>salary ↔ salary</td><td>number</td><td>With <em>Numeric tolerance</em> at <code>0.01</code> the float noise is not a difference; the 225 changed salaries are.</td></tr>
-      <tr><td>hire_date ↔ hire_date</td><td>date · Directory: <em>to date (%d-%b-%Y)</em></td><td><code>06-Nov-2019</code> spelled out. The built-in list of spellings reads it too - Auto did - but a format in the mapping is explicit and fast.</td></tr>
+      <tr><td>emp_id ↔ id, key</td><td>text · Directory: <em>upper</em></td><td>Pairs the lower-case ids; one-sided drops to 30 and 20.</td></tr>
+      <tr><td>first_name ↔ name</td><td>text · Directory: <em>part N split by S</em>, space, N = 1</td><td>Part 1 of <code>name</code>.</td></tr>
+      <tr><td>last_name ↔ name</td><td>text · Directory: <em>part N split by S</em>, space, N = 2</td><td>Same source column, part 2.</td></tr>
+      <tr><td>department ↔ dept</td><td>text · case: ignore</td><td>The 107 left are real renames.</td></tr>
+      <tr><td>salary ↔ salary</td><td>number</td><td>Tolerance 0.01 hides float noise.</td></tr>
+      <tr><td>hire_date ↔ hire_date</td><td>date · Directory: <em>to date (%d-%b-%Y)</em></td><td><code>06-Nov-2019</code>, explicit and fast.</td></tr>
       <tr><td>active ↔ active</td><td>boolean</td><td><code>true</code> = <code>True</code>.</td></tr>
     </table>
-    <p><code>manager_id</code> has no counterpart and stays one-sided, as the setup card and the report's column sheet say.</p>
+    <p><code>manager_id</code> has no counterpart and stays one-sided.</p>
   </div>
 </section>
 
 <section class="sec" id="sources">
-  <div class="sec-head"><div class="sec-num">02</div><div><h2 class="sec-h">Sources.</h2><div class="sec-sub">the source cards - upload, path on disk, or database</div></div></div>
+  <div class="sec-head"><div class="sec-num">02</div><div><h2 class="sec-h">Sources.</h2><div class="sec-sub">upload, path on disk, or database - one card per side</div></div></div>
   <div class="body">
-    <p>Each side comes from one of three places, picked with the radio under its Name box: <strong>Upload</strong>, <strong>Path on disk</strong>, or <strong>Database</strong> (the Profiling page's one <strong>File</strong> panel is the same panel). <strong>Upload</strong> has no size limit: the file is streamed to the work folder as it arrives. <strong>Path on disk</strong> is still the way for a big file, since nothing is copied; with it and <strong>Database</strong>, DuckDB reads the file, or the fetched table, straight from disk, and a multi-GB file is fine. For a big file, Path on disk is the route - and <strong>Browse…</strong> beside the path box opens the system's file dialog to pick it instead of typing it. With a <strong>Folder</strong> connection saved (section 03), Path on disk shows a <strong>Folder</strong> box first: <em>Any path</em> keeps the path box, a folder lists its CSV, JSON and Parquet files - subfolders too, the first 2,000 - in <strong>File in &lt;folder&gt;</strong>, where a name can also be typed (<code>2026-10/hr.csv</code>). <strong>Browse…</strong> then opens in that folder, and a file picked inside it is kept by its name there. The dialog opens on the machine the app runs on, so it is offered where that machine has a screen (Windows, macOS, a Linux desktop) and not in the container, where the path under <code>/data</code> is typed.</p>
-    <p>A file is a <strong>CSV</strong> (any delimiter), a <strong>JSON</strong> file - an array of objects, or one object per line (.jsonl / .ndjson) - or a <strong>Parquet</strong> file. A JSON value that is itself an object or list arrives as text, in DuckDB's own spelling of the object or list rather than as JSON; a Parquet BLOB column arrives as hex. With <code>COMPARE_DATA_DIR</code> set, a path on disk must sit under one of its folders or the card says <em>Not under an allowed folder</em>. Each side has a <strong>Name</strong> (shown everywhere, and the name of every output file), for CSV a delimiter and a header tick, and <strong>Rows to read</strong>: a WHERE filter on the file's own column names, an order, a top N. All three are applied by DuckDB as the file is read - this is how a 20 GB file becomes the 100,000 rows you actually want. The column / condition / value pickers build the filter for you.</p>
-    <p><strong>Snapshot the rows read to Parquet</strong> (under <em>Advanced</em>, on by default) reads the file once with its cut and keeps the rows as a compact Parquet file in the work folder. Everything after - previews, key search, comparison - reads that instead of re-parsing the file. Untick it only for small files you are re-loading constantly. A Parquet source with no cut is already what a snapshot would be, so none is taken. Also under <strong>Advanced</strong>, a comma-separated list of column names overrides a header row that is missing or short. The app warns when the header looks like a data row, or names fewer columns than the data has.</p>
-    <p><strong>Database</strong> fetches a table or a query out of Snowflake, Databricks, SQL Server, Oracle, Postgres or a DuckDB file into a Parquet file in the work folder, once; from there on the side is a Parquet file like any other. The panel:</p>
-    <div class="grid">
-      <div class="cell"><div class="k">Connection</div><div class="v">The saved and environment connections by name, kind and host; none yet, and it says so and points at the Connections drawer in the header. A connection whose password was not saved gets a <strong>Password - kept for this session only</strong> box; the password lives in the session and nowhere else.</div></div>
-      <div class="cell"><div class="k">Table · SQL query</div><div class="v">A table is <code>schema.table</code>, quoted for the dialect: a part you quote yourself is kept as written, a bare part is folded the way that database folds it (Snowflake and Oracle to upper case, Postgres to lower), so <code>hr.employees</code> finds <code>HR.EMPLOYEES</code> on Snowflake. A query is one <code>SELECT</code> or <code>WITH</code> statement - see read-only, section 03.</div></div>
-      <div class="cell"><div class="k">Fetch at most (0 = all)</div><div class="v">Default 1,000,000. The cap goes into the SQL where the dialect can take it (<code>LIMIT</code>, <code>FETCH FIRST n ROWS ONLY</code>, <code>TOP (n)</code>) and is enforced by the fetch loop everywhere. A cap on a query with no <code>ORDER BY</code> gets a warning: the two sides could get different rows.</div></div>
-      <div class="cell"><div class="k">Fetch A · Fetch B</div><div class="v">The rows stream in batches of 50,000 straight into Parquet and the running panel counts along - <em>Fetching from SAMPLE…</em>, <em>120,000 rows · 38 MB · 12 s</em> - and ends on <em>Fetched 120,000 rows in 12.3s</em>, kept in the Log. The fetch stops with a plain message under 1 GB free; on any error the half-written file is removed. Afterwards the panel says <em>Fetched at 10:12:38 - 3,000 rows</em> (and <em>capped</em>) and offers <strong>Fetch again</strong>. The fetch is kept while the connection, the SQL and the cap stay the same.</div></div>
-      <div class="cell"><div class="k">Same SQL as A</div><div class="v">On side B: copies A's connection, Table / SQL choice, text and cap - for the case where both sides are the same query against two databases or two dates.</div></div>
-      <div class="cell"><div class="k">Then the file panel</div><div class="v">The columns caption, <strong>Rows to read</strong> (applied to the fetched rows - to cut at the database, put a WHERE in the SQL), <strong>Advanced</strong>, <strong>Load</strong>. The caption under Load reads <code>SAMPLE · DuckDB file · hr.employees - 3,000 rows, 7 columns · fetched 10:12:38</code>, with <em>capped at N</em> when it was. A database side left at its default name takes the connection's name.</div></div>
-    </div>
+    <p>Each side is a CSV (any delimiter), a JSON file (an array, or one object per line) or a Parquet file. The Profile page's one <strong>File</strong> card works the same way.</p>
+    <figure class="shot"><img src="docs/app-loaded.png" alt="Source cards A (HR) and B (Payroll), both loaded: 3,000 and 2,985 rows, 7 columns each" loading="lazy"><figcaption>HR 3,000 rows · Payroll 2,985 rows · 7 columns each · Parquet snapshot</figcaption></figure>
+    <ul class="pts">
+      <li><b>Name</b> - shown everywhere and used to name every output file</li>
+      <li><b>Upload</b> - drop or choose a file; any size, copied to the work folder first</li>
+      <li><b>Path on disk</b> - read in place, nothing copied, so any size; <b>Browse…</b> opens the file dialog where the app has a screen</li>
+      <li><b>Folder</b> - with a folder connection saved (section 03), pick a file by its name in that folder instead of a full path</li>
+      <li><b>Delimiter · First row is a header</b> - for CSV; <b>Advanced</b> takes column names when the header is missing or short</li>
+      <li><b>Rows to read</b> - a WHERE filter, an order and a top N, applied by DuckDB as the file is read</li>
+      <li><b>Snapshot the rows read to Parquet</b> - on by default; the rows are read once, then everything reads the snapshot</li>
+      <li><b>COMPARE_DATA_DIR</b> - when set, a path on disk must sit under one of its folders</li>
+    </ul>
+    <figure class="shot"><img src="docs/app-database.png" alt="Side B loaded from a database: DuckDB file · payroll.employees · 2,985 rows × 7 columns · fetched" loading="lazy"><figcaption>B fetched from the sample DuckDB file - payroll.employees, 2,985 rows</figcaption></figure>
+    <p><strong>Database</strong> fetches a table or a query once into a Parquet file in the work folder; from then on the side is a Parquet file like any other.</p>
+    <ul class="pts">
+      <li><b>Conn.</b> - pick a saved or environment connection; <b>Manage</b> opens the Connections drawer</li>
+      <li><b>Password</b> - asked when none is saved, kept for this session only; <b>Change password</b> forgets it</li>
+      <li><b>A table</b> - <code>schema.table</code>, folded the way the database folds names (<code>hr.employees</code> finds <code>HR.EMPLOYEES</code> on Snowflake)</li>
+      <li><b>SQL query</b> - one <code>SELECT</code> or <code>WITH</code> statement only</li>
+      <li><b>Fetch at most</b> - default 1,000,000, 0 = all; a cap with no <code>ORDER BY</code> gets a warning</li>
+      <li><b>Fetch A · Fetch B</b> - rows stream into Parquet in batches; then <b>Load</b> reads what was fetched</li>
+      <li><b>Fetch again</b> - the fetch is kept while the connection, SQL and cap stay the same</li>
+      <li><b>Same SQL as A</b> - on side B, copies A's connection, table or SQL and cap</li>
+    </ul>
   </div>
 </section>
 
 <section class="sec" id="connections">
-  <div class="sec-head"><div class="sec-num">03</div><div><h2 class="sec-h">Connections.</h2><div class="sec-sub">named · in your home folder · from JSON or YAML files · overridable by the environment · read-only</div></div></div>
+  <div class="sec-head"><div class="sec-num">03</div><div><h2 class="sec-h">Connections.</h2><div class="sec-sub">named · from a file or the environment · read-only</div></div></div>
   <div class="body">
-    <p>Connections are kept the way Airflow keeps them: named, in a file in your home folder, overridable one by one with an environment variable - and as many as you like can come from one JSON or YAML file (see <a href="#connections-files">Connections files</a> below). <strong>Connections</strong> in the header opens a drawer on both pages - make or import a connection there first, then pick it on a source card. It lists every connection known - <code>PROD · Snowflake · ACCOUNT - DB.SCHEMA - WH · password saved</code>, or <em>password asked each session</em>, <em>from team.yml · read-only</em>, or <em>env · read-only</em> - with the form under it: <strong>Edit</strong> (a saved connection, or <em>New connection</em>), <strong>Kind</strong>, <strong>Name</strong> (letters, digits, <code>_</code> and <code>-</code>), the fields that kind wants, <strong>Save password</strong>, <strong>Query timeout, seconds</strong> (default 600), and <strong>Test</strong>, <strong>Save</strong>, <strong>Delete</strong>.</p>
+    <p><strong>Connections</strong> in the header opens a drawer on both pages. Make or import a connection there, then pick it on a source card.</p>
+    <figure class="shot half"><img src="docs/app-connections.png" alt="Connections drawer: SAMPLE · DuckDB file · env · read-only, and the Add a connection form" loading="lazy"><figcaption>One connection from the environment (SAMPLE), and the form to add one</figcaption></figure>
+    <ul class="pts">
+      <li><b>The list</b> - every connection with its name, driver, where it points and where it comes from (<em>env · read-only</em>)</li>
+      <li><b>Name · Driver</b> - then the fields that driver wants (table below)</li>
+      <li><b>Password kept</b> - <em>In the file</em>, <em>This session</em>, or <em>Environment variable</em> (only its name is saved)</li>
+      <li><b>Query timeout, seconds</b> - default 600</li>
+      <li><b>Test connection</b> - runs the smallest query and says who the database thinks you are</li>
+      <li><b>Save · Delete · Edit</b> - for connections in your own store; env and shared-file ones are read-only</li>
+    </ul>
     <table>
-      <tr><th>Kind</th><th>Fields</th></tr>
-      <tr><td>Snowflake</td><td>Account, User, Password (or a pasted private key), Database, Schema, Warehouse, Role, Authenticator (optional), Private key file (optional), Private key passphrase (optional)</td></tr>
-      <tr><td>Databricks</td><td>Server hostname, Schema, HTTP path, Access token, Catalog</td></tr>
-      <tr><td>SQL Server</td><td>Server, Port (1433), Database, User, Password</td></tr>
-      <tr><td>Oracle</td><td>Host, Port (1521), User, Password, Service name</td></tr>
-      <tr><td>Postgres</td><td>Host, Port (5432), Database, User, Password</td></tr>
-      <tr><td>DuckDB file</td><td>File path</td></tr>
-      <tr><td>Folder</td><td>Folder path - not a database: the place a <em>Path on disk</em> side picks its files from by name</td></tr>
+      <tr><th>Driver</th><th>Fields</th><th>URI form</th></tr>
+      <tr><td>Snowflake</td><td>Account, User, Password or pasted key, Database, Schema, Warehouse, Role, Private key file</td><td><code>snowflake://USER:PASSWORD@ACCOUNT/DB/SCHEMA?warehouse=WH&amp;role=ROLE</code></td></tr>
+      <tr><td>Databricks</td><td>Server hostname, HTTP path, Access token, Catalog, Schema</td><td><code>databricks://token:TOKEN@HOST/?http_path=PATH&amp;catalog=CATALOG&amp;schema=SCHEMA</code></td></tr>
+      <tr><td>SQL Server</td><td>Server, Port (1433), Database, User, Password</td><td><code>mssql://USER:PASSWORD@SERVER:1433/DB</code></td></tr>
+      <tr><td>Oracle</td><td>Host, Port (1521), User, Password, Service name</td><td><code>oracle://USER:PASSWORD@HOST:1521/?service_name=SERVICE</code></td></tr>
+      <tr><td>Postgres</td><td>Host, Port (5432), Database, User, Password</td><td><code>postgresql://USER:PASSWORD@HOST:5432/DB</code></td></tr>
+      <tr><td>DuckDB file</td><td>File path</td><td><code>duckdb:///C:/data/sample.duckdb</code></td></tr>
+      <tr><td>Folder</td><td>Folder path - not a database; shows under <em>Path on disk</em></td><td><code>folder:///D:/exports/hr</code></td></tr>
     </table>
-    <p><strong>Snowflake key-pair login.</strong> Snowflake logs in with a password, or with a key pair (<code>SNOWFLAKE_JWT</code>) when there is a private key: either a <strong>Private key file</strong> path (the <code>.p8</code> / PEM file - then no password is asked for at all), or the PEM key pasted into the <strong>Password</strong> box itself (the box is one line, so the newlines a paste loses are put back). An encrypted key takes its <strong>Private key passphrase</strong>. The key is read with <code>cryptography</code> and handed to the connector as DER bytes; a key that will not read says why (encrypted with no passphrase, or a wrong one) without ever showing the key, and any key text in a driver message is blanked like a password. A pasted key follows <strong>Save password</strong> the way a password does, and so does the passphrase: with <strong>Save password</strong> unticked it is held for this session only and never written to the file. A key file is the better rule for anything shared, since only its path is saved.</p>
-    <p><strong>Test</strong> connects, runs the smallest query (<code>SELECT 1</code>, or <code>SELECT 1 FROM dual</code>) and says who the database thinks you are: <em>OK - USER · ROLE · WH · DB - 0.6 s</em> (for a DuckDB file, how many tables it holds; for a folder, <em>Found - 12 data files in D:/exports</em>), or the driver's own message with every credential blanked.</p>
-    <p><strong>Folder connections.</strong> A folder has a name and a path and nothing else - no password, no timeout. It never shows in the Database list; it shows under <strong>Path on disk</strong> as the <strong>Folder</strong> box (section 02), as soon as it is saved. What it buys: a side is picked by its name in the folder instead of a full path, and a config saved from that run keeps the folder's name and the file's name. On another machine the same folder connection points wherever the files are there, and the config still runs; on the command line <code>--left feb/hr.csv</code> is read in that folder.</p>
-    <p><strong>The store</strong> is <code>~/.crosshire-compare/connections.json</code> (<code>COMPARE_CONNECTIONS</code> points it elsewhere): <code>{"version": 1, "connections": [ … ]}</code>, one record per connection with its name, kind, host, port, database, schema, user, <code>extra</code> (the kind's own fields: warehouse, role, HTTP path, service name) and timeout. The folder is created <code>0700</code> and the file written <code>0600</code> through a temp file and a rename, so it is never half-written. <strong>Save password</strong> unticked - the rule for anything shared - writes the record with no <code>password</code> key at all; the app then asks for the password once per session, in the Database panel, and keeps it in the session only. A saved password is never echoed back into the form.</p>
-    <p><strong>The environment</strong> wins over the file: every <code>COMPARE_CONN_&lt;NAME&gt;=&lt;uri&gt;</code> is a connection called <code>&lt;NAME&gt;</code>, shown <em>env · read-only</em> in the manager, overriding a file connection of the same name (compared ignoring case, because Windows upper-cases variable names). The URI form is Airflow's, one example per kind:</p>
-<pre><code>COMPARE_CONN_PROD=snowflake://USER:PASSWORD@ACCOUNT/DB/SCHEMA?warehouse=WH&amp;role=ROLE
-COMPARE_CONN_SFKEY=snowflake://USER@ACCOUNT/DB/SCHEMA?warehouse=WH&amp;private_key_file=C:/keys/rsa_key.p8&amp;private_key_pwd=PASSPHRASE
-COMPARE_CONN_LAKE=databricks://token:TOKEN@HOST/?http_path=/sql/1.0/warehouses/ID&amp;catalog=CATALOG&amp;schema=SCHEMA
-COMPARE_CONN_MSSQL=mssql://USER:PASSWORD@SERVER:1433/DB
-COMPARE_CONN_ORA=oracle://USER:PASSWORD@HOST:1521/?service_name=SERVICE
-COMPARE_CONN_PG=postgresql://USER:PASSWORD@HOST:5432/DB
-COMPARE_CONN_SAMPLE=duckdb:///C:/data/sample.duckdb
-COMPARE_CONN_EXPORTS=folder:///D:/exports/hr</code></pre>
-    <p>Percent-encode a user name or password with <code>@</code>, <code>:</code> or <code>/</code> in it; add <code>&amp;timeout=900</code> for a longer query timeout; leave <code>:PASSWORD</code> out and the password is asked for each session. For <code>duckdb</code> and <code>folder</code> the path is everything after <code>:///</code>, exactly as written. The manager's <strong>Save</strong> writes the same URI fields to the file, so a connection made in the drawer and one set in the environment behave the same.</p>
+    <ul class="pts">
+      <li><b>The store</b> - <code>~/.crosshire-compare/connections.json</code>; <code>COMPARE_CONNECTIONS</code> points it elsewhere (a <code>.yml</code> works too)</li>
+      <li><b>COMPARE_CONN_&lt;NAME&gt;=&lt;uri&gt;</b> - a connection called NAME, shown <em>env · read-only</em>; wins over the file</li>
+      <li><b>No password in the URI</b> - leave <code>:PASSWORD</code> out and it is asked once per session</li>
+      <li><b>Snowflake key pair</b> - a private key file, or the PEM key pasted into Password; add <code>private_key_file=</code> in a URI</li>
+      <li><b>Timeout</b> - add <code>&amp;timeout=900</code> to a URI for a longer query timeout</li>
+    </ul>
     <h3 id="connections-files" style="font-family:var(--font-display);font-weight:400;font-size:1.3rem;color:var(--fs-text);margin:28px 0 8px">Connections files</h3>
-    <p>Any number of connections in one file, JSON or YAML - every kind, folders too:</p>
+    <p>Many connections in one JSON or YAML file - every driver, folders too.</p>
 <pre><code>connections:
   - name: PROD
-    kind: snowflake            # or type:
-    account: xy12345.eu-west-1 # host, account, server - one field
+    kind: snowflake
+    account: xy12345.eu-west-1
     user: ANALYST
-    password: ${SNOW_PW}       # read from the environment when used - never stored as the secret
+    password: ${SNOW_PW}       # read from the environment when used
     database: HR
-    schema: PUBLIC
-    warehouse: WH_S            # any other field is the kind's own: role, http_path, token, catalog, service_name…
-    role: READER
-  - name: PG
-    kind: postgresql
-    host: db.local
-    port: 5432
-    database: hr
-    user: me                   # no password: asked for once per session
+    warehouse: WH_S
   - name: EXPORTS
     kind: folder
     path: D:/exports/hr
   - name: SAMPLE
-    uri: duckdb:///examples/sample.duckdb   # or a whole URI, as in COMPARE_CONN_</code></pre>
-    <p>The same in JSON is <code>{"connections": [{"name": "PROD", "kind": "snowflake", …}, …]}</code>; a mapping of name to fields (<code>PROD: {kind: snowflake, …}</code>) and a name to a URI (<code>PG: postgresql://me@db.local/hr</code>) read the same. The field names are the form's - <code>host</code>, <code>port</code>, <code>database</code>, <code>schema</code>, <code>user</code>, <code>password</code>, <code>timeout</code>, <code>extra</code> - or a usual alias: <code>account</code>, <code>server</code>, <code>path</code> for the host, <code>username</code> for the user, <code>db</code> for the database, <code>type</code> for the kind. A file with one bad record is refused whole, naming the record and what is wrong.</p>
-    <div class="grid">
-      <div class="cell"><div class="k">Import</div><div class="v"><strong>Import or export a connections file</strong> in the Connections drawer takes the file, lists what it holds (marking a name that replaces a saved one), and <strong>Add N connections</strong> writes them to your store. A password written in the file is saved only with <strong>Save the passwords written in the file</strong> ticked; a <code>${NAME}</code> is kept as written either way, so the store never holds the secret itself. <strong>Download my connections (.yml, no passwords)</strong> hands the store back out as a file to share: passwords, tokens and passphrases are left blank, and a <code>${NAME}</code> is written as it stands.</div></div>
-      <div class="cell"><div class="k">Shared, read-only</div><div class="v"><code>COMPARE_CONNECTION_FILES</code> names one file or several (separated by <code>;</code> on Windows, <code>:</code> elsewhere). Their connections show <em>from team.yml · read-only</em>; your own store wins over them for the same name, and the environment wins over both. Edit them in the file, not the form.</div></div>
-      <div class="cell"><div class="k">The store itself</div><div class="v"><code>COMPARE_CONNECTIONS</code> may point at a <code>.yml</code> file; it is then read and written as YAML.</div></div>
-    </div>
-    <p><code>${NAME}</code> works in any field of any connections file, the store included: the value comes from the environment when the connection is used, and an unset one reads as empty - a password then is asked for, as if none were written.</p>
-    <div class="note"><div class="note-t">Read-only means three things</div><p>Only a single <code>SELECT</code> or <code>WITH</code> statement is ever sent: the guard strips comments and one trailing <code>;</code>, refuses a second statement, refuses <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>MERGE</code>, <code>CREATE</code>, <code>DROP</code>, <code>ALTER</code>, <code>TRUNCATE</code>, <code>GRANT</code>, <code>REVOKE</code>, <code>EXEC</code>, <code>EXECUTE</code> and <code>CALL</code> anywhere outside a string or a quoted name (quote a column called <code>update</code>), and refuses <code>SELECT … INTO</code> - each with a sentence naming the word, before a connection is even opened. The session is read-only where the driver has such a thing: a DuckDB file is opened <code>read_only</code>, Postgres gets <code>default_transaction_read_only=on</code>, Oracle runs <code>SET TRANSACTION READ ONLY</code> first, SQL Server connects with read-only intent and autocommit off; Snowflake and Databricks rely on the role of the user. And nothing ever commits: every connection is rolled back and closed when the fetch ends. The login timeout is 10 seconds (or the query timeout when that is shorter); the query timeout is the connection's, 600 s by default.</p></div>
-    <p>No credential reaches an output, a report, a log line or the screen: driver messages go through a redaction that first blanks every password, token and passphrase the server knows - typed this session or saved - wherever it appears, whole even with a space in it, then blanks the value after <code>password=</code>, <code>pwd=</code>, <code>token=</code>, <code>secret=</code>, <code>api_key=</code> and <code>authorization:</code> and the <code>user:password@</code> part of any URI, and the only thing about a connection that lands in a report or <code>summary.json</code> is its name. No answer from the server holds a password, a token or a passphrase; a password typed with <strong>Save password</strong> unticked lives only in the server's memory for your browser session. When a password is held, the Database panel shows <strong>Change password</strong>, which forgets it and asks again; editing or deleting the connection forgets it too. A connections file that will not parse is named with its line number only, never the line. <code>connections*.json</code>, <code>.env</code> and <code>*.duckdb</code> (bar the sample) are in <code>.gitignore</code> and <code>.dockerignore</code>.</p>
-    <div class="note bad"><div class="note-t">What was and was not exercised</div><p>The DuckDB kind runs end to end here (the sample database, the API tests). Snowflake, Databricks, SQL Server, Oracle and Postgres were <strong>not</strong> run against a live server in this repository - their dialects, the read-only guard, the read-only switch each driver is connected with, the cap and the streamed fetch (row batches and Arrow batches alike) are covered by tests against a stub driver and a fake DB-API cursor only. The first fetch against a real one is yours; <strong>Test</strong> is the place to start.</p></div>
+    uri: duckdb:///examples/sample.duckdb</code></pre>
+    <ul class="pts">
+      <li><b>Import a file</b> - in the drawer's <em>Import or export</em>; lists what it holds, then <b>Add N connections</b> saves them</li>
+      <li><b>Save the passwords written in the file</b> - off by default; a <code>${NAME}</code> is always kept as written</li>
+      <li><b>Download mine (.yml, no passwords)</b> - your store as a file to share, secrets left blank</li>
+      <li><b>COMPARE_CONNECTION_FILES</b> - shared files (<code>;</code>-separated on Windows, <code>:</code> elsewhere), shown read-only</li>
+      <li><b>Who wins</b> - environment over your store, your store over shared files, for the same name</li>
+      <li><b>A bad record</b> - the whole file is refused, naming the record and what is wrong</li>
+    </ul>
+    <div class="note"><div class="note-t">Read-only and redacted</div><p>Only one <code>SELECT</code> or <code>WITH</code> is ever sent, the session is opened read-only where the driver allows, and every connection is rolled back and closed. Passwords, tokens and keys never reach a report, a log line or the screen; only the DuckDB driver has run against a real database here.</p></div>
   </div>
 </section>
 
 <section class="sec" id="columns">
-  <div class="sec-head"><div class="sec-num">04</div><div><h2 class="sec-h">The column <em>table.</em></h2><div class="sec-sub">every column from either side · one place to decide everything</div></div></div>
+  <div class="sec-head"><div class="sec-num">04</div><div><h2 class="sec-h">The column <em>table.</em></h2><div class="sec-sub">one row per pair · decide everything in one place</div></div></div>
   <div class="body">
-    <p>Every column from either side is a row; one place to decide everything. The table is always open - it never folds away.</p>
-    <table>
-      <tr><th>Column</th><th>What it is</th></tr>
-      <tr><td>Role</td><td>What the row is - <code>key</code>, <code>compared</code>, <code>not compared</code>, <code>only in HR</code> / <code>only in Payroll</code> - in colour: green for a key, red for a row that takes no part in the comparison, no colour for a compared one. Not editable; it changes the moment you tick Key or Compare.</td></tr>
-      <tr><td>A column · B column</td><td>Dropdowns. Each row is one column from either side with its counterpart on the other, or blank. Pick a counterpart for a blank row and the two rows merge; pick a column already used elsewhere and it moves - the row you edited wins. A column that is in no pair always has a row of its own; a row with nothing on either side disappears.</td></tr>
-      <tr><td>Common name</td><td>What the pair is called from here on: in transforms, filters, results, downloads.</td></tr>
-      <tr><td>Type · both sides</td><td>What both sides are converted to before comparing. <code>number</code>: 100.00 = 100 = 1e2. <code>date</code>: 27/08/2026 = 2026-08-27. <code>timestamp</code> keeps the time of day. <code>boolean</code>: 1 = yes = true. A value that will not convert keeps its text, so it shows as a difference rather than vanishing. Both sides - the type is a property of the pair.</td></tr>
-      <tr><td>Key</td><td>Part of the row key. Several ticks make a compound key.</td></tr>
-      <tr><td>Compare</td><td>Compare this column. Ignored on key columns.</td></tr>
-      <tr><td>Case</td><td>For a text pair: <code>ignore</code> or <code>exact</code>, or blank to follow the <em>Ignore case in values</em> switch. A pair of any other Type takes no notice of it.</td></tr>
-      <tr><td>Matched by · detected</td><td>Information: how the pair was made (<code>name</code>, <code>similar name</code>, <code>guess - check</code>, <code>data</code>, <code>you</code>, <code>file</code>) - it also lands in <code>columns.csv</code> - and the type DuckDB sniffed or the file carries on each side.</td></tr>
-      <tr><td>A looks like · B looks like</td><td>What a sample of the values looks like, for a column DuckDB left as text: <code>boolean · Y/N</code>, <code>number</code>, <code>number · 12,686.95 has thousands separators</code>, <code>date · 06-Nov-2019 → %d-%b-%Y</code>, <code>timestamp · 27/08/2026 10:11 → %d/%m/%Y %H:%M</code>, or <code>timestamp · … → ISO, no format needed</code>; blank for plain text or an empty column. Suggestions only - the Type never changes by itself. A column DuckDB already typed gets none: the detected cell already says it.</td></tr>
-    </table>
-    <p>The <em>looks like</em> cells come from up to 2,000 distinct values of the first 50,000 rows (null tokens and empty strings skipped), decided in this order: boolean when every value is one of true/false/t/f/yes/no/y/n, number when 98% cast once commas are removed, else date or timestamp when 98% parse with one of the preset formats - the same list as the <em>to date</em> / <em>to timestamp</em> step picker, so the format can go straight into a step. To take a suggestion, change the pair's Type, or add a <em>to date</em> / <em>to number</em> step with that format; the setup card's <em>Read as</em> row lists every suggestion not taken (<code>active · Payroll looks like boolean (Y/N) - read as text</code>) until the pair's Type agrees or the side gets a conversion step.</p>
-    <div class="note"><div class="note-t">A column may be used in more than one pair</div><p>One <code>name</code> split into <code>first_name</code> and <code>last_name</code> with a <em>part N split by S</em> step on each pair, N = 1 and N = 2. To pair a column a second time, pick it in the dropdown of a row that is still unpaired on the other side. It keeps a one-sided row only while it is in no pair. The setup card's <em>Paired</em> row says <code>name used 2 times on the Right</code> when it happens, and the column sheet, the profile and the report list both pairs, each with its own step.</p></div>
-    <p><strong>Match by data</strong> reads a sample of both sides and pairs the unpaired columns that hold the same values, whatever they are called - <code>Dept</code> with <code>department</code>. <strong>Reset to name matches</strong> starts the table over. <strong>Save mapping</strong> writes the pairs as JSON - one entry per pair with <code>a</code>, <code>b</code>, <code>name</code>, <code>type</code>, <code>key</code>, <code>compare</code>, <code>case</code>, <code>a_steps</code> and <code>b_steps</code>, each step as <code>{"op": "to date", "params": {"fmt": "%d-%b-%Y"}}</code> - and the upload box under it (a JSON file) loads one back for the next run of the same two feeds: every pair whose columns both exist is taken, a column named in several entries is paired several times, an identical entry listed twice is taken once, and the unpaired rows are rebuilt from the sides. <code>examples/mapping_hr_directory.json</code> is one to read. The <em>looks like</em> cells are not in the file.</p>
-    <p><strong>The colours.</strong> The Role cell carries them - the editable cells stay plain - and the <strong>chips</strong> under the table say the same in one line: a green chip per key column, a plain one per compared column, a red one for a column that is not compared (<code>salary · not compared</code>) or is only in one side (<code>CostCenter · only in Payroll</code>). Tick Key or Compare and the row and its chip change colour at once. The <strong>setup card</strong> under the table always shows what it amounts to: how many pairs and any column used twice, the key, the compare list, how every typed or transformed column is read (<code>department text · ignore case</code>, <code>hire_date date · B: to date (format=%d-%b-%Y)</code>) with the suggestions not taken, and the columns that exist on one side only - those are null on the other side and are not compared.</p>
-    <p><strong>Add a column</strong> (the button over the table) makes a column from a DuckDB expression on each side's own columns and pairs it like any other - a date out of a datetime, so rows group by day rather than by minute; the hour, the month or the year; <code>upper</code>; a rounded number; or an expression typed in. Pick what it is made as and the column it is made from on each side - picking HR's column picks its partner on Payroll - and the expressions fill in, editable. Leave one side blank and only the other side gets it. The expression is tried on both files before the column is kept, so a typo comes back as DuckDB's own message; an added column is listed with its two expressions and a <strong>remove</strong>, is saved in the config and survives loading a side again. On the sample pair, <code>hire_year</code> is <code>year(TRY_CAST("hire_date" AS DATE))</code> on HR and <code>year(TRY_STRPTIME("HireDate", '%d/%m/%Y'))</code> on Payroll. The presets read a datetime with <code>TRY_CAST</code>, which takes ISO text; a dd/mm/yyyy column like Payroll's needs <code>TRY_STRPTIME</code> with its format, typed into that side's expression.</p>
+    <p>Every column from either side is a row. Pair it, type it, and say what it does in the run.</p>
+    <figure class="shot"><img src="docs/app-columns.png" alt="Column table for HR against Payroll: 6 pairs, emp_id as key, first_name only in HR and CostCenter only in Payroll" loading="lazy"><figcaption>HR against Payroll - 6 pairs, key emp_id, 5 compared, 2 one-sided</figcaption></figure>
+    <ul class="pts">
+      <li><b>Role</b> - Key, Compare or Skip. Several Key ticks make a compound key; one-sided columns are always Skip.</li>
+      <li><b>HR column · Payroll column</b> - dropdowns. Pick a partner for a <em>no partner</em> row and the two rows merge.</li>
+      <li><b>Read as</b> - the type both sides become: <code>number</code> 100.00 = 1e2, <code>date</code> 27/08/2026 = 2026-08-27, <code>boolean</code> 1 = yes = true.</li>
+      <li><b>Transform</b> - <b>+ Add</b> or the steps a side already has; opens the values editor (section 05).</li>
+      <li><b>Matched by</b> - how the pair was made: name, similarity, <em>guess · check</em> (loose name or values) or you. Guesses are listed under the table.</li>
+      <li><b>Case</b> - <code>ignore</code> or <code>exact</code> for a text pair; <em>default</em> follows the <em>Ignore case in values</em> switch.</li>
+      <li><b>The chevron</b> - opens the common name and what each side was detected as and looks like.</li>
+      <li><b>Summary</b> - the setup card: pairs, key, compare list, how each column is read, suggestions not taken.</li>
+    </ul>
+    <ul class="pts">
+      <li><b>Match by data</b> - pairs unpaired columns that hold the same values, whatever they are called - <code>Dept</code> with <code>department</code>.</li>
+      <li><b>Reset to name matches</b> - starts the table over.</li>
+      <li><b>Save mapping · Load mapping</b> - the pairs, types, roles and steps as JSON, for the next run of the same two feeds.</li>
+      <li><b>Add a column</b> - a new column from a DuckDB expression on each side, paired like any other.</li>
+    </ul>
+    <figure class="shot"><img src="docs/app-add-column.png" alt="Add a column form with Made as, Column name, and a From column and expression for HR and for Payroll" loading="lazy"><figcaption>Add a column - a preset fills both expressions, each still editable</figcaption></figure>
+    <ul class="pts">
+      <li><b>Made as</b> - a preset such as <em>date from a datetime</em>, the hour, month or year, <code>upper</code>, a rounded number, or your own expression.</li>
+      <li><b>From</b> - picking HR's column picks its partner on Payroll. Leave one side blank and only the other gets it.</li>
+      <li><b>Checked first</b> - the expression is tried on both files; a typo comes back as DuckDB's own message.</li>
+      <li><b>dd/mm/yyyy text</b> - presets use <code>TRY_CAST</code> (ISO only); type <code>TRY_STRPTIME("HireDate", '%d/%m/%Y')</code> instead.</li>
+    </ul>
+    <div class="note"><div class="note-t">One column, two pairs</div><p>Split one <code>name</code> into <code>first_name</code> and <code>last_name</code>: pair it twice, each pair with its own <em>part N split by S</em> step.</p></div>
   </div>
 </section>
 
 <section class="sec" id="values">
-  <div class="sec-head"><div class="sec-num">05</div><div><h2 class="sec-h">Values: <em>steps</em>, then the type.</h2><div class="sec-sub">per column · per side · previewed on five rows</div></div></div>
+  <div class="sec-head"><div class="sec-num">05</div><div><h2 class="sec-h">Values: <em>steps</em>, then the type.</h2><div class="sec-sub">per column · per side · previewed on the first rows</div></div></div>
   <div class="body">
-    <p>Both sides are read as text. Every value on every side goes through the same stages and comes out as canonical text, so both sides compare on the same thing:</p>
-    <div class="steps"><span class="n">01</span>the side's transform steps<span class="a">→</span><span class="n">02</span>null folding (empty, NULL, N/A, …)<span class="a">→</span><span class="n">03</span>trim<span class="a">→</span><span class="n">04</span>the pair's Type</div>
-    <p style="margin-top:18px">Click a pair's Transform cell - <strong>+ Add</strong>, or the steps it already has - and the values editor opens: the pairs on the left, the pair's steps on the right, one tab per side. A step goes to the side on screen, or, with <strong>Add a step</strong> set to <em>both</em>, to HR and Payroll at once - the usual case for <em>trim</em>, <em>upper</em> or <em>remove spaces</em>. Each step runs on the result of the one before:</p>
-    <div class="grid">
-      <div class="cell"><div class="k">Text</div><div class="v">trim · upper · lower · left N · right N · length · characters from N, M long · replace text · regex replace · remove spaces · collapse repeated spaces · strip leading zeros · pad left · digits only · letters and digits only · part N split by S · remove thousands separators</div></div>
-      <div class="cell"><div class="k">Conversions</div><div class="v">to number · to timestamp (format) · to date (format) · to boolean. A conversion step sets the pair's Type for you. Formats come from a picker of what the value looks like - <code>27/08/2026</code> → <code>%d/%m/%Y</code> - or typed in; blank tries the usual spellings.</div></div>
-      <div class="cell"><div class="k">Custom expression</div><div class="v">Any DuckDB expression with <code>x</code> as the value - <code>upper(split_part(x, '-', 1))</code>. A searchable catalog of DuckDB's own text, regex and date functions sits next to it, with a template, a description and an example for each. It is one expression: a <code>;</code> outside quotes is refused.</div></div>
-    </div>
-    <p>A text parameter is taken exactly as typed: one space is a real separator for <em>part N split by S</em> and a real find text for <em>replace text</em>; only nothing at all is blank, and a step whose find, separator or pad character is blank is refused with <em>Type the separator first - one space counts</em>. The preview shows the first five rows of that side: in the file, after the steps, compared as - and whether the type conversion succeeds. <strong>Check this column on all rows</strong> counts the values on each side that do not convert, with examples. <strong>Copy to the other side</strong> repeats the same steps there; <strong>Remove last</strong> and <strong>Clear</strong> undo them. When both sides have the same name the Side radio and the Copy button say <code>A · SAMPLE</code> and <code>B · SAMPLE</code>.</p>
-    <div class="note"><div class="note-t">Example</div><p><code>hired_at</code> holds <code>2026-08-27 10:11:12.123</code> on A and <code>27/08/2026 10:11</code> on B, and you only care about the day. B: <em>left 10 → to date (%d/%m/%Y)</em>. Type becomes <code>date</code>; A's ISO text converts on its own. Both compare as <code>2026-08-27</code>.</p></div>
-    <p><strong>How values are read</strong> holds the global switches: trim, empty = null, ignore case, numeric tolerance, and the list of tokens folded to null. Case can also be decided per column: the table's <strong>Case</strong> cell on a text pair - <code>ignore</code> or <code>exact</code> - beats the switch for that column, travels in the mapping JSON as <code>"case"</code>, and shows in the setup card, in the report (<em>case matters · ignored on: department</em>) and in <code>columns.csv</code> as <code>text · ignore case</code>. The tolerance applies to every number pair, and only to them: two values within it are equal, while a text pair keeps its exact match, so a code of <code>001</code> against <code>1</code> stays a difference.</p>
+    <p>Every value goes through the same stages, so both sides compare on the same thing:</p>
+    <div class="steps"><span class="n">01</span>the side's transform steps<span class="a">→</span><span class="n">02</span>null folding (empty, NULL, N/A, …)<span class="a">→</span><span class="n">03</span>trim<span class="a">→</span><span class="n">04</span>the pair's type</div>
+    <figure class="shot"><img src="docs/app-transform.png" alt="Values editor: pairs on the left, last_name with one Payroll step part N split by S, the step palette and a preview where every row matches" loading="lazy"><figcaption>FullName on Payroll, split by a space, N = 2 - every preview row now matches HR's last_name</figcaption></figure>
+    <ul class="pts">
+      <li><b>Open it</b> - click a pair's Transform cell in the column table. <b>Back to the column table</b> returns.</li>
+      <li><b>HR steps · Payroll steps</b> - one tab per side; each step runs on the result of the one before.</li>
+      <li><b>Add a step</b> - to the side on screen, or <em>both - HR and Payroll</em> at once (trim, upper, remove spaces).</li>
+      <li><b>Text steps</b> - trim, upper, lower, left / right N characters, replace text, regex replace, strip leading zeros, digits only, part N split by S…</li>
+      <li><b>Conversions</b> - to number, to date, to timestamp, to boolean. A conversion sets the pair's type.</li>
+      <li><b>Custom expression</b> - any DuckDB expression on <code>x</code>, e.g. <code>upper(split_part(x, '-', 1))</code>.</li>
+      <li><b>Preview on the first rows</b> - before, after the steps, as the type, the other side, and a Match tick.</li>
+      <li><b>Check this column on all rows</b> - counts the values that do not convert, with examples. <b>Copy to</b> and <b>Clear</b> sit beside the steps.</li>
+    </ul>
+    <ul class="pts">
+      <li><b>How values are read</b> - null tokens, empty string is null, trim whitespace, ignore case, numeric tolerance.</li>
+      <li><b>Text parameters</b> - taken as typed: one space is a real separator.</li>
+      <li><b>Numeric tolerance</b> - only for number pairs; a text <code>001</code> against <code>1</code> stays a difference.</li>
+    </ul>
+    <div class="note"><div class="note-t">Example</div><p><code>hired_at</code> is <code>2026-08-27 10:11:12.123</code> on A and <code>27/08/2026 10:11</code> on B. B: <em>left 10 → to date (%d/%m/%Y)</em> - both compare as <code>2026-08-27</code>.</p></div>
   </div>
 </section>
 
 <section class="sec" id="key">
-  <div class="sec-head"><div class="sec-num">06</div><div><h2 class="sec-h">The <em>key.</em></h2><div class="sec-sub">only when asked · with its reasons · or hash when there is none</div></div></div>
+  <div class="sec-head"><div class="sec-num">06</div><div><h2 class="sec-h">The <em>key.</em></h2><div class="sec-sub">on a key · by position · by hash</div></div></div>
   <div class="body">
-    <p>Tick <strong>Key</strong> in the table and rows are matched on it; you can always change it by hand - tick another column, untick this one. Nothing measures the key until you ask.</p>
-    <p><strong>Suggest keys</strong> finds the combinations of up to four columns that identify a row on both sides - with Desbordante when it is installed (HyUCC for exact keys on the first 200,000 rows of the side counted, verified on every row; PyroUCC's almost-unique combinations when nothing is exact), otherwise a level at a time: every column on its own, then every pair of the most key-like columns, then combinations of three, then of four - each level only when the one before found no key. Every candidate gets its <strong>Overlap %</strong> - the share of the Left side's distinct key values that exist on the Right, which is what a key is for - and a <strong>Why</strong>: one line of plain reasons. <em>name says identifier · no nulls · 3,000 distinct of 3,000 in HR, 2,985 of 2,985 in Payroll · 98.7% of HR's values found in Payroll · unique by itself</em>; or <em>salary: a measure, decimal - never a key</em>; or <em>no values in common - none of HR's hire_date values found in Payroll</em> for a key that pairs nothing because one column is spelled differently. A level that finds a key ends the search: a column unique by itself is never combined with anything and nothing is looked for beside it - <code>emp_id</code> is never followed by <code>hire_date + emp_id</code>, nor by a natural key of a name and a date - a pair that works is never grown to three, and every key found is minimal by construction. The columns that take part in a combination are the 24 most key-like in table order - an identifier, a name or a date in the name first - and a measure only in a second pass when they found no key at all: a key with an amount in it beats no key, and is a coincidence beside one. A combination whose distinct counts multiply to fewer than the rows cannot be unique and is not counted; the rest are counted the tightest first - every pair, then the 300 tightest combinations of three, then of four - and over 5,000 rows on a random sample of 5,000 rows first: a duplicate there is a duplicate on every row, so only the combinations unique on the sample are verified on every row - a full count each, the tightest first, and a statement that verifies a key ends the level, so a designed key costs one and the coincidences behind it are never counted in full. The counting itself reads one side: every level - every column, then the combinations, the sample first - is counted on the Left alone, and a combination unique there is verified on the Right before it can end the search: unique there too, and sharing values. One that is not is listed all the same and the search goes on to the next level. That is half the counting of measuring both sides at every level, and the same answer. Only keys end a level - a combination unique on both sides with no value in common pairs no rows, so it is listed but ends nothing - and when nothing is unique the closest are listed, each cut back to the fewest columns that tell as many rows apart. On a wide table with no single unique column this takes minutes - see <a href="#speed">Speed</a>. Candidates rank by unique on both sides, then whether they share any values at all - a row number each side counts for itself pairs nothing, so it ranks under a name and a date shared by both, and is no reason to stop looking for a key that pairs - then whether a measure or a checksum is among them - a row hash is unique by construction and pairs nothing but itself, so it reads <em>a checksum - unique by construction, not a key</em> and ranks under <code>emp_id</code> however unique it is - then whether an identifier is - <code>emp_id</code> above a name and a date - then how close it comes - distinct values per row - then overlap, then fewer columns, then how much the names look like a key on average. How close before the names, and the names averaged rather than summed: a sum grows with every column added, so four key-like names outscored the two that were the key whenever nothing was unique on both sides. The search narrates its steps like every other run and ends on the best - <em>Best key: emp_id in 0.8s</em> - with its steps kept in the Log; pick rows from the list and press <strong>Use as key</strong>. When a profile of the same columns exists (Auto's <em>Profile both sides first</em>, or <strong>Profile both files</strong> under Rows), the single-column counts come from it and are not measured twice; a column with nulls is penalised and a constant column is skipped.</p>
-    <p><strong>Check key</strong> counts, per side, the rows, the distinct key values and the duplicate rows among the rows that have a full key, and the <strong>Null keys</strong> - rows where any key column is null, which identify nothing. A key with duplicates or nulls is not unique, and the warning says which: <em>This key is null on 12 rows of Left - those rows cannot match</em>, then <em>This key is not unique on Right (40 duplicate rows). Rows sharing a key are paired in file order, which can produce differences that are really mis-pairing. Tick another column.</em></p>
-    <p><strong>A key written differently on the two sides</strong> - <code>00123</code> against <code>123</code>, <code>ab 7</code> against <code>AB7</code>, <code>EMP-0042</code> against <code>42</code> - matches no rows however right the column is. So the values of each key column are looked at on both sides: a sample of 2,000 distinct values of one side against every value of the other, both ways round, as written and after each fix tried. A fix is kept when it makes at least half the sample meet and at least 30 points more of it than met as written, and never when it would merge two values of one side into one - that would turn a unique key into a duplicate one. The simplest that comes within two points of the best wins. This runs in three places: <strong>Auto</strong> (before the key search, on the text columns whose names read like a key, and on the chosen key after it), <strong>Check key</strong> and <strong>Use as key</strong> (on the ticked key), and <strong>Profile both files</strong> (on the ticked key, or with none ticked on the key-like columns - first, so the profile is measured on the fixed values).</p>
+    <p>The top of the Rows page decides how rows pair up. Nothing is measured until you press a button.</p>
+    <figure class="shot"><img src="docs/app-rows-setup.png" alt="Rows page: Match rows set to On a key with emp_id ⇄ EmployeeId, Suggest keys and Check key buttons, and the Rows to read cards for HR and Payroll" loading="lazy"><figcaption>Rows matched on emp_id ⇄ EmployeeId - HR 3,000 rows, Payroll 2,985</figcaption></figure>
+    <ul class="pts">
+      <li><b>On a key</b> - rows match on the key columns. Up to four columns can form a key together.</li>
+      <li><b>By position</b> - line 1 against line 1, for exports that keep their order.</li>
+      <li><b>By hash of compared columns</b> - pairs rows identical on every compared column, when nothing identifies a row.</li>
+      <li><b>Add a column</b> - adds a pair to the key; the × on a chip takes it off.</li>
+      <li><b>Suggest keys</b> - single columns, then pairs, threes, fours - stopping at the first level that finds a key.</li>
+      <li><b>Each candidate</b> - a chip with its overlap %; the why is under <em>Every figure of the search</em>. Pick one or more, press <b>Use as key</b>.</li>
+      <li><b>Check key</b> - per side: rows, distinct keys, duplicates and null keys, with a warning when not unique.</li>
+      <li><b>Speed</b> - over 5,000 rows a 5,000-row sample first; a wide pair with no obvious key takes minutes.</li>
+    </ul>
     <div class="grid">
-      <div class="cell"><div class="k">Simple fixes - applied at once</div><div class="v">Case (<code>upper</code>), spaces at the ends, spaces anywhere, leading zeros, a trailing <code>.0</code> (an id that went through a float), and case with leading zeros or spaces. The steps go into the column table's <em>A steps</em> and <em>B steps</em>, after the column's own, where they can be changed, and the Key section says what was done: <em>emp_code: the two sides write the key differently - spaces ('AB 7' against 'AB7'); A: remove spaces · B: remove spaces makes 100% of the values meet, against 0% as written. Applied</em>. Auto's decisions list it too.</div></div>
-      <div class="cell"><div class="k">The rest - suggested</div><div class="v">With <strong>Apply</strong> beside each: a prefix or a suffix one side carries and the other does not (<code>EMP-</code>, with leading zeros if that is what it takes), keeping only letters and digits, keeping only the digits. These read meaning into the values - an <code>R-</code> may be what tells two ids apart - so nothing changes until Apply is pressed.</div></div>
+      <div class="cell"><div class="k">Key written differently - fixed</div><div class="v">Case, spaces, leading zeros, a trailing <code>.0</code>: added as steps on each side and said in the Key section.</div></div>
+      <div class="cell"><div class="k">Key written differently - suggested</div><div class="v">A prefix like <code>EMP-</code>, letters and digits only, digits only: nothing changes until you press <strong>Apply</strong>.</div></div>
     </div>
-    <p>With no key ticked, choose how rows are paired:</p>
-    <table>
-      <tr><th>Mode</th><th>How</th><th>When</th></tr>
-      <tr><td>hash</td><td>Every row is hashed over the compared columns and the two multisets are matched. Identical rows pair; the rest are one-sided. The result also says, per column, how many distinct values exist on one side only - where the one-sided rows differ.</td><td>No key at all, or you want to know whether the two files are the same set of rows.</td></tr>
-      <tr><td>position</td><td>Line 1 against line 1.</td><td>Both files sorted identically, same row count.</td></tr>
-    </table>
-    <div class="note bad"><div class="note-t">If everything differs</div><p>A key that pairs every row and then finds every row different usually means the key columns are spelled differently on the two sides - <code>e10042 </code> against <code>E10042</code>. The summary shows sample unmatched key values; give the key column a Type or an <em>upper</em> / <em>trim</em> step.</p></div>
+    <div class="note bad"><div class="note-t">If everything differs</div><p>The key is likely spelled differently on each side - <code>e10042 </code> against <code>E10042</code>. Give the key an <em>upper</em> or <em>trim</em> step.</p></div>
   </div>
 </section>
 
 <section class="sec" id="rows">
-  <div class="sec-head"><div class="sec-num">07</div><div><h2 class="sec-h">Rows.</h2><div class="sec-sub">filters on the common names · profile on demand</div></div></div>
+  <div class="sec-head"><div class="sec-num">07</div><div><h2 class="sec-h">Rows.</h2><div class="sec-sub">rows to read · filters · profile on demand</div></div></div>
   <div class="body">
-    <p><strong>Filters</strong> apply to both sides, or one, after types: <code>=</code> <code>!=</code> <code>&gt;</code> <code>&gt;=</code> <code>&lt;</code> <code>&lt;=</code> <code>in</code> <code>not in</code> <code>between</code> <code>like</code> <code>is null</code> <code>is not null</code>, each with a Type of <code>auto</code>, <code>string</code>, <code>number</code> or <code>date</code>. Values are matched exactly - the <em>Ignore case</em> switch does not apply to filters - but they are spelled the way the column is before the engine sees them: on a boolean column <code>True</code>, <code>t</code>, <code>yes</code>, <code>y</code> and <code>1</code> mean <code>true</code> (and their opposites <code>false</code>), in lists and ranges too; on a date or timestamp column a value becomes the ISO text the column holds, read with the format the column's own <em>to date</em> or <em>to timestamp</em> step names on the side the filter applies to, else in any of the usual spellings (<code>05/01/2024</code> is <code>2024-05-01</code> on a column read with <code>%m/%d/%Y</code> and <code>2024-01-05</code> without a format; a value the two sides' formats read as different days is refused and asked for in ISO; the time of day is kept on a timestamp column); on a number column the value compares as a number - <code>10 &gt; 9</code>, also when the column is the key and never compared, or when rows pair by hashing - and a value that is not a date, or not a number, is refused in a sentence - <em>filter on 'hire_date': 'not-a-date' is not a date</em> - shown once above the result, whether or not Compare was pressed. <code>between</code> takes two values, comma separated. Every value reaches SQL quoted for its type, never as raw text; two rows on one column where one compares as a number and the other as text are refused in a sentence - set the same Type on both. A filter for one side adds to the <em>Both</em> filters on that column, it never replaces them. To shrink a big file before it is even read, use <em>Rows to read</em> on that file's source card instead; the caption over the filters says so.</p>
-    <p><strong>Profile both files</strong> runs only when pressed: per column, a <em>Both sides</em> sheet with the null %, distinct count, min and max of each file and the null % gap, then each file's own statistics table - the same columns the Profiling page's Statistics has (section 13) - and the 10 most and 10 least frequent values, on the same typed values the comparison uses. It narrates its steps (<em>Profiling…</em>, then <em>Profile ready in 1.2s</em>) and lands in the Log. A profile also feeds <strong>Suggest keys</strong> and Auto, goes into the run folder as <code>profile.csv</code>, and is dropped when the column table or the reads change; the one Auto takes with <em>Profile both sides first</em> shows here too, without the press. To profile one table with no second side, use the Profiling page - section 13.</p>
+    <p>Under the key, the Rows page narrows what is compared. All of it is optional.</p>
+    <ul class="pts">
+      <li><b>Rows to read</b> - per side, a DuckDB <code>WHERE</code>, <b>Order by</b> and <b>Top N</b>, applied at load. <b>Build a condition</b> writes one for you.</li>
+      <li><b>Filters at compare</b> - on the common names, for both sides or one: <code>=</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>in</code> <code>between</code> <code>like</code> <code>is null</code>…</li>
+      <li><b>Filter values</b> - matched exactly, read as the column's type; a bad date or number is refused in a sentence.</li>
+      <li><b>Profile by bucket</b> - count a column in every bucket; the Summary then shows which rows match worst.</li>
+      <li><b>Profile both files</b> - null %, distinct, min and max per column, side by side, plus each side's top and bottom 10 values.</li>
+      <li><b>Run settings</b> - <em>Re-run on every change</em>, <em>Profile both sides first</em> (with Auto), rows to display per section. Downloads hold every row.</li>
+      <li><b>Compare HR against Payroll</b> - runs it, with a caption of columns, key and filters.</li>
+    </ul>
   </div>
 </section>
 
 <section class="sec" id="compare">
-  <div class="sec-head"><div class="sec-num">08</div><div><h2 class="sec-h">Compare, and what <em>comes back.</em></h2><div class="sec-sub">the running panel · a verdict · five tabs · result kept · the Log</div></div></div>
+  <div class="sec-head"><div class="sec-num">08</div><div><h2 class="sec-h">Compare, and what <em>comes back.</em></h2><div class="sec-sub">a verdict · five tabs · the Log</div></div></div>
   <div class="body">
-    <p>Press <strong>Compare</strong>. Both sides are materialised once as DuckDB tables under the common names with the canonical values applied, then the engine (or the hash matcher) runs on those. The running panel narrates: reading A, reading B, matching on the key and comparing N columns. The result gets a <strong>verdict</strong>: <em>Identical</em> when no row differs and none is one-sided; <em>Small differences</em> when the rows that differ are under 5% of the matched rows and the one-sided rows are no more than the matched rows; <em>Differences</em> otherwise; <em>Error</em> when the engine reported one. The verdict is the run's own: it sits on the results head, in the report and in <code>summary.json</code> / <code>summary.csv</code>.</p>
-    <div class="note"><div class="note-t">While it runs</div><p>Compare, Auto and Run from config show a panel at the top of the page: what the run is doing now, every step it has done so far with a check mark, and the seconds since it started. A profile on the Profile page shows the same panel. The step on the rail says how it ended - <em>compared in 0.8s</em> - and a run that fails says <em>could not finish</em> with the error under it. Every step is kept in the Log.</p></div>
-    <div class="note"><div class="note-t">The Log</div><p>The last thing on either page is the <strong>Log</strong> expander - <em>Log - 4 entries</em>, <em>Log - empty</em> before the first run - folded by default. Every run is an entry, newest first: the time of day it started as HH:MM:SS, what it was (Auto, Profile, Key search, Fetch, Compare), the label it ended with - the elapsed time included - and every progress line under it; Auto adds a second entry, <em>Auto decisions</em>, with one line per decision: the pairs it made and how, the type and steps of every column, the key and why, the columns compared; the Profiling page's Profile adds <em>Profile notes</em> the same way, one line per thing that stands out. A run that failed says <em>could not finish</em>. The Log keeps the last 50 entries across reruns and page switches, and <strong>Clear</strong> empties it - a job still running stays, so it can be followed. Leave a page or fold an expander while a job runs and coming back picks the job up again from the Log; starting the same job a second time while it runs is refused with <em>That is running already</em>. The report keeps Auto's decisions as well, under its Key row as <em>How this was worked out</em>, and <code>summary.json</code> carries them as <code>notes</code>.</p></div>
-    <p><strong>Re-run on every change</strong> is off by default - the last result stays on screen and is marked stale when a setting that changes the answer changes. The side names, <em>Rows to display per section</em> and the table format do not: <em>Rows to display</em> (100 to 10,000, default 1,000) caps the tables on screen and in the report only, and changing it redraws them without a run; downloads always contain everything. The engine's own <code>diff.html</code> is capped at 2,000 rows per tab.</p>
-    <p>The result opens with a headline sentence - <em>2,960 rows matched on emp_id · 5 columns compared · 649 rows (21.93%) differ in 687 cells · 40 only in HR · 25 only in Payroll</em> - and the row-outcome bar, then five tabs; only the tab on screen is fetched.</p>
-    <table>
-      <tr><th>Tab</th><th>What it holds</th></tr>
-      <tr><td>Summary</td><td>The counts as tiles - rows each side, matched on the key, fully matched, overall match, columns compared. <strong>Columns</strong>: every pair with how it was read, matched, mismatched and a match bar - green for the share that matched, and a red sliver beside it whenever any row differs - then the columns no pair compares, in orange. <strong>Why they differ</strong>: per column, the value pairs behind its count, or a line saying how alike the values are on average. <strong>Profile by bucket</strong>: the top values for the rows whose keys matched, matched but differ, or exist on one side only. In the paired buckets every mismatched column is counted first, worst first, with its count beside its tick box; the matching columns and the ones no pair compares are a tick away, and a not-compared column is drawn in orange so it is never read as a compared one. The matched-but-different bucket opens with <strong>by key value</strong> - where the differing rows sit, per key column.</td></tr>
-      <tr><td>Differing rows</td><td>One row per key, HR above Payroll, the differing cells marked, a page at a time - HR's rows tinted with side A's colour, Payroll's with side B's.</td></tr>
-      <tr><td>One-sided rows</td><td>The rows only in HR and only in Payroll - on the sample pair the 40 employees only in HR and the 25 only in Payroll - the columns only one file has drawn in orange.</td></tr>
-      <tr><td>Report</td><td>The house-style HTML report, viewed in the page and downloaded with one button; <strong>Download engine report</strong> is the second button. Section 09 walks through it.</td></tr>
-      <tr><td>Downloads</td><td>The whole run as one zip, then every file of the run folder, the table format switch and <strong>Save everything to folder</strong> - section 10.</td></tr>
-    </table>
-    <p><strong>Percentages</strong> are shown to two decimals, except that a share is never rounded to 100% or to 0% while one row disagrees: 6 differing rows in 629,424 read <em>99.999%</em> matched, with as many decimals as it takes, up to six.</p>
+    <p>Press <strong>Compare</strong>. The running panel lists each step as it goes, and the rail ends on <em>compared in 0.8s</em>.</p>
+    <figure class="shot"><img src="docs/app-result.png" alt="Result head: headline sentence, row outcome bar, five tabs and the Summary tiles" loading="lazy"><figcaption>HR against Payroll - 2,960 matched, 649 differ, 40 only in HR, 25 only in Payroll</figcaption></figure>
+    <ul class="pts">
+      <li><b>Headline</b> - rows matched on the key, columns compared, rows and cells that differ, one-sided rows</li>
+      <li><b>Row outcome</b> - one bar: fully matched 2,311 · differ 649 · only in HR 40 · only in Payroll 25</li>
+      <li><b>Verdict</b> - <em>Identical</em>, <em>Small differences</em> (under 5% of matched rows differ, one-sided rows no more than matched), <em>Differences</em> or <em>Error</em></li>
+      <li><b>Summary tab</b> - count tiles, every column with its match bar, the value pairs behind each count</li>
+      <li><b>Percentages</b> - two decimals, never rounded to 100% or 0% while one row disagrees</li>
+      <li><b>Stale result</b> - <em>Re-run on every change</em> is off by default; a changed setting marks the result stale</li>
+    </ul>
+    <div class="shots">
+      <figure class="shot"><img src="docs/app-diffs.png" alt="Differing rows tab with column filter chips, search and HR to Payroll cells" loading="lazy"><figcaption>Differing rows - each differing cell reads HR value → Payroll value</figcaption></figure>
+      <figure class="shot"><img src="docs/app-onesided.png" alt="One-sided rows tab with a pattern note and the two side panels" loading="lazy"><figcaption>One-sided rows - only in HR and only in Payroll, side by side</figcaption></figure>
+    </div>
+    <ul class="pts">
+      <li><b>Differing rows</b> - one row per key; chips filter by column (department 337, salary 319, active 31)</li>
+      <li><b>Search</b> - <em>Find a key or value</em> narrows the table; the CSV button downloads every differing cell</li>
+      <li><b>One-sided rows</b> - a pattern note when the rows share values, then each side with its own CSV</li>
+      <li><b>Report</b> and <b>Downloads</b> - sections 09 and 10</li>
+      <li><b>Rows to display per section</b> - caps the tables on screen and in the report; downloads hold every row</li>
+    </ul>
+    <figure class="shot"><img src="docs/app-log.png" alt="Log panel with compare entries and the Auto decisions entry" loading="lazy"><figcaption>The Log - every run this session, newest first</figcaption></figure>
+    <ul class="pts">
+      <li><b>Log</b> - in the header with its count; each entry has its time, kind and every progress line</li>
+      <li><b>Auto decisions</b> - one line per decision: pairs, types, steps, the key and why</li>
+      <li><b>Copy as text</b>, <b>Clear</b>, <b>Close</b> - a running job stays in the Log after Clear</li>
+      <li><b>Twice at once</b> - starting a job that is already running is refused with <em>That is running already</em></li>
+    </ul>
   </div>
 </section>
 
 <section class="sec" id="report">
-  <div class="sec-head"><div class="sec-num">09</div><div><h2 class="sec-h">The <em>report.</em></h2><div class="sec-sub">one HTML file · Left tinted blue, Right brown · opens anywhere · prints</div></div></div>
+  <div class="sec-head"><div class="sec-num">09</div><div><h2 class="sec-h">The <em>report.</em></h2><div class="sec-sub">one self-contained HTML file · opens anywhere · prints</div></div></div>
   <div class="body">
-    <p>The Report tab shows the report in the page. <strong>Download report</strong> saves it through the browser as <code>&lt;pair&gt;__report.html</code>; <strong>Save report to folder</strong> writes it straight to the folder in the box beside it - <code>&lt;COMPARE_OUT_DIR&gt;/&lt;pair&gt;__&lt;run_id&gt;</code> when the variable is set, else a folder of that name next to file A or under your Downloads folder - and prints the path: the reliable route for big runs. The Downloads tab has the same <strong>Save everything to folder</strong> for the whole run folder at once. It is one self-contained file - fonts from Google, everything else inline - so it can be mailed or dropped in a ticket and opens without the app; offline, the fonts fall back to the system's and the page is otherwise whole. It prints: a <code>@media print</code> block turns the ground white and keeps cards and rows in one piece. It is written for the person who did not run the comparison: what was compared, how, and where it went wrong, in that order.</p>
+    <figure class="shot"><img src="docs/app-report-tab.png" alt="Report tab with Engine report, Download report, run folder box and the report preview" loading="lazy"><figcaption>The Report tab - the report in the page, with its buttons above</figcaption></figure>
+    <ul class="pts">
+      <li><b>Download report</b> - saves <code>&lt;pair&gt;__report.html</code> through the browser</li>
+      <li><b>Save report to folder</b> - writes it to the run folder in the box and prints the path; best for big runs</li>
+      <li><b>Engine report</b> - the engine's own side-by-side <code>&lt;pair&gt;__diff.html</code>, same numbers, capped at 2,000 rows per tab</li>
+      <li><b>Viewer</b> - sets the height of the preview</li>
+      <li><b>Self-contained</b> - fonts from Google, everything else inline; mail it or attach it to a ticket</li>
+      <li><b>Prints</b> - a print style turns the ground white and keeps cards and rows whole</li>
+    </ul>
+    <figure class="shot"><img src="docs/report-paper.png" alt="Report header: title, headline, pills, Differences verdict band and the setup table" loading="lazy"><figcaption>Header, verdict band and the setup</figcaption></figure>
+    <div class="shots">
+      <figure class="shot"><img src="docs/report-columns.png" alt="Every column section: column sheet with match bars and value-pair cards" loading="lazy"><figcaption>Every column - match % worst first, then the value pairs</figcaption></figure>
+      <figure class="shot"><img src="docs/report-rows.png" alt="Rows that differ: HR above Payroll, differing cells picked out" loading="lazy"><figcaption>Rows that differ - HR above Payroll, differing cells marked</figcaption></figure>
+    </div>
     <table>
       <tr><th>Section</th><th>What it says</th></tr>
-      <tr><td>Header</td><td>The two sides and the verdict in one line: rows matched, columns compared, rows that differ, one-sided rows. Under it a row of pills - each side with its file name or database kind, the key, the column count, and one anchor per section (<code>setup</code>, <code>counts</code>, <code>columns</code>, <code>by-key</code>, <code>rows</code>, <code>only-a</code>, <code>only-b</code>) so a reader can be sent to the line that matters - then the <strong>verdict band</strong>: <em>Identical</em>, <em>Small differences</em> or <em>Differences</em>, with the rule it was judged by spelled out beside it.</td></tr>
-      <tr><td>The setup</td><td><strong>Sources</strong>: per side its name, file or <code>Kind · schema.table</code>, the connection name and the SQL for a database side, the path for a file given by path, the <em>Rows to read</em> cut, <em>Parquet snapshot</em>, rows read, when it was fetched and whether the cap was hit. <strong>Key</strong>: the columns; unique on both sides or how many rows share their key; the match rate; and, when Auto chose it, its reason, with the whole list of Auto's decisions folded under <em>How this was worked out</em>. Then rows paired (the key, <em>by hashing the compared columns</em>, or <em>by position</em>), the columns compared, how each typed or transformed column was read, <strong>Values</strong> (trim, empty is null, case - with the columns whose own Case overrides the switch - tolerance, null tokens, anything off the default in bold) and <strong>Filters</strong> as typed, with the side they applied to and the engine's SQL under them. Enough to re-run it by hand.</td></tr>
-      <tr><td>Row counts</td><td>Rows read on each side, rows after a filter when it changed the count, rows paired, rows only in Left, rows only in Right, rows that differ - as figures, with the verdict under them and a note when the key is not unique.</td></tr>
-      <tr><td>Every column</td><td>The same sheet as the Summary tab: every column from either side with its name on each side, role, how it was read, and matched / mismatched / match % for the compared ones, worst first. Columns present on one side only are listed in a note above the table so a missing or extra column is never silent. In hash mode the match figures become the number of distinct values present on one side only. Under the sheet, one card per differing column (worst first, up to 15) with the five most frequent <strong>value pairs</strong> behind its count - <code>Finance → Finance &amp; Control · 112 · 33%</code> - and a warning on a column that differs on every matched row, which is nearly always two different fields paired by mistake.</td></tr>
-      <tr><td>Differences by key value</td><td>For rows that paired on the key but disagree: each key column's values with how many rows differ under each value and in which columns. Tells you <em>where</em> the differences cluster - one department, one date - before you look at what they are. If the key is not unique the section says so up front: rows sharing a key are paired in file order (first with first, second with second), and a difference under a repeated key may be two rows swapped rather than a changed value. Below it, every column across the differing rows: top values counted on each side.</td></tr>
-      <tr><td>Rows that differ</td><td>The paired rows, Left above Right, key columns first. Left rows are tinted with side A's colour and Right rows with side B's, and the cells that differ are picked out in the trouble colour on both. A legend sits above the table. Capped at <em>Rows to display</em> (at most 2,000) or 150,000 cells, whichever comes first - the subtitle says which; the CSVs hold everything.</td></tr>
-      <tr><td>Only in Left / Only in Right</td><td>The one-sided rows, tinted the same way - the paired columns under their common names, key columns included; a column present on one side only is not in them - each section opening with the top values per column, key columns first - the key values are the reason those rows found no partner. Capped the same way.</td></tr>
-      <tr><td>Columns in one file only</td><td>The last section: every column only one side has, read with its side and counted for that side's rows, never compared - each one's file, filled share, distinct values and most frequent value.</td></tr>
-      <tr><td>Footer</td><td>When the run happened, how long it took, the run id, the caps that applied, and a folded <em>Settings as JSON</em> - the <code>sources</code> and <code>settings</code> blocks of <code>summary.json</code>.</td></tr>
+      <tr><td>Header</td><td>Headline, pills for each side, the key and one anchor per section, then the verdict and the rule it was judged by</td></tr>
+      <tr><td>The setup</td><td>Sources, key and why, how rows paired, columns compared, values and filters - enough to re-run it by hand</td></tr>
+      <tr><td>Row counts</td><td>Rows read, paired, only in each side, rows that differ</td></tr>
+      <tr><td>Every column</td><td>Each column's role, how it was read, matched / mismatched / match %; one-sided columns in a note; top value pairs per differing column</td></tr>
+      <tr><td>By key value</td><td>Where the differing rows cluster, per key column</td></tr>
+      <tr><td>Rows that differ</td><td>Paired rows, side A above side B, capped at <em>Rows to display</em> (at most 2,000) or 150,000 cells</td></tr>
+      <tr><td>Only in Left / Right</td><td>The one-sided rows, with the top values per column first</td></tr>
+      <tr><td>Columns in one file only</td><td>Each column only one side has: filled share, distinct values, most frequent value</td></tr>
+      <tr><td>Footer</td><td>When, how long, the run id, the caps and the settings as JSON</td></tr>
     </table>
-    <p><strong>Download engine report</strong> is the second button: the comparison engine's own side-by-side HTML (<code>&lt;pair&gt;__diff.html</code>) with its tabs, row search and <em>only columns with differences</em> toggle. Same numbers, different presentation; keep whichever the reader prefers. Its header names the sides as you did: <em>Left = &lt;name of side A&gt;</em> and <em>Right = &lt;name of side B&gt;</em>, each with the file or table it was read from.</p>
+    <figure class="shot half"><img src="docs/report-violet.png" alt="The same report in the violet theme" loading="lazy"><figcaption>The report follows the app's theme - here <code>COMPARE_THEME=violet</code></figcaption></figure>
   </div>
 </section>
 
 <section class="sec" id="outputs">
   <div class="sec-head"><div class="sec-num">10</div><div><h2 class="sec-h">Outputs.</h2><div class="sec-sub">one folder per run · a fixed set of files · named after the two sides</div></div></div>
   <div class="body">
-    <p>The pair name is <code>&lt;left&gt;_compare_&lt;right&gt;</code>, each half the side's <strong>Name</strong> box on its source card slugged to letters, digits and underscores (anything else becomes one underscore) - else a database side's connection name, else <code>Left</code> / <code>Right</code>. The file names play no part. <code>HR</code> and <code>Payroll</code> give <code>HR_compare_Payroll</code>; both sides on the <code>SAMPLE</code> connection give <code>A_SAMPLE_compare_B_SAMPLE</code>; nothing named gives <code>Left_compare_Right</code>, and the card reminds you under a side that is still called Left or Right. Two sides with one name - both on the <code>SAMPLE</code> connection - are told apart by their tag everywhere the name is used, not only where a side is picked: the column table's headers, the Files line, the column sheet, the report and the file names read <code>A · SAMPLE</code> and <code>B · SAMPLE</code>, and the cards say so. A name is a column header and half a file name, so two the same would collide. The run id is the start time, <code>YYYYMMDD-HHMMSS</code>, and the folder is <code>&lt;COMPARE_WORK_DIR&gt;/&lt;pair&gt;__&lt;run_id&gt;/</code> (the temp folder when the variable is not set). The Downloads tab hands each file out; the names are always:</p>
-<div class="tree"><b>HR_compare_Payroll__report.html</b>      <i>· the house-style report (Download report)</i><br>
-<b>HR_compare_Payroll__diff.html</b>        <i>· the engine's own side-by-side report (Download engine report)</i><br>
-<b>HR_compare_Payroll__cell_diffs.csv</b>   <i>· one line per differing cell: the key columns (the row number in position mode; an extra occurrence column when a key value repeats), column_name, left_value, right_value</i><br>
-<b>HR_compare_Payroll__left_only.csv</b>    <i>· rows found only in Left: the paired columns under their common names, key columns included; one-sided columns are not in these files</i><br>
-<b>HR_compare_Payroll__right_only.csv</b>   <i>· rows found only in Right, the same way</i><br>
-<b>HR_compare_Payroll__paired.csv</b>       <i>· every paired row on one line: the key columns, then a_&lt;column&gt;, b_&lt;column&gt; for each compared column, in file order - a header only in hash mode; written when it is asked for, not as the run goes</i><br>
-<b>HR_compare_Payroll__columns.csv</b>      <i>· the column sheet: column, name_a, name_b, role, read_as, matched_by, matched, mismatched, match_pct, values_only_a, values_only_b - matched_by is how the pair was made (name, similar name, guess - check, data, you, file), blank on a one-sided column</i><br>
-<b>HR_compare_Payroll__profile.csv</b>      <i>· when a profile ran: column, side, rows, nulls, null_pct, distinct, distinct_pct (of the filled rows), distinct_pct_rows (of all rows), top_value, top_pct, min, max, mean, avg_length, min_length, max_length</i><br>
-<b>HR_compare_Payroll__summary.csv</b>      <i>· one row: schema_version, run_id, started_at, pair, left, right, mode, keys, rows_left_read, rows_right_read, rows_left, rows_right, matched_rows, only_left, only_right, diff_rows, cell_diffs, duplicate_keys_left, duplicate_keys_right, status, tone, seconds, error - lists joined with |</i><br>
-<b>HR_compare_Payroll__summary.json</b>     <i>· the whole run for a script: app, engine, duckdb_version, run_id, started_at, seconds, pair, sources (per side: name, kind, database, connection name, origin, path, sql, fetched_at, cap, rows, cut, columns - never a URI or a password), settings (mode, keys, compare_columns, the specs with their steps and case, column_rules, filters, trim, tolerance, null_tokens...), result, verdict, notes (Auto's decisions) and files (every file above with its format, rows and bytes)</i></div>
-    <p>In key and position mode every file but <code>paired.csv</code> is present after every run - an empty table is written with its header - so a script can rely on the set; <code>summary.csv</code> and <code>summary.json</code> carry <code>schema_version</code> 1. Read <code>columns.csv</code> by header, not by position: <code>matched_by</code> was inserted after <code>read_as</code>. In hash mode the engine does not run, so there is no <code>cell_diffs</code> file and no engine report - rows either match whole or land in <code>left_only</code> / <code>right_only</code>, which carry every column, and <code>paired.csv</code> is a header only. The engine's CSVs are complete; only the tables on screen and in the report are capped by <em>Rows to display</em>.</p>
-    <div class="grid">
-      <div class="cell"><div class="k">The paired rows</div><div class="v"><code>paired.csv</code> is the one file a run does not write as it goes: a second pass over both sides joined and written out whole - on a 100,000-row, 200-column pair, 19 seconds and 359 MB against the comparison's own 57 - and most runs are read on the page and never downloaded. <strong>Write the paired rows</strong> writes it, once; after that it is a file like any other - in the folder, the picker, <code>summary.json</code>, the Parquet copies and the zip. The three buttons that say the whole run - <strong>Zip the whole run</strong>, <strong>Write Parquet copies for this run</strong>, <strong>Save everything to folder</strong> - write it first when it is not on disk yet.</div></div>
-      <div class="cell"><div class="k">Formats</div><div class="v">Tables are CSV; the <strong>Tables as</strong> radio on the Downloads tab - <em>CSV</em>, <em>Parquet</em>, <em>both</em> - applies from the next run, and <strong>Write Parquet copies for this run</strong> adds them to the run on screen. <code>COMPARE_TABLE_FORMATS=csv,parquet</code> sets the default. With Parquet on, every table - cell differences, one-sided rows, columns, profile, and the paired rows when they are written - is also written as <code>.parquet</code> next to its CSV, typed and a fraction of the size; <code>summary.json</code> lists both.</div></div>
-      <div class="cell"><div class="k">The zip</div><div class="v"><strong>Zip the whole run</strong> writes <code>&lt;pair&gt;__&lt;run_id&gt;.zip</code>, the whole run folder, and hands it out; it is written when the button is pressed, not before, and again after Parquet copies are added. Above it a picker holds every file of the run with its size - <em>Cell differences</em>, <em>Rows only in HR</em>, <em>Rows only in Payroll</em>, <em>Paired rows</em>, <em>Columns</em>, <em>Profile</em>, <em>Summary</em>, <em>Settings and result</em>, <em>Report</em>, <em>Engine report</em>, and the Parquet copies when they exist - and only the file picked is read: a browser download holds the whole file in memory, and ten of them on every rerun is what made a big run's page slow.</div></div>
-      <div class="cell"><div class="k">Save everything to folder</div><div class="v">Copies the run folder to the folder in the box beside it. The default is <code>&lt;COMPARE_OUT_DIR&gt;/&lt;pair&gt;__&lt;run_id&gt;</code> when the variable is set - and then every save must stay under it, or it is refused with <em>Saves must stay under …</em> - otherwise a folder of that name next to file A, or under your Downloads folder for an upload; the next run's box defaults beside the last save. The report is written at run time, so the folder and the zip always hold it.</div></div>
-      <div class="cell"><div class="k">The sweep</div><div class="v">At the first run of a server process the app removes run folders, zips, staged uploads, snapshots, fetches and key-search scratch files in the work folder older than <code>COMPARE_KEEP_HOURS</code> (24). Saved folders under <code>COMPARE_OUT_DIR</code> are never touched.</div></div>
-    </div>
+    <figure class="shot"><img src="docs/app-downloads.png" alt="Downloads tab with run folder, Save everything to folder, Download selected, Everything as one zip and the file list" loading="lazy"><figcaption>Downloads - every file of the run, tick what you want or take the zip</figcaption></figure>
+    <ul class="pts">
+      <li><b>Pair name</b> - <code>&lt;left&gt;_compare_&lt;right&gt;</code> from each side's <strong>Name</strong>: <code>HR_compare_Payroll</code></li>
+      <li><b>Folder</b> - <code>&lt;COMPARE_WORK_DIR&gt;/&lt;pair&gt;__&lt;run_id&gt;/</code>, run id <code>YYYYMMDD-HHMMSS</code></li>
+      <li><b>Download selected</b> - the ticked files; <b>Everything as one zip</b> - the whole run folder</li>
+      <li><b>Save everything to folder</b> - copies the run folder to the box; under <code>COMPARE_OUT_DIR</code> when set</li>
+      <li><b>Tables as</b> - CSV, Parquet or both from the next run; <b>Write Parquet copies for this run</b> adds them now</li>
+      <li><b>Write the paired rows</b> - writes <code>paired.csv</code> on request; zip, Parquet copies and save write it first</li>
+      <li><b>Complete</b> - the files hold every row; only the screen and report are capped</li>
+      <li><b>Sweep</b> - work files older than <code>COMPARE_KEEP_HOURS</code> (24) are removed; saved folders never are</li>
+    </ul>
+    <table>
+      <tr><th>File</th><th>What it holds</th></tr>
+      <tr><td><code>__report.html</code></td><td>The house-style report</td></tr>
+      <tr><td><code>__diff.html</code></td><td>The engine's side-by-side report</td></tr>
+      <tr><td><code>__cell_diffs.csv</code></td><td>One line per differing cell: key, column_name, left_value, right_value</td></tr>
+      <tr><td><code>__left_only.csv</code></td><td>Rows only in Left, paired columns under their common names</td></tr>
+      <tr><td><code>__right_only.csv</code></td><td>Rows only in Right, the same way</td></tr>
+      <tr><td><code>__paired.csv</code></td><td>Every paired row on one line, <code>a_</code> / <code>b_</code> per column - written on request</td></tr>
+      <tr><td><code>__columns.csv</code></td><td>The column sheet: names, role, read_as, matched_by, matched, mismatched, match_pct</td></tr>
+      <tr><td><code>__profile.csv</code></td><td>Per column and side - when a profile ran</td></tr>
+      <tr><td><code>__summary.csv</code></td><td>One row of counts, status and timing</td></tr>
+      <tr><td><code>__summary.json</code></td><td>The whole run for a script: sources, settings, result, verdict, notes, files - never a password</td></tr>
+      <tr><td><code>__config.json</code></td><td>The setup, to run it again - section 12</td></tr>
+    </table>
+    <div class="note"><div class="note-t">Hash mode</div><p>With no key the engine does not run: no <code>cell_diffs</code> and no engine report. Rows match whole or land in <code>left_only</code> / <code>right_only</code>.</p></div>
   </div>
 </section>
 
 <section class="sec" id="auto">
   <div class="sec-head"><div class="sec-num">11</div><div><h2 class="sec-h">Auto.</h2><div class="sec-sub">does everything by itself, and logs each decision</div></div></div>
   <div class="body">
-    <p>Auto does everything by itself - pairs the columns, works out the types, finds the key, compares - narrating each step in the running panel and listing each decision in the Log, every one a cell in the column table or a step in the transform section that you can change. It reads both sides several times over, so on big files cut them first with <em>Rows to read</em>.</p>
+    <p>Press <strong>Auto · figure it all out</strong>. Every decision lands in the Log and is a cell or a step you can change.</p>
     <div class="run">
-      <div class="row"><div class="k">01</div><div><div class="t">Pair columns</div><div class="d">By name, then similar name, then by their values for whatever is left over.</div></div></div>
-      <div class="row"><div class="k">02</div><div><div class="t">Analyse types</div><div class="d">One pass over the first 50,000 rows of each side: how many values read as a number, a number once commas go, an ISO date, day-first, month-first, any known spelling, with a time of day, a boolean. Each pair gets a Type; a side that needs it gets a step - <em>remove thousands separators</em>, <em>to date (%d/%m/%Y)</em>. Two spellings are only merged when both sides read cleanly.</div></div></div>
-      <div class="row"><div class="k">03</div><div><div class="t">Check case</div><div class="d">Text pairs whose sides only agree once case is ignored get an <em>upper</em> step on both. Auto does not set the Case cell; the step is the decision, visible in the transform section.</div></div></div>
-      <div class="row"><div class="k">04</div><div><div class="t">Profile both sides</div><div class="d">The <strong>Profile both sides first</strong> tick under the button, off by default. Counts, nulls and distinct values per column feed the key search, show under Rows as the Profile, and land in the run folder as <code>profile.csv</code>; a constant column, an empty one, or a distinct count that differs more than twice between the sides becomes a note. It measures every column of both files - minutes on a big or wide pair - and Auto finds the key without it, so it is asked for rather than assumed. A profile already taken on the same columns and Types is reused; one taken before Auto changed a Type is measured again, on the typed values.</div></div></div>
-      <div class="row"><div class="k">05</div><div><div class="t">Find the key</div><div class="d">Same as Suggest keys. The running panel ends on the key it chose - <em>Worked out in 1.6s - key: emp_id - comparing now</em> - and the decision carries its <em>Why</em> and the runner-up - another key unique on both sides when the chosen one is, else the next closest, never the chosen key with a column added; if nothing is unique, the closest is used and said so; if nothing at all, hash mode.</div></div></div>
-      <div class="row"><div class="k">06</div><div><div class="t">Compare</div><div class="d">Every paired non-key column, immediately. Every decision is a line of the <em>Auto decisions</em> entry in the Log - <em>12 decisions - every one a cell in the column table</em> - and is a cell in the table or a step in the transform section; the report keeps the list under its Key row as <em>How this was worked out</em>.</div></div></div>
+      <div class="row"><div class="k">01</div><div><div class="t">Pair columns</div><div class="d">By name, then similar name, then by values - on the sample, <code>department</code> with <code>Dept</code>.</div></div></div>
+      <div class="row"><div class="k">02</div><div><div class="t">Analyse types</div><div class="d">Reads the first 50,000 rows a side; adds steps such as <em>remove thousands separators</em> or <em>to date (%d/%m/%Y)</em>.</div></div></div>
+      <div class="row"><div class="k">03</div><div><div class="t">Check case</div><div class="d">Text that agrees only once case is ignored gets an <em>upper</em> step on both sides.</div></div></div>
+      <div class="row"><div class="k">04</div><div><div class="t">Profile both sides</div><div class="d">Only with <strong>Profile both sides first</strong> ticked (off by default) - minutes on a big pair.</div></div></div>
+      <div class="row"><div class="k">05</div><div><div class="t">Find the key</div><div class="d">Same as Suggest keys, with its reason; nothing unique - the closest; nothing at all - hash mode.</div></div></div>
+      <div class="row"><div class="k">06</div><div><div class="t">Compare</div><div class="d">Every paired non-key column, straight away.</div></div></div>
     </div>
+    <ul class="pts">
+      <li><b>Sample</b> - 11 decisions, key <code>emp_id</code>, 5 columns compared (see the Log shot in section 08)</li>
+      <li><b>Big files</b> - Auto reads both sides several times; cut them first with <em>Rows to read</em></li>
+      <li><b>In the report</b> - the decisions sit under the Key row as <em>How this was worked out</em></li>
+    </ul>
   </div>
 </section>
 
 <section class="sec" id="rerun">
-  <div class="sec-head"><div class="sec-num">12</div><div><h2 class="sec-h">Run it again <em>from a config.</em></h2><div class="sec-sub">every run saves its setup · on the page, or from the command line on other files</div></div></div>
+  <div class="sec-head"><div class="sec-num">12</div><div><h2 class="sec-h">Run it again <em>from a config.</em></h2><div class="sec-sub">every run saves its setup · on the page or the command line</div></div></div>
   <div class="body">
-    <p>Every run writes <code>&lt;pair&gt;__config.json</code> to its folder. <strong>Download config</strong> sits on its own row at the top of the Downloads tab, with <strong>Save config to folder</strong> under it. It holds the whole setup:</p>
-    <ul>
-      <li>both sources: the path, delimiter, header, the names typed over the header, the rows to read, the snapshot tick - or, for a database side, the connection's name and its SQL</li>
-      <li>the column table: every pair, its Type and Case, the steps on each side, and the key-format fixes that were applied</li>
-      <li>the key, the compare list, the no-key mode, the switches under <em>How values are read</em>, the Rows filters as typed, the table formats</li>
+    <figure class="shot"><img src="docs/app-run-config.png" alt="Run from a config screen: Config upload or path, This run, and Batch with pairs.csv" loading="lazy"><figcaption>Run from config - upload a config.json or give its path</figcaption></figure>
+    <ul class="pts">
+      <li><b>The file</b> - every run writes <code>&lt;pair&gt;__config.json</code>; <strong>Download config</strong> and <strong>Save config to folder</strong> on the Downloads tab</li>
+      <li><b>What it holds</b> - both sources, the column table with types and steps, key, values switches, filters, formats</li>
+      <li><b>Never</b> - a password, a token or a private key</li>
+      <li><b>Run this config</b> - loads both sides, rebuilds the setup and compares</li>
+      <li><b>Open in the setup instead</b> - goes back to the setup; nothing runs</li>
+      <li><b>Database side</b> - uses the password typed this session, or asks for it</li>
+      <li><b>Load mapping</b> - under the column table, reads only the <code>columns</code> part</li>
     </ul>
-    <p>It never holds a password, a token or a private key. An uploaded file is kept as its temporary copy's path and marked <code>"uploaded": true</code>, so a rerun asks for the real path instead of finding nothing.</p>
-    <p><strong>On the page:</strong> <strong>Run from config</strong> in the header takes the file, uploaded or as a path. It fills both sides' boxes, loads them, builds the column table and the settings from it, and compares. Change anything afterwards as usual. A database side is fetched with the password typed this session; without one, the panel says to type it, then Fetch and Load. Under <code>COMPARE_DATA_DIR</code> the config file and every path it names must lie in an allowed folder. A config waits its turn: while a Compare or Auto runs it is refused with a sentence. It keeps the page's own switches (Rows to display, Re-run on every change, Auto's profile tick) unless it sets them. A file that is not UTF-8 or a value that does not fit (<code>"limit": "ten"</code>) is refused in a sentence. <strong>Load mapping</strong> under the column table also takes a config file: it reads the <code>columns</code> part.</p>
-    <p><strong>On the command line:</strong> the same comparison on other files, without the page. One pair, or many:</p>
+    <p><strong>On the command line</strong> - the same comparison on other files, one pair or many:</p>
 <pre><code>python -m tablecmp.run HR_compare_Payroll__config.json                       # the config's own two sides
 python -m tablecmp.run config.json --left jan/hr.csv --right jan/payroll.csv --out results
 python -m tablecmp.run config.json --pairs pairs.csv --out results           # left,right[,name_left,name_right]</code></pre>
-    <p>A config's own <code>"pairs": [{"left": ..., "right": ..., "name_left": ..., "name_right": ...}]</code> list runs the same way.</p>
-    <ul>
-      <li>A side given another file is named after the file's stem, unless a name is given.</li>
-      <li>A side picked from a <a href="#connections">folder connection</a> takes a bare file name - <code>--left feb/hr.csv</code> is read in that folder. A full path is always that file. When this machine has no folder connection of that name, the path saved in the config is used.</li>
-      <li><code>--connections team.yml</code> (<code>-c</code>, may be given more than once) adds a JSON or YAML <a href="#connections-files">connections file</a> for the run, read-only - the database sides' connections and the folders, without saving them anywhere.</li>
-      <li>Each pair writes the run folder a page run writes (report, summary, cell differences, one-sided rows), copied under <code>--out</code>.</li>
-      <li>A pair whose file is missing, or that lacks a column the config pairs (<code>Dept (not in thin)</code>), fails on its own line. The rest still run.</li>
-      <li>A database side reads its password from <code>COMPARE_PASSWORD_&lt;CONNECTION&gt;</code>, or asks once in a terminal.</li>
-      <li>Exit code: 0 all identical, 1 a difference, 2 an error.</li>
+    <ul class="pts">
+      <li><b>Names</b> - a side given another file is named after its stem, unless a name is given</li>
+      <li><b>Folder connection</b> - a bare file name is read in that <a href="#connections">folder connection</a>; a full path is that file</li>
+      <li><b><code>--connections team.yml</code></b> (<code>-c</code>) - adds a <a href="#connections-files">connections file</a> for the run, read-only</li>
+      <li><b>Output</b> - each pair writes a full run folder under <code>--out</code></li>
+      <li><b>Failures</b> - a missing file or column fails its own line; the rest still run</li>
+      <li><b>Passwords</b> - from <code>COMPARE_PASSWORD_&lt;CONNECTION&gt;</code>, or asked once in a terminal</li>
+      <li><b>Exit code</b> - 0 all identical, 1 a difference, 2 an error</li>
     </ul>
-    <div class="note"><div class="note-t">Not the engine's own config</div><p>The engine's own <code>python csvdiff.py config</code> cannot replay a config: the steps, the types and the key-format fixes are applied by the app before the engine runs. <code>tablecmp.run</code> goes through the same code as the page.</p></div>
+    <div class="note"><div class="note-t">Not the engine's own config</div><p><code>python csvdiff.py config</code> cannot replay it: the app applies steps, types and key fixes before the engine. <code>tablecmp.run</code> uses the same code as the page.</p></div>
   </div>
 </section>
 
 <section class="sec" id="profiling">
-  <div class="sec-head"><div class="sec-num">13</div><div><h2 class="sec-h">Profiling: <em>one table.</em></h2><div class="sec-sub">the second page · one source · keys, what stands out, statistics, outliers, patterns, dependencies, frequencies</div></div></div>
+  <div class="sec-head"><div class="sec-num">13</div><div><h2 class="sec-h">Profiling: <em>one table.</em></h2><div class="sec-sub">the second page · columns, what stands out, keys, dependencies, one page per column</div></div></div>
   <div class="body">
-    <p>The <strong>Compare</strong> | <strong>Profile</strong> switch in the header picks the page; <strong>Connections</strong> sits beside it on both pages. While a profile runs, the same panel as Compare's lists every step done so far - <em>HR: outliers…</em> - with the seconds since it started. Profiling takes one table on its own - the headline reads <em>One table, every column.</em> - and says what a person opening an unfamiliar table wants to know first: which column identifies a row, what stands out, the statistics of every column, where the numbers and dates run wild, what shape the text takes, which columns determine which, and the most and least frequent values. The page holds a single source card, the same card side A has: a <strong>Name</strong> (<em>Table</em> by default - it names the saved files, and a database table left at the default takes its connection's name), the <strong>Upload</strong> / <strong>Path on disk</strong> / <strong>Database</strong> radio, the delimiter and header tick, <em>Rows to read</em>, <em>Advanced</em>, <strong>Load</strong>; for a database the same Connection, Table or SQL query, cap and <strong>Fetch</strong>. Load, then press <strong>Profile</strong>.</p>
-    <p>What the values look like decides the types - there is no column table here to take a suggestion in - so a text column of <code>12,686.95</code> profiles as a number, <code>06-Nov-2019</code> as a date with its format, <code>Y</code>/<code>N</code> as a boolean; a column DuckDB typed keeps that type. The table is read into DuckDB once and every measure below runs on that one read; only the checks for stray spaces, case variants and leading zeros go back to the file, because they need the value as written. A table too big to hold - more than a quarter of DuckDB's memory limit at some 24 bytes a value, a million rows of two hundred columns on a 16 GB machine - is not read in: the running panel says <em>too big to hold in memory - measured from the file</em> and every measure reads and types the columns it needs from the file, slower per measure but with no copy of the table in memory, so a table of any size profiles. Every measure that counts distinct values takes the columns a few at a time - 32 a statement, fewer as the rows grow - because each such count holds a hash table and hundreds at once run DuckDB out of memory on a wide table however few the rows. A wide or big table takes minutes rather than seconds - the caption under the button says so, and <a href="#speed">Speed</a> says where they go. The run shows in the running panel - <em>Profiling…</em>, then <em>Looking for keys…</em> and <em>What stands out…</em> on the way, ending on <em>Profile ready - key: emp_id in 0.4s</em> (or <em>Profile ready - no key in 0.4s</em>) - and lands in the Log as two entries: the run with its steps, and <em>Profile notes</em> - <em>8 things stand out</em> - with one line per note, the way Auto's decisions are logged. The page then reads, top to bottom: the verdict, the <strong>Columns</strong> table across the page, <strong>Key candidates</strong> and <strong>What stands out</strong>, the <strong>Outliers</strong>, <strong>Patterns</strong> and <strong>Dependencies</strong> tables, then <strong>Value frequencies</strong> and <strong>Files</strong>.</p>
-    <p><strong>File</strong> - the name, the file, rows × columns and the cut, with <em>First 10 rows</em> folded under it.</p>
-    <p><strong>Profile</strong> - one line under the heading: <code>3,000 rows × 7 columns · key: emp_id · 0 duplicate rows</code>. The rows and columns, the key (or <em>no key up to 5 columns</em>), the exact duplicate rows - always said, even at 0 - and then only what is there: <em>1 empty column</em>, <em>1 constant column</em>, <em>2 columns with outliers</em>.</p>
-    <p><strong>Keys</strong> - three selects, then the candidates. <strong>Columns in a key, up to</strong> (1 to 6, 5 by default) is how far the combinations grow; <strong>Checked on every row</strong> (the best 5, 10 or 20, 10 by default) is how many of the combinations found on the sample are counted on the whole table; <strong>Candidates listed</strong> (3, 5, 10 or 20, 5 by default) is how many the panel shows. The page keeps them in the browser and sends them with the next <strong>Profile</strong>; when the profile on screen used others, a caption under them says so. The search: every column on its own first, from the statistics just measured, so nothing is counted twice and a column with one value is never a candidate. Then, on a random sample of 100,000 rows - the whole table when it is smaller, the same rows each run - every pair of the 24 most key-like columns, then the 300 tightest combinations of three, of four, up to the size set, until as many as <em>Checked on every row</em> says are unique there. A key found on the way does not stop it - a column unique by itself is listed and the combinations go on, so the other keys are found too - but a combination that holds one already unique on the sample is not tried, so every one found is minimal. Those are then counted on every row: one unique there is a key; one that repeats there is listed as <em>unique on the 100,000-row sample, not on every row</em> and is tried again with one column more, on every row, while fewer keys hold than the panel lists. After the keys come the combinations that come closest, each cut back to the fewest columns that tell as many rows apart, so a key that nearly works shows how near it is. A measure - an amount, a price, a salary, a decimal - is tried only when the key-like columns found no key, and a combination with a null in it can come close but is never a key: a row with no key identifies nothing. Above the list, as bullets, a green note when the best candidate is unique on every row, or a warning, <em>Nothing up to 5 columns is unique - the closest are below.</em>, then how the search went. Candidates rank by unique first, then whether a measure is among them, then whether an identifier is, then how close - distinct values per row - then fewer columns, then how much the names look like a key on average. On <code>hr_employees.csv</code>: <code>emp_id</code>, unique by itself; <code>first_name + last_name + hire_date</code>, unique together, the natural key; then <code>first_name + department + hire_date + active</code> with 3 rows that share it, <code>first_name + department + hire_date</code> with 4 and <code>last_name + department + hire_date + active</code> with 8. Each card has the distinct, duplicate and null-key counts on one line and the reasons under it. The candidate table, as <strong>Save to folder</strong> writes it:</p>
+    <p>Pick <strong>Profile</strong> in the header switch. Load one table, press <strong>Profile</strong>; Compare keeps its state while you are here.</p>
+    <figure class="shot"><img src="docs/app-profiling.png" alt="Profile page with hr_employees.csv loaded: the source card, the verdict and the Columns table" loading="lazy"><figcaption>One source card, the verdict, then the Columns table - hr_employees.csv</figcaption></figure>
+    <ul class="pts">
+      <li><b>Source card</b> - the same as side A: Name (<em>Table</em>), Upload / Path on disk / Database, Rows to read, Advanced, <strong>Load</strong></li>
+      <li><b>Verdict</b> - <code>Key emp_id - unique on every row · 3,000 rows × 7 columns · 0 duplicate rows · 0 nulls</code></li>
+      <li><b>Types</b> - read from the values: <code>12,686.95</code> is a number, <code>06-Nov-2019</code> a date, <code>Y</code>/<code>N</code> a boolean</li>
+      <li><b>Progress</b> - the running panel shows each step; the Log gets the run and its <em>Profile notes</em></li>
+      <li><b>Big tables</b> - too big to hold in memory, each measure reads the file instead; slower, any size works (see <a href="#speed">Speed</a>)</li>
+      <li><b>Bar under the header</b> - <strong>Profile</strong>; once a profile is on screen, <strong>Save to folder</strong> and <strong>profile.csv</strong> too</li>
+    </ul>
+
+    <figure class="shot"><img src="docs/app-profile-columns.png" alt="Columns table with Nulls, Distinct, Distinct % bars, Min, Max and Top value with bars" loading="lazy"><figcaption>Columns - one row per column, every share as a bar and its %</figcaption></figure>
+    <ul class="pts">
+      <li><b>Columns</b> - Column, Type, Nulls, Distinct, Distinct %, Min, Max, Top value</li>
+      <li><b>Distinct %</b> - one bar for all rows; a second, <em>non-null</em>, when the column has nulls</li>
+      <li><b>Top value</b> - the most frequent value with its bar, e.g. <code>department</code> Support 13.73%</li>
+      <li><b>Open a column</b> - click its name for the column's own page</li>
+      <li><b>Below</b> - What stands out, <em>Could be another type</em> (when any column could), Key candidates, the Outliers, Patterns and Dependencies tables, then Value frequencies and Files</li>
+    </ul>
+
+    <figure class="shot"><img src="docs/app-profile-findings.png" alt="What stands out panel: Nearly unique - a few values repeat, salary 5 rows" loading="lazy"><figcaption>What stands out - each finding once, with its columns</figcaption></figure>
+    <ul class="pts">
+      <li><b>One line per finding</b> - the columns it covers beside it, e.g. <em>Nearly unique</em> · <code>salary</code> 5 rows</li>
+      <li><b>Kinds</b> - empty or constant columns, many nulls, outliers, negative values, dates after today, stray spaces, case variants, leading zeros</li>
+      <li><b>Left out</b> - what the page shows elsewhere: the key, a column's values, the type it was read as</li>
+      <li><b>Full notes</b> - one per line in the Log and in <code>notes.txt</code></li>
+    </ul>
+
+    <figure class="shot"><img src="docs/app-profile-keys.png" alt="Key candidates: three selects, the search bullets and the first candidate cards with distinct, duplicates and null keys bars" loading="lazy"><figcaption>Key candidates - emp_id, then the natural key first_name + last_name + hire_date</figcaption></figure>
+    <ul class="pts">
+      <li><b>Columns in a key, up to</b> - 1 to 6, 5 by default</li>
+      <li><b>Checked on every row</b> - the best 5, 10 or 20 sample hits are counted on the whole table</li>
+      <li><b>Candidates listed</b> - 3, 5, 10 or 20; the choices are sent with the next <strong>Profile</strong></li>
+      <li><b>Search</b> - single columns first, then combinations on a 100,000-row random sample; each key found is minimal</li>
+      <li><b>Each card</b> - distinct, duplicates and null keys, each as a count, a bar and a %, then the reasons</li>
+      <li><b>Sample</b> - <code>emp_id</code> unique by itself; <code>first_name + last_name + hire_date</code> unique together; the next three repeat on 3, 4 and 8 rows</li>
+      <li><b>Never a key</b> - a combination with a null, or a checksum column such as <code>row_hash</code></li>
+    </ul>
+
+    <figure class="shot"><img src="docs/app-profile-deps.png" alt="Dependencies matrix of hr_employees.csv, every cell 0" loading="lazy"><figcaption>Dependencies - every cell 0 on HR: no column decides another</figcaption></figure>
+    <ul class="pts">
+      <li><b>Cell</b> - how far the row's column decides the column above it beyond chance, in %: 0 unrelated, 100 one value each</li>
+      <li><b>Shading</b> - from 30% up, darker the higher</li>
+      <li><b>Rows</b> - only columns with no more distinct values than half the rows; others decide everything by size alone</li>
+      <li><b>Then</b> - when any exist, a graph and the functional dependencies (X → Y, many-to-one or one-to-one); correlated pairs with |r| ≥ 0.7</li>
+      <li><b>Payroll</b> - <code>Dept</code> → <code>CostCenter</code>, many-to-one with 11 distinct values</li>
+    </ul>
+
+    <figure class="shot"><img src="docs/app-profile-column.png" alt="Column page for salary: navigation buttons and stat cards" loading="lazy"><figcaption>One page per column - salary, column 5 of 7</figcaption></figure>
+    <ul class="pts">
+      <li><b>Navigate</b> - <strong>All columns</strong> back, <strong>Previous</strong> / <strong>Next</strong> to the neighbouring columns</li>
+      <li><b>Stat cards</b> - Rows, Nulls, Distinct, Min, Q1, Median, Mean, Q3, Max, Std dev, Top value</li>
+      <li><b>Length cards</b> - Min, Avg and Max length in characters, of the value as read</li>
+      <li><b>Distribution</b> - number, date and timestamp columns: 10 equal bins, rows per bin, a line on its shape</li>
+      <li><b>Could be read as</b> - a text or number column whose values would read as a number, a date or a timestamp: how many, the type (<code>DECIMAL(p, s)</code>, <code>BIGINT</code>, <code>TIMESTAMP</code>) and the format, e.g. <code>%Y%m%d%H%M%S</code> for <code>20260504004217</code></li>
+      <li><b>Parts</b> - a number by its digits before and after the point in bands (1-3, 4-6 …), a date by year, month and weekday (and hour), text by its most common first and last 1 to 5 characters</li>
+    </ul>
+
+    <figure class="shot"><img src="docs/app-profile-outliers.png" alt="Outliers and Shapes panels for salary" loading="lazy"><figcaption>Then outliers, shapes, frequencies and dependencies - two to a row</figcaption></figure>
+    <ul class="pts">
+      <li><b>Outside the fence</b> - count and %, and which side: low, high or both; <em>none</em> on salary</li>
+      <li><b>No fence</b> - whole numbers that are nearly all different or 9+ digits long read as a code, and digits that read as a date or timestamp say so; a spread means nothing for either</li>
+      <li><b>Fence</b> - Q1 − 1.5 × IQR … Q3 + 1.5 × IQR, with Q1, Q3 and IQR written out; P1 to P99 below</li>
+      <li><b>Lowest … highest</b> - flagged when the highest is 10× the P99 or more: check for a unit or entry error</li>
+      <li><b>Zero · negative</b> - counts and %; 5% zeros or more is flagged, a zero can stand for a missing value</li>
+      <li><b>Shapes</b> - spelled out, e.g. <em>2 letters · 6 digits · 2 letters · 15 digits</em>; a number shows digits before the point, places after and the <code>DECIMAL(p, s)</code> it fits</li>
+      <li><b>One decimal</b> - not a problem: a trailing zero dropped on export (10.10 → 10.1)</li>
+      <li><b>Most and least frequent</b> - ten each; 11 to 20 values list the rest once; 10 or fewer show every value once</li>
+      <li><b>Dependencies</b> - the 5 it decides most and the 5 that decide it most, each a bar; under 30% faint, not conclusive</li>
+    </ul>
+
     <table>
-      <tr><th>Column</th><th>What it is</th></tr>
-      <tr><td>Key columns</td><td>The column, or the combination joined with <code>+</code>.</td></tr>
-      <tr><td>Distinct</td><td>The distinct values of the combination among the rows that have a full key.</td></tr>
-      <tr><td>Unique</td><td><code>yes</code> when Duplicate rows and Null keys are both 0.</td></tr>
-      <tr><td>Duplicate rows</td><td>Rows minus null keys minus distinct: the rows that share their key with another.</td></tr>
-      <tr><td>Null keys</td><td>Rows where any key column is null; they identify nothing.</td></tr>
-      <tr><td>Looks like a key</td><td><code>yes</code> when the names and detected types read as identifiers, <code>measure columns</code> when one of them is a measure - an amount, a rate, a decimal - and <code>checksum</code> when one is a checksum of the row: named as one (<code>row_hash</code>, <code>md5</code>, <code>checksum</code>, <code>fingerprint</code>…) or holding digests, every filled value hex of one digest length (32, 40, 64 or 128). A checksum is unique by construction and says nothing about which row it is, so it is listed under the key and never taken beside one.</td></tr>
-      <tr><td>Why</td><td>The reasons in one line, as on the Compare page but naming no side. <code>emp_id</code>: <em>name says identifier · no nulls · 3,000 distinct of 3,000 · unique by itself</em>. <code>first_name + last_name + hire_date</code>, the key once <code>emp_id</code> is gone: <em>a name, not an identifier · no nulls · 3,000 distinct of 3,000 · unique as three - no single column or pair is</em>. When nothing is unique, the closest: <em>name says identifier · 10 nulls · 90 distinct of 100 · on its own - with a null it can complete no key</em> for an <code>id</code> column with 10 empty cells - the 10 rows with no id have no key, so they are neither distinct nor duplicates, and the column was in no combination - or <em>on its own - no other column to add</em> when there was none to try, <em>on its own - adding a column told no more rows apart</em> for a combination cut back to one column, <em>the closest - no combination up to 5 columns is unique</em> for one that stayed a combination when nothing is a key, <em>close to unique - among the most distinct of the combinations that repeat</em> for one listed after the keys, <em>unique on the 100,000-row sample, not on every row</em> for one the sample let through; <em>50 distinct of 100 · 50 rows share it</em> for one where every row appears twice.</td></tr>
+      <tr><th>Save to folder writes</th><th>What it holds</th></tr>
+      <tr><td><code>Table__profile.csv</code></td><td>The statistics, one row per column (also <strong>Download profile.csv</strong>)</td></tr>
+      <tr><td><code>Table__keys.csv</code></td><td>Key candidates: Distinct, Unique, Duplicate rows, Null keys, Looks like a key, Why</td></tr>
+      <tr><td><code>Table__notes.txt</code></td><td>The headline, then one note per line</td></tr>
+      <tr><td><code>Table__outliers.csv</code></td><td>Percentiles, std dev, fences, outliers, lowest, highest, zeros, negatives</td></tr>
+      <tr><td><code>Table__patterns.csv</code></td><td>The three most common shapes per column</td></tr>
+      <tr><td><code>Table__dependencies.csv</code></td><td>Dependencies and correlated pairs</td></tr>
     </table>
-    <p><strong>Statistics</strong> - the statistics table, one row per column: Column, Type, Rows, Nulls, Null %, Distinct, <strong>Distinct % of filled</strong> (distinct ÷ the non-null rows) and <strong>Distinct % of rows</strong> (distinct ÷ all rows - the two differ only where there are nulls: <code>manager_id</code> in the directory JSON is 2.21% of filled and 2.01% of rows), <strong>Top value</strong> and <strong>Top %</strong> (the most frequent value and its share of all rows, a null counting as a value and shown as <code>∅ null</code> - <code>department</code> has <code>Support</code> on 13.73%), Min, Max, Mean (numbers only), Avg length, <strong>Min length</strong> and <strong>Max length</strong> (of the text as read; blank on a column with nothing filled). <strong>Download profile.csv</strong> hands the table out through the browser as <code>&lt;Table&gt;__profile.csv</code>; <strong>Save to folder</strong> writes six files to the folder in the box beside it - <code>&lt;COMPARE_OUT_DIR&gt;/&lt;Table&gt;__&lt;run_id&gt;</code> when the variable is set (and then the save must stay under it), else a folder of that name next to the file, or under your Downloads folder - the same rule as the Compare page's saves:</p>
-<pre><code>Table__profile.csv        the statistics table, the columns above
-Table__keys.csv           the candidate table: Key columns, Distinct, Unique, Duplicate rows, Null keys,
-                          Looks like a key, Why
-Table__notes.txt          the headline, a blank line, then one note per line
-Table__outliers.csv       the Outliers table: Column, Type, P1, P5, P25, Median, P75, P95, P99, Std dev,
-                          Low fence, High fence, Outliers, Outlier %, Lowest, Highest, Zeros, Negatives
-Table__patterns.csv       the Patterns table: Column, Pattern, Collapsed, Count, %, Example
-Table__dependencies.csv   the dependencies and the correlated pairs on one sheet: Column A, Column B,
-                          Kind (many-to-one, one-to-one, correlated), Distinct, r</code></pre>
-    <p>A fold with nothing in it writes a file with the header alone, so a script can rely on the set.</p>
-    <p>The page reads top to bottom: the headline, the <strong>Columns</strong> table across the page so every column fits in one go, then <strong>What stands out</strong> across the page and the <strong>Key candidates</strong> under it, the Outliers, Patterns and Dependencies tables, the value frequencies and the files. In the Columns table each share is a short bar and its %: the nulls, then under <em>Distinct %</em> one bar for the share of all rows that are distinct and, when the column has nulls, a second under it for the share of the rows with a value; the top value has its bar too, and a long minimum, maximum or top value is cut with the whole of it in the tooltip. Each key candidate shows its distinct of the non-null rows, its duplicate rows and its null keys, each as a count, a bar and a %.</p>
-    <p><strong>What stands out</strong> - each finding once, with the columns it is about, rather than a line per note: every empty column on one line, every column with outliers on another, each column with its figure beside it - <em>Nearly unique - a few values repeat</em> · <code>salary</code> 5 rows on <code>hr_employees.csv</code>, <em>One column decides another</em> · <code>Dept → CostCenter</code> on Payroll. What the page already shows elsewhere is left out: the key (Key candidates), a column's list of values (its own page), the type a text column was read as (the Columns table) and the lines that say where a cap cut a list. A finding the panel cannot place goes under <em>Also</em>. The full notes, one per line, are in the Log and in <code>notes.txt</code>; on <code>hr_employees.csv</code>:</p>
-<pre><code>key: emp_id - unique on every row
-patterns: the 3 most common shapes per column are listed - more exist in first_name (4 shapes), last_name (5 shapes), department (6 shapes)
-first_name: 20 values - Jonas, Nadia, Ines, Aarav, Rafael, Uma, Fatima, Elena, Amara, Omar, Tomasz, Priya, …
-last_name: 18 values - Ibrahim, Silva, Rossi, Costa, Larsen, Haddad, Nakamura, Schmidt, Mensah, Moreau, Novak, Okafor, …
-department: 8 values - Support, Marketing, Operations, Engineering, Finance, Sales, People, Legal
-salary: nearly unique - 5 rows share a value with another
-hire_date: 16 dates after today
-active: 2 values - true, false</code></pre>
-    <p>(The sample's hire dates run to 2026-09-28, so how many fall after today depends on the day you run it.) Every kind of line, in the order they come - a line marked with a sample file is that file's own, the others show the form:</p>
-    <table>
-      <tr><th>Line</th><th>When it appears</th></tr>
-      <tr><td style="white-space:normal"><code>12 exact duplicate rows - the same values in every column</code></td><td>Rows that repeat another one in every column, told apart by the MD5 of the row's values, a null equal to a null.</td></tr>
-      <tr><td style="white-space:normal"><code>key: emp_id - unique on every row</code> (HR), or <code>no single column or combination up to 5 is unique - closest: first_name + last_name (2,998 distinct of 3,000)</code></td><td>The best candidate from Keys - a key as the search counted it, the closest counted again on the table.</td></tr>
-      <tr><td style="white-space:normal"><code>Dept → CostCenter: every Dept has one CostCenter</code> (Payroll), <code>cust_id ↔ cust_email: one-to-one</code></td><td>One line per row of the Dependencies table, the first 10, then <code>… and n more in Dependencies</code>.</td></tr>
-      <tr><td style="white-space:normal"><code>tenure_years ~ leave_days: correlated, r = 0.93</code></td><td>One line per correlated pair, the first 5, then <code>… and n more</code>.</td></tr>
-      <tr><td style="white-space:normal"><code>patterns: the 3 most common shapes per column are listed - more exist in first_name (4 shapes), …</code> (HR)</td><td>A text column has more shapes than the Patterns table shows. A line of the same kind says when the dependency search or the correlations were capped.</td></tr>
-      <tr><td style="white-space:normal"><code>notes: empty - null on every row</code></td><td>Null on every row; nothing else is said about the column.</td></tr>
-      <tr><td style="white-space:normal"><code>company: constant - one value on every row (ACME)</code></td><td>One distinct value.</td></tr>
-      <tr><td style="white-space:normal"><code>manager_id: null on 9.3% of rows</code> (Directory)</td><td>Null on 5% of rows or more - or on any row at all when the name says identifier: <code>id</code>, <code>key</code>, <code>code</code>, <code>ref</code>, <code>no</code>, <code>num</code>, <code>account</code> and the like.</td></tr>
-      <tr><td style="white-space:normal"><code>salary: nearly unique - 5 rows share a value with another</code> (HR)</td><td>The distinct values are 99% or more of the filled rows, but not all of them.</td></tr>
-      <tr><td style="white-space:normal"><code>manager_id: says identifier but 2,653 rows share a value</code> (Directory)</td><td>The name says identifier and the values do not: neither unique nor nearly so.</td></tr>
-      <tr><td style="white-space:normal"><code>department: 8 values - Support, Marketing, Operations, Engineering, Finance, Sales, People, Legal</code> (HR)</td><td>Between 2 and 20 distinct values, covering at most half the rows - a category. The values by count, the first 12, then <code>…</code>.</td></tr>
-      <tr><td style="white-space:normal"><code>status: active on 97.3% of rows</code></td><td>One value on 95% of rows or more, and it is not the only value.</td></tr>
-      <tr><td style="white-space:normal"><code>Salary: read as a number - 12,686.95 has thousands separators</code> (Payroll), <code>hire_date: read as a date - 06-Nov-2019 → %d-%b-%Y</code> (Directory), <code>IsActive: read as a boolean - Y/N</code> (Payroll)</td><td>What the <em>looks like</em> sniff decided for a text column, in its own words - what the column was read as.</td></tr>
-      <tr><td style="white-space:normal"><code>zip: reads as a number but 120 values have leading zeros - keep it as text</code></td><td>A column read as a number whose values in the file start with a zero - a code, not an amount.</td></tr>
-      <tr><td style="white-space:normal"><code>city: 5 values differ only in case - Paris / paris / PARIS</code></td><td>The same value in more than one case in the file; one example group of up to three spellings.</td></tr>
-      <tr><td style="white-space:normal"><code>dept: 123 values have leading or trailing spaces - trimmed before measuring</code> (Directory)</td><td>Values in the file with a space at either end; the tail is there when <em>Trim whitespace</em> is on.</td></tr>
-      <tr><td style="white-space:normal"><code>salary: 2 outliers - above 21,489.10 (1.5 × IQR) · highest 1,000,000</code></td><td>Values outside Tukey's fences (see Outliers below), with the fence and the extreme on each side that is crossed; a side nothing crosses is left out.</td></tr>
-      <tr><td style="white-space:normal"><code>salary: 3 negative values · 40 zeros</code></td><td>Either count above zero, on a number column.</td></tr>
-      <tr><td style="white-space:normal"><code>ratio: 2 values are NaN, infinite or beyond 1e150 - left out of the outliers</code>, <code>valid_to: 30 values are infinite - left out of the outliers</code></td><td>Values no percentile, standard deviation or correlation can hold - <code>NaN</code>, <code>inf</code>, a number so large its square overflows, a date written <code>infinity</code> - are values to the reader and nulls to the Outliers table, and this line says how many.</td></tr>
-      <tr><td style="white-space:normal"><code>hire_date: 16 dates after today</code> (HR), <code>birth_date: 3 dates before 1900</code></td><td>Either count above zero, on a date or timestamp column.</td></tr>
-      <tr><td style="white-space:normal"><code>emp_id: 99.7% of values are A9999 - 3 are not (e1234, E12, 12E4)</code></td><td>One shape covers 90% or more of a text column's values but not all of them; up to three of the others, then <code>…</code> when there are more.</td></tr>
-    </table>
-    <p><strong>Outliers</strong> - a table across the page, always shown: one row per number, date and timestamp column. The percentiles P1, P5, P25, Median, P75, P95, P99 and the standard deviation - <code>salary</code>: <code>5384.155</code>, <code>8672.865</code> and <code>11826.135</code> for P25, the median and P75, std dev <code>3714.9289</code> - then Tukey's fences, P25 − 1.5 × IQR and P75 + 1.5 × IQR with the IQR being P75 − P25 (<code>-4278.815</code> and <code>21489.105</code>), Outliers and Outlier % for the values outside them (none in the sample), Lowest and Highest (<code>2152.33</code>, <code>14979.57</code>), Zeros and Negatives. A date column takes the same percentiles on the dates - <code>hire_date</code>: median <code>2022-06-27</code>, fences <code>2013-06-08</code> and <code>2031-07-25</code> - with Std dev, Zeros and Negatives left blank; its dates after today and before 1900 go to What stands out only.</p>
-    <p><strong>Patterns</strong> - a table across the page, always shown: the three most common shapes of each text and number column, each with its Count, its % of the non-null values and the smallest value of that shape. A shape turns every letter into <code>A</code> and every digit into <code>9</code> and keeps the rest as written - <code>E10001</code> is <code>A99999</code>, <code>2026-01-12</code> is <code>9999-99-99</code>, <code>Finance &amp; Control</code> is <code>AAAAAAA &amp; AAAAAAA</code> - and Collapsed folds the runs, <code>A+9+</code>, <code>9+-9+-9+</code>, <code>A+ &amp; A+</code>, so <code>CC-220</code> and <code>CC-1100</code> read as one. A number is shaped as written without a trailing <code>.0</code>, so its digits before and after the point show its precision and scale - <code>2086.93</code> is <code>9999.99</code>, <code>3000</code> is <code>9999</code>. On the sample <code>emp_id</code> is <code>A99999</code> on all 3,000 rows; <code>first_name</code> is <code>AAAAA</code> on 1,243 (41.43%), <code>AAAA</code> on 999 and <code>AAAAAA</code> on 596, and the note above says a fourth shape exists.</p>
-    <p><strong>Dependencies</strong> - a matrix, a list, a graph, then two tables. The matrix has a row for each column that can decide another - one with no more distinct values than half the rows; one with more decides nearly everything by having a value for almost every row, and says nothing - and a column for every column, the first 30 in table order. Each cell is how far the row's column decides the column above it beyond chance, in %: the distinct values of X over the distinct pairs of X and Y, set against what that would be with X and Y unrelated, so 0 is what two unrelated columns give and 100 means every value of X goes with one value of Y. Without the chance taken out, a column of two values scored 50% against every other column. A cell from 30% up is shaded, darker the higher, and 100 is bold; over 200,000 rows it is measured on a random sample of 200,000. On <code>hr_employees.csv</code> every cell is 0 and nothing is listed - first name, last name, department and active are unrelated; on <code>payroll_employees.csv</code> <code>Dept</code> decides <code>CostCenter</code> 100 and <code>CostCenter</code> decides <code>Dept</code> 70. The graph puts the columns that determine others on the left and the columns they determine on the right, an arrow for each X → Y, arrows both ways for a one-to-one and a dashed line for a correlated pair - on Payroll, <code>Dept</code> → <code>CostCenter</code>. Then the tables. First the functional dependencies: X → Y when every value of X goes with one value of Y, found by grouping - X determines Y when every group of X holds one value of Y, a null counting as a value; on a table over 200,000 rows the first 200,000 are tried first, and only a dependency that holds there is tried on every row. The columns are Determines, Determined, Kind (<code>many-to-one</code>, or <code>one-to-one</code> when it holds the other way round too - listed once, the column that comes first in the table first) and Distinct, the values of X. Tried as X: every column that is neither unique, nor nearly unique (99% of the filled rows), nor constant - those determine everything and say nothing - the fewest values first, at most 40; any other non-constant column can be Y. Payroll's <code>Dept → CostCenter</code> is one, many-to-one with 11 distinct values. Then the correlated number columns: Pearson's r for every pair of the first 30 number columns, keeping the pairs with |r| ≥ 0.7, the strongest first - Column A, Column B, r. Where either cap cut columns, What stands out says so.</p>
-    <p><strong>One page per column</strong> - click a column in the Statistics table: its figures as tiles - a text column's shortest, average and longest length among them - the distribution across the page, then its outliers, shapes, most and least frequent values and dependencies two to a row. The dependencies list the five columns it decides most and the five that decide it most, each as a bar and its %; one under 30% is faint and marked not conclusive, and when nothing reaches 30% one line says so. A column decided at 99% but not on every row reads <em>No column determines it on every row</em>, pointing at those figures. A number column's shapes are its digits before and after the point - its precision and scale. With more than 20 distinct values those are the ten most and the ten least frequent. With ten or fewer the two lists would be the same values in opposite orders, so they are shown once, as <em>Every value · most to least frequent</em>; with 11 to 20, the ten most frequent come first and the others follow under a dashed line in the accent colour, down to the least frequent, the bars on the same scale - no value is listed twice. <strong>Profile both files</strong> under Rows on the Compare page shows its frequencies the same way.</p>
-    <p>The profile goes when another table is loaded; measured under other null tokens or another <em>Trim whitespace</em> setting than the page's (both set under <em>How values are read</em> on the Compare page, and they apply here too), it says so (<em>This profile is from earlier settings - run it again to refresh</em>). Compare is untouched: switch back and the sides, the column table, the result and the Log are where they were.</p>
+
+    <div class="note"><div class="note-t">Also on Compare</div><p><strong>Profile both files</strong> under Rows on the Compare page shows each side's frequencies the same way.</p></div>
   </div>
 </section>
 
 <section class="sec" id="speed">
   <div class="sec-head"><div class="sec-num">14</div><div><h2 class="sec-h">Speed.</h2><div class="sec-sub">nothing heavy runs unless you press it</div></div></div>
   <div class="body">
-    <ul>
-      <li>Loading sniffs the schema from a sample and takes one pass to snapshot and count. The 10-row preview stops after 10 rows.</li>
-      <li>A plain rerun - editing the table, opening an expander - runs nothing beyond the two 10-row previews and the five-row transform preview.</li>
-      <li>Key suggestion, key check, profile, type check and the comparison run only on their buttons. Auto runs them all, once, on purpose, and the key search reuses the profile it just made.</li>
-      <li>Finding a key can take minutes on a wide or big table - and so can a profile, which looks for one. Every column is measured, and when no single column is unique every pair of the 24 most key-like columns is counted, then the 300 tightest combinations of three, then of four, and the measures once more when the key-like columns found nothing - over 5,000 rows each level is counted on a random sample of 5,000 rows first, a couple of milliseconds a combination, and only the combinations unique there are verified on every row, a full count each, the tightest first, until one is a key. A designed key is verified in one statement; a wide table with no key at all verifies every coincidence the sample let through - a few minutes at a million rows, and a table too big to hold in memory is counted from the file and is slower still. The running panel says which level it is on. To try a slice first, cut <em>Rows to read</em> on the source card.</li>
-      <li>A database fetch runs once, streams in 50,000-row batches into Parquet and is kept until the connection, the SQL or the cap changes; put the WHERE in the SQL so the database does the cutting, and give a capped query an ORDER BY.</li>
-      <li>The comparison materialises each side as a DuckDB table under the common names, so the engine reads each side once; the key search and the profile do the same while the table fits in a quarter of DuckDB's memory, and read from the file otherwise. Numbers go through a fast 8-decimal decimal first and the wide one only when needed. The value pairs behind every column's count come from one DuckDB pass over the cell differences.</li>
-      <li>Null tokens are folded with <code>list_contains</code> over a constant list, never <code>IN (...)</code>: DuckDB plans an <code>IN</code> over constants as a join, and one statement holding a fold per column plans hundreds of them. Reading a 100,000-row × 200-column side took seven minutes that way and takes four seconds this way - the same shape was behind a slow sniff of the values and a slow profile of a wide table.</li>
-      <li>One-off measurements, both with the real engine. 500,000 rows × 6 columns: load 1.2 s a side, the comparison itself 7 s (both sides materialised, keyed join, cell differences written), the whole Auto run 16 s including Desbordante and the report. 100,000 rows × 200 columns, 198 of them compared: 4 s to read and type each side, 11 s for the key search when a pair is the key and 15 s when nothing up to four columns is unique, and 57 s for the whole run, 53 s of it in the engine for 19.8 million cells; <code>paired.csv</code> is another 19 s when it is asked for. Treat them as an order of magnitude; there is no benchmark script in the repo. The sample pair compares in about a second.</li>
-      <li>The results are drawn one view at a time, and each view draws what is worth drawing: the columns that differ, the first 12 of them open; the key's values in <em>Profile by bucket</em>; one file read on the Downloads view, the one picked. A wide pair used to draw a card and two tables per compared column, count every column for every bucket and read every result file into memory on every click, four tabs at once - that is what made a click take seconds.</li>
-      <li>The key search on a pair counts one side and verifies what it finds on the other, so a level costs one side's counting, not two.</li>
-      <li>DuckDB gets three quarters of its own default limit - about 60% of the machine - and a temp directory in the work folder, so past that it spills to disk rather than failing and there is room left for the server, pandas and the browser. <code>COMPARE_DUCKDB_MEMORY</code> sets the limit outright when the machine is shared, and with it the table the profile and the key search hold in memory.</li>
-      <li>For a very big file, cut it in <em>Rows to read</em> first - a date filter or a top N - and keep the Parquet snapshot on.</li>
-      <li>Every long run ends with its elapsed time on the running panel and in its Log entry, so the Log says which step of which run took the time.</li>
+    <ul class="pts">
+      <li><b>Load</b> - sniffs the schema from a sample, one pass to snapshot and count; previews stop at 10 rows.</li>
+      <li><b>On a button only</b> - key search, profile, type check and the comparison; Auto runs them once and reuses its profile.</li>
+      <li><b>Key search</b> - can take minutes on a wide table; over 5,000 rows each level is tried on a 5,000-row sample first.</li>
+      <li><b>Databases</b> - fetched once in 50,000-row batches into Parquet; put the WHERE in the SQL, ORDER BY with a cap.</li>
+      <li><b>Memory</b> - DuckDB gets 2 GB and spills up to 20 GB to disk; change both under <em>Run settings</em>.</li>
+      <li><b>Big files</b> - cut them in <em>Rows to read</em> first (a date filter or a top N) and keep the Parquet snapshot on.</li>
+      <li><b>Rough timings</b> - the sample pair in about a second; 500,000 × 6 in 16 s for a whole Auto run; 100,000 × 200 in 57 s.</li>
     </ul>
   </div>
 </section>
 
 <section class="sec" id="settings">
-  <div class="sec-head"><div class="sec-num">15</div><div><h2 class="sec-h">Settings.</h2><div class="sec-sub">no settings file · environment variables read at start</div></div></div>
+  <div class="sec-head"><div class="sec-num">15</div><div><h2 class="sec-h">Settings.</h2><div class="sec-sub">environment variables, read at start</div></div></div>
   <div class="body">
     <table>
       <tr><th>Variable</th><th>Default</th><th>What it does</th></tr>
-      <tr><td>COMPARE_THEME</td><td><code>paper</code></td><td><code>aurora</code> or <code>violet</code> switches the whole look - the page and the report - to that palette, opening dark. Anything else falls back to paper.</td></tr>
-      <tr><td>COMPARE_APP_NAME</td><td><code>CrossHire Compare</code></td><td>The name in the browser tab, the header, the report header and <code>summary.json</code>.</td></tr>
-      <tr><td>COMPARE_APP_TAGLINE</td><td><code>Tables, side by side</code></td><td>A line under the name, where one is shown.</td></tr>
-      <tr><td>COMPARE_WORK_DIR</td><td><code>&lt;temp&gt;/crosshire-compare</code></td><td>Where staged uploads, Parquet snapshots, database fetches, run folders and zips go, and DuckDB's own temp directory. Created on first use; swept.</td></tr>
-      <tr><td>COMPARE_OUT_DIR</td><td>unset</td><td>When set, the root every save lands under: the save boxes default to <code>&lt;COMPARE_OUT_DIR&gt;/&lt;pair&gt;__&lt;run_id&gt;</code> and a folder outside it is refused.</td></tr>
-      <tr><td>COMPARE_DATA_DIR</td><td>unset</td><td>When set, the folders a <em>Path on disk</em> may come from, separated by the OS path separator (<code>;</code> on Windows, <code>:</code> elsewhere). A path outside them is refused: <em>Not under an allowed folder</em>.</td></tr>
-      <tr><td>COMPARE_KEEP_HOURS</td><td><code>24</code></td><td>How old a run folder, zip, upload, snapshot or fetch in the work folder must be before the sweep at server start removes it.</td></tr>
-      <tr><td>COMPARE_TABLE_FORMATS</td><td><code>csv</code></td><td>The default of the Downloads tab's <em>Tables as</em> radio: <code>csv</code>, <code>parquet</code> or <code>csv,parquet</code>.</td></tr>
-      <tr><td>COMPARE_CONNECTIONS</td><td><code>~/.crosshire-compare/connections.json</code></td><td>The connections file - JSON, or YAML when it ends in <code>.yml</code> / <code>.yaml</code>.</td></tr>
-      <tr><td>COMPARE_CONNECTION_FILES</td><td>unset</td><td>Shared connections files, JSON or YAML, read-only, separated by the OS path separator (see <a href="#connections-files">Connections files</a>, section 03).</td></tr>
-      <tr><td>COMPARE_CONN_&lt;NAME&gt;</td><td>-</td><td>One connection each, as a URI (section 03); named <code>&lt;NAME&gt;</code>, read-only in the manager, wins over a file connection of the same name.</td></tr>
-      <tr><td>COMPARE_WEB_PORT</td><td><code>8501</code></td><td>The port the page is served on (<code>--port</code> overrides it).</td></tr>
-      <tr><td>COMPARE_ALLOWED_HOSTS</td><td>empty</td><td>Extra Host names the server answers to, comma separated - needed when the page is reached by a machine name, for example in a container.</td></tr>
-      <tr><td>COMPARE_DUCKDB_MEMORY</td><td>unset</td><td>DuckDB's <code>memory_limit</code> for every connection the app opens, e.g. <code>4GB</code>; a quarter of it is what the profile and the key search may hold a table in - bigger, and they read from the file.</td></tr>
+      <tr><td>COMPARE_THEME</td><td><code>paper</code></td><td><code>aurora</code> or <code>violet</code> for a look that opens dark, page and report.</td></tr>
+      <tr><td>COMPARE_APP_NAME</td><td><code>CrossHire Compare</code></td><td>Name in the tab, header, report and <code>summary.json</code>.</td></tr>
+      <tr><td>COMPARE_APP_TAGLINE</td><td><code>Tables, side by side</code></td><td>Line under the name, where shown.</td></tr>
+      <tr><td>COMPARE_WORK_DIR</td><td><code>&lt;temp&gt;/crosshire-compare</code></td><td>Uploads, snapshots, fetches, run folders and DuckDB temp.</td></tr>
+      <tr><td>COMPARE_OUT_DIR</td><td>unset</td><td>Root every save must land under.</td></tr>
+      <tr><td>COMPARE_DATA_DIR</td><td>unset</td><td>Folders a <em>Path on disk</em> may come from (<code>;</code> on Windows, <code>:</code> elsewhere).</td></tr>
+      <tr><td>COMPARE_KEEP_HOURS</td><td><code>24</code></td><td>Age at which the start-up sweep removes work files.</td></tr>
+      <tr><td>COMPARE_TABLE_FORMATS</td><td><code>csv</code></td><td>Default of <em>Tables as</em>: <code>csv</code>, <code>parquet</code> or <code>csv,parquet</code>.</td></tr>
+      <tr><td>COMPARE_CONNECTIONS</td><td><code>~/.crosshire-compare/connections.json</code></td><td>Your connections file, JSON or YAML.</td></tr>
+      <tr><td>COMPARE_CONNECTION_FILES</td><td>unset</td><td>Shared read-only connections files (see <a href="#connections-files">Connections files</a>).</td></tr>
+      <tr><td>COMPARE_CONN_&lt;NAME&gt;</td><td>-</td><td>One connection as a URI; read-only, wins over a file entry.</td></tr>
+      <tr><td>COMPARE_WEB_PORT</td><td><code>8501</code></td><td>Port the page is served on; <code>--port</code> overrides it.</td></tr>
+      <tr><td>COMPARE_ALLOWED_HOSTS</td><td>empty</td><td>Extra host names to answer to, comma separated (e.g. in a container).</td></tr>
+      <tr><td>COMPARE_DUCKDB_MEMORY</td><td><code>2GB</code></td><td>DuckDB <code>memory_limit</code>; fixes it for everyone, over <em>Run settings</em>.</td></tr>
+      <tr><td>COMPARE_DUCKDB_DISK</td><td><code>20GB</code></td><td>Most DuckDB may spill to disk; fixes it over <em>Run settings</em>.</td></tr>
+      <tr><td>COMPARE_PASSWORD_&lt;NAME&gt;</td><td>-</td><td>A connection's password for <code>python -m tablecmp.run</code>.</td></tr>
     </table>
 <pre><code>set COMPARE_THEME=violet                              (Windows)
 export COMPARE_APP_NAME="Employee Table Check"        (macOS / Linux)</code></pre>
-    <p>Under Docker the image starts <code>python compare_app.py --host 0.0.0.0 --no-browser</code> on port 8501. Open it as <code>http://localhost:8501</code>; reached by another name, add that name to <code>COMPARE_ALLOWED_HOSTS</code> in <code>.env</code>. The radii, fonts and colours live in <code>tablecmp/theme.py</code>.</p>
   </div>
 </section>
 
@@ -549,47 +677,59 @@ export COMPARE_APP_NAME="Employee Table Check"        (macOS / Linux)</code></pr
   <div class="body">
 <pre><code>docker build -t crosshire-compare .
 docker run --rm -p 8501:8501 -v ./data:/data:ro -v ./out:/out --env-file .env crosshire-compare</code></pre>
-    <p>Or <code>docker compose up</code> with the <code>docker-compose.yml</code> in the repo. The image is <code>python:3.12-slim</code> with the pinned <code>requirements.lock</code> installed, runs as the user <code>app</code> (uid 1000), starts <code>python compare_app.py --host 0.0.0.0 --no-browser</code> on port 8501, and answers a <code>HEALTHCHECK</code> on <code>/api/health</code>. It sets <code>COMPARE_DATA_DIR=/data</code>, <code>COMPARE_OUT_DIR=/out</code> and <code>COMPARE_WORK_DIR=/work</code>, so inside the container a <em>Path on disk</em> must be under <code>/data</code>, every save lands under <code>/out</code>, and the scratch lives in <code>/work</code>.</p>
-    <p>Compose mounts four things: <code>./data</code> read-only at <code>/data</code> (the files to compare), <code>./out</code> at <code>/out</code> (saved runs), a named volume <code>connections</code> at <code>/home/app/.crosshire-compare</code> (the connections file survives a rebuild) and a named volume <code>work</code> at <code>/work</code>; and caps the container at 4 GB. Connections come from <code>.env</code> - copy <code>.env.example</code> to <code>.env</code> and put one <code>COMPARE_CONN_&lt;NAME&gt;=&lt;uri&gt;</code> per line (a DuckDB file under <code>./data</code> is <code>duckdb:////data/sample.duckdb</code>). <code>.env</code>, <code>connections*.json</code>, <code>*.duckdb</code>, <code>docs/</code>, <code>examples/</code> and <code>tests/</code> are in <code>.dockerignore</code>, so nothing private and nothing large is in the image.</p>
+    <ul class="pts">
+      <li><b>Compose</b> - <code>docker compose up</code> with the repo's <code>docker-compose.yml</code>; capped at 4 GB.</li>
+      <li><b>Image</b> - <code>python:3.12-slim</code> with <code>requirements.lock</code>, runs as user <code>app</code>, on port 8501.</li>
+      <li><b>Health</b> - a <code>HEALTHCHECK</code> on <code>/api/health</code>.</li>
+      <li><b>Folders</b> - files to compare under <code>/data</code> (read-only), saves under <code>/out</code>, scratch in <code>/work</code>.</li>
+      <li><b>Connections</b> - copy <code>.env.example</code> to <code>.env</code>, one <code>COMPARE_CONN_&lt;NAME&gt;=&lt;uri&gt;</code> per line.</li>
+      <li><b>Other host name</b> - add it to <code>COMPARE_ALLOWED_HOSTS</code> in <code>.env</code>.</li>
+      <li><b>Kept out</b> - <code>.env</code>, connections files, <code>*.duckdb</code>, <code>docs/</code>, <code>examples/</code>, <code>tests/</code>.</li>
+    </ul>
   </div>
 </section>
 
 <section class="sec" id="layout">
   <div class="sec-head"><div class="sec-num">17</div><div><h2 class="sec-h">The <em>files.</em></h2><div class="sec-sub">what lives where</div></div></div>
   <div class="body">
-<div class="tree"><b>compare_app.py</b> <i>· entry point: starts the page on uvicorn</i><br>
-<b>csvdiff.py</b> <i>· the comparison engine (a black box to the app; runs on its own from the command line)</i><br>
-<b>requirements.txt</b> <i>· fastapi, uvicorn, duckdb, pandas, pyarrow, pyyaml and the five database drivers (desbordante optional)</i><br>
-<b>requirements-dev.txt</b> <i>· pytest and pytest-playwright, for the tests</i><br>
-<b>requirements.lock</b> <i>· the pinned set the Docker image installs</i><br>
-<b>Dockerfile</b> · <b>docker-compose.yml</b> · <b>.env.example</b> <i>· section 16</i><br>
+<div class="tree"><b>compare_app.py</b> <i>· entry point</i><br>
+<b>csvdiff.py</b> <i>· the comparison engine, also a command-line tool</i><br>
+<b>requirements.txt</b> <i>· app and database drivers</i><br>
+<b>requirements-dev.txt</b> <i>· pytest and pytest-playwright</i><br>
+<b>requirements.lock</b> <i>· pinned set for Docker</i><br>
+<b>Dockerfile</b> · <b>docker-compose.yml</b> · <b>.env.example</b><br>
 <b>docs/</b> <i>· banner and screenshots</i><br>
-<b>examples/</b> <i>· hr_employees.csv, payroll_employees.csv, directory_employees.json, sample.duckdb, mapping_hr_directory.json and make_sample.py</i><br>
-<b>tests/</b> <i>· the pytest suite: units per module, the page's flows over HTTP (tests/webflow.py, tests/test_web_flows.py), three browser runs in tests/e2e</i><br>
-<b>web/</b> <i>· the page's source: React + TypeScript, built by Vite</i><br>
+<b>examples/</b> <i>· the HR / Payroll sample files and sample.duckdb</i><br>
+<b>tests/</b> <i>· pytest: units, HTTP flows (tests/webflow.py), browser runs in tests/e2e</i><br>
+<b>web/</b> <i>· the page: React + TypeScript, built by Vite</i><br>
 <b>tablecmp/web/</b> <i>· the server: FastAPI</i><br>
 <b>tablecmp/</b><br>
-   theme.py        <i>· colours, fonts, the tokens the page and the report share - the only place to change the look</i><br>
-   sql.py          <i>· quoting, the scratch DuckDB connection (UTC, temp directory, memory limit)</i><br>
-   filepick.py     <i>· Browse: the system file dialog, in a process of its own</i><br>
-   sources.py      <i>· one side: a file or a fetched table, which rows to read; schema sniff, snapshot, preview; the work, out and data folders; a folder's files</i><br>
-   connections.py  <i>· named connections and folders: the URI form, JSON / YAML connections files, the home-folder store, shared files, COMPARE_CONN_* overrides, redaction</i><br>
-   databases.py    <i>· the six dialects, the read-only guard, connect, test, the streamed Parquet fetch</i><br>
-   values.py       <i>· transform steps, null folding, types, canonical text, registration, type check</i><br>
-   sniff.py        <i>· what a text column's values look like - the looks-like suggestions</i><br>
-   columns.py      <i>· the column table: pairing, normalisation, specs, roles and chips, mapping JSON, match by data</i><br>
-   keys.py         <i>· key uniqueness, overlap, reasons, Desbordante / DuckDB suggestion - for a pair or one table</i><br>
-   keyformat.py    <i>· a key the two sides write differently: the fix that makes it meet, simple or suggested</i><br>
-   profile.py      <i>· statistics and value frequencies, of a pair or of one table; what the key search reads from them</i><br>
-   observe.py      <i>· what stands out in one table: duplicates, the key, dependencies, correlations, outliers, patterns, the notes</i><br>
-   compare.py      <i>· running a comparison (engine, position, hash), filters, and reading it back</i><br>
-   outputs.py      <i>· the run folder: pair name, verdict, summary / columns / profile writers, Parquet copies, zip, saves, sweep</i><br>
+   theme.py        <i>· colours, fonts, radii</i><br>
+   sql.py          <i>· quoting, the scratch DuckDB connection</i><br>
+   filepick.py     <i>· Browse dialog</i><br>
+   sources.py      <i>· one side: read, sniff, snapshot, preview</i><br>
+   connections.py  <i>· named connections and folders</i><br>
+   databases.py    <i>· dialects, read-only guard, fetch</i><br>
+   values.py       <i>· transform steps, nulls, types</i><br>
+   sniff.py        <i>· looks-like suggestions</i><br>
+   columns.py      <i>· the column table and pairing</i><br>
+   keys.py         <i>· key checks and suggestions</i><br>
+   keyformat.py    <i>· keys written differently</i><br>
+   profile.py      <i>· statistics and frequencies</i><br>
+   observe.py      <i>· what stands out in one table</i><br>
+   compare.py      <i>· running a comparison, reading it back</i><br>
+   outputs.py      <i>· the run folder, zip, saves, sweep</i><br>
    report.py       <i>· the HTML report</i><br>
-   auto.py         <i>· two sides in, the rest worked out</i><br>
-   runconfig.py    <i>· a run as a config file: saved after a run, its sides opened, run again with no page</i><br>
-   run.py          <i>· python -m tablecmp.run - a config on one pair of files or many, from the command line</i><br>
+   auto.py         <i>· Auto</i><br>
+   runconfig.py    <i>· a run as a config file</i><br>
+   run.py          <i>· python -m tablecmp.run</i><br>
+   loading.py · setup.py · keying.py · comparing.py · results.py · profiling.py <i>· each step, with no page attached</i><br>
 </div>
-    <p style="margin-top:22px">The engine is a black box to the app: it receives two DuckDB tables named <code>src_a</code> and <code>src_b</code> with the common column names and canonical values already applied, and the app reads back its counts and its CSV outputs. Only <code>tablecmp/web/</code> speaks HTTP and only <code>web/</code> draws the page; everything else is plain Python over DuckDB and pandas, which is what makes the API tests possible. <code>csvdiff.py</code> also runs on its own from the command line - <code>python csvdiff.py file a.csv b.csv --keys id --out out/</code> - with <code>key</code>, <code>row_number</code>, <code>multiset</code> and <code>auto</code> matching; exit codes 0 = identical, 1 = differences found, 2 = error.</p>
+    <ul class="pts" style="margin-top:22px">
+      <li><b>Engine</b> - receives <code>src_a</code> and <code>src_b</code> in DuckDB; the app reads back its counts and CSVs.</li>
+      <li><b>Layers</b> - HTTP only in <code>tablecmp/web/</code>, drawing only in <code>web/</code>.</li>
+      <li><b>Command line</b> - <code>python csvdiff.py file a.csv b.csv --keys id --out out/</code>; exit 0 same, 1 differs, 2 error.</li>
+    </ul>
   </div>
 </section>
 
@@ -598,20 +738,25 @@ docker run --rm -p 8501:8501 -v ./data:/data:ro -v ./out:/out --env-file .env cr
   <div class="body">
     <div class="run">
       <div class="row"><div class="k">01</div><div><div class="t">python -m pip install -r requirements-dev.txt</div><div class="d">Once - pytest and pytest-playwright.</div></div></div>
-      <div class="row"><div class="k">02</div><div><div class="t">python -m py_compile compare_app.py tablecmp/*.py</div><div class="d">Everything must compile.</div></div></div>
-      <div class="row"><div class="k">03</div><div><div class="t">python -m pytest tests -q</div><div class="d">The suite (560 tests): the units for every module, the page's flows over HTTP on the sample pair - the file flow and the database flow asserting the counts in <code>tests/COUNTS.md</code>, and every response and output grepped for the fake password - the Profiling page, and three runs in a browser (the sample pair, one table profiled, settings kept across the page switch). The database tests set <code>COMPARE_CONNECTIONS</code> to a temp file, so your own connections are never read or written.</div></div></div>
-      <div class="row"><div class="k">04</div><div><div class="t">python -m playwright install chromium</div><div class="d">The browser runs need Chromium once (<code>--with-deps</code> on a bare Linux). Without it they skip and say that command.</div></div></div>
-      <div class="row"><div class="k">05</div><div><div class="t">Drive it yourself</div><div class="d">The way the tests do - check the numbers, not just that it ran:<pre><code>from pathlib import Path
+      <div class="row"><div class="k">02</div><div><div class="t">python -m playwright install chromium</div><div class="d">Once, for the browser runs; without it they skip.</div></div></div>
+      <div class="row"><div class="k">03</div><div><div class="t">python -m pytest tests -q</div><div class="d">560 tests; sample counts in <code>tests/COUNTS.md</code>.</div></div></div>
+      <div class="row"><div class="k">04</div><div><div class="t">cd web &amp;&amp; npm install &amp;&amp; npm run dev</div><div class="d">Hot reload at <code>http://localhost:5173</code>, with <code>python compare_app.py --no-browser</code> beside it.</div></div></div>
+      <div class="row"><div class="k">05</div><div><div class="t">cd web &amp;&amp; npm test &amp;&amp; npm run build</div><div class="d">Before committing - <code>tests/test_web_build.py</code> fails on a stale build.</div></div></div>
+    </div>
+    <p>Drive it the way the tests do, with <code>tests/webflow.py</code>:</p>
+<pre><code>from pathlib import Path
 from tests.webflow import auto, boot, load_path
 
 def test_the_sample_pair(monkeypatch, tmp_path):
-    f = boot(monkeypatch, tmp_path)               # the page in memory, temp folders
+    f = boot(monkeypatch, tmp_path)
     load_path(f, "A", Path("examples/hr_employees.csv")); load_path(f, "B", Path("examples/payroll_employees.csv"))
-    assert auto(f)["counts"]["matched"] == 2960   # Auto, then the run's counts</code></pre></div></div></div>
-      <div class="row"><div class="k">06</div><div><div class="t">Look at it</div><div class="d">Run <code>python compare_app.py</code>, or take a Playwright screenshot from a test. <code>examples/make_sample.py</code> regenerates the sample data (seed 7) when the samples need to change - and then the counts in <code>COUNTS.md</code> and here do too.</div></div></div>
-      <div class="row"><div class="k">07</div><div><div class="t">Changing the page</div><div class="d">Node 24 is needed only to change the screens; the page's source is in <code>web/</code> (Vite, React, TypeScript) and its build is committed in <code>tablecmp/web_dist/</code>. <code>cd web</code>, <code>npm install</code> once, then <code>npm run dev</code> (hot reload at <code>http://localhost:5173</code>, with <code>python compare_app.py --no-browser</code> running beside it), <code>npm test</code>, and <code>npm run build</code> before committing - <code>tests/test_web_build.py</code> fails when the build is older than <code>web/</code>. <code>web/.npmrc</code> sets <code>legacy-peer-deps</code>, because <code>openapi-typescript</code> still lists TypeScript 5 as a peer.</div></div></div>
-    </div>
-    <p>Conventions the code keeps: identifiers go through <code>sql.ident</code>, literals through <code>sql.lit</code>, never f-strings into SQL; HTTP only in <code>tablecmp/web/</code>, drawing only in <code>web/</code>; the app is read-only against databases and no credential reaches an output, a log or the screen; plain, human wording in the UI with captions that say why, and no emojis anywhere; every long run is a job (<code>tablecmp/web/jobs.py</code>), so it shows in the running panel and lands in the Log; tables shown to people use thousands separators, blank for not-applicable and a null glyph for a real null; this page is updated when behaviour changes; <code>csvdiff.py</code> is not modified by the app's changes.</p>
+    assert auto(f)["counts"]["matched"] == 2960</code></pre>
+    <ul class="pts">
+      <li><b>SQL</b> - identifiers through <code>sql.ident</code>, literals through <code>sql.lit</code>, never f-strings.</li>
+      <li><b>Databases</b> - read-only; no credential reaches an output, a log or the screen.</li>
+      <li><b>Long runs</b> - always a job, so they show in the running panel and the Log.</li>
+      <li><b>Engine</b> - <code>csvdiff.py</code> is not changed by app work.</li>
+    </ul>
   </div>
 </section>
 
@@ -620,27 +765,28 @@ def test_the_sample_pair(monkeypatch, tmp_path):
   <div class="body">
     <table>
       <tr><th>Symptom</th><th>Cause · fix</th></tr>
-      <tr><td>Every matched row differs on one column</td><td>Two different fields paired by mistake (<em>Matched by</em> says <code>guess - check</code>), or a value that converts on one side only. Check the column in the transform section and press <em>Check this column on all rows</em>; the report's value-pair card says the same.</td></tr>
-      <tr><td>Few rows match on the key</td><td>Key values spelled differently - case, padding, a prefix, a date format. <em>Check key</em> fixes the simple ones and suggests the rest (see <em>A key written differently</em>, section 06); the summary lists sample unmatched values. Otherwise give the key column a Type or a step.</td></tr>
-      <tr><td>A date column shows as text</td><td>Look at its <em>looks like</em> cell: add <em>to date</em> with that format on the side that needs it, or pick the Type and let the built-in spellings read it. Ambiguous day/month order needs the format spelled out.</td></tr>
-      <tr><td>Auto picked a key that is not unique</td><td>It says so, with the reason. Suggest keys shows the alternatives with their overlap; or tick a column in the table.</td></tr>
-      <tr><td>Where Auto's decisions went</td><td>Open the <strong>Log</strong> at the foot of the page: the <em>Auto decisions</em> entry lists them, one line each, newest run first; the report keeps them under <em>How this was worked out</em>.</td></tr>
-      <tr><td>The comparison failed</td><td>The message is shown, the step on the rail says <em>could not finish</em> and the previous result stays on screen; the Log keeps the steps up to the failure. Usually a filter value or a custom expression DuckDB cannot read - the preview shows DuckDB's own message; a filter value that is not a date or not a number is refused before the run.</td></tr>
-      <tr><td>Header names look like data</td><td>Untick <em>First row is a header</em> and load again; give names under Advanced if you have them.</td></tr>
-      <tr><td>Not under an allowed folder (COMPARE_DATA_DIR)</td><td>The server restricts paths on disk to the folders in <code>COMPARE_DATA_DIR</code> (<code>/data</code> under Docker). Put the file there, or upload it.</td></tr>
-      <tr><td>Saves must stay under …</td><td><code>COMPARE_OUT_DIR</code> is set; every save goes under it. Use the default folder the box offers.</td></tr>
-      <tr><td>SQL Server needs the pymssql package</td><td>That driver is not installed. <code>pip install -r requirements.txt</code> installs all five; a single one installs on its own.</td></tr>
-      <tr><td>Only SELECT or WITH statements are sent · UPDATE is not allowed in a read-only statement</td><td>The read-only guard. One statement, <code>SELECT</code> or <code>WITH</code>; a column that happens to be called <code>update</code> or <code>into</code> must be quoted.</td></tr>
-      <tr><td>Type the password above first</td><td>The connection was saved without its password (or came from the environment without one): type it in the Database panel's password box, once per session. A held password that is wrong: press <strong>Change password</strong> and type it again.</td></tr>
-      <tr><td>The fetch failed - …</td><td>The driver's own message, credentials blanked. Press <em>Test</em> in the Connections manager to see whether it is the connection or the statement.</td></tr>
-      <tr><td>A cap without an ORDER BY can give the two sides different rows</td><td>A warning, not a stop: add an ORDER BY to the query, or fetch everything.</td></tr>
-      <tr><td>Stopped: under 1 GB free in the work folder</td><td>The fetch or the run needs room: point <code>COMPARE_WORK_DIR</code> at a bigger disk, or lower the cap.</td></tr>
+      <tr><td>Every matched row differs on one column</td><td>Wrong pairing (<code>guess - check</code>) or a one-sided conversion; press <em>Check this column on all rows</em>.</td></tr>
+      <tr><td>Few rows match on the key</td><td>Keys spelled differently; <em>Check key</em> fixes or suggests (section 06).</td></tr>
+      <tr><td>A date column shows as text</td><td>Add <em>to date</em> with the format its <em>looks like</em> cell shows.</td></tr>
+      <tr><td>Auto picked a key that is not unique</td><td>It says why; pick another from Suggest keys or tick one.</td></tr>
+      <tr><td>Where Auto's decisions went</td><td>The <strong>Log</strong>, entry <em>Auto decisions</em>; the report has them too.</td></tr>
+      <tr><td>The comparison failed</td><td>Message shown, old result kept; usually a filter or expression DuckDB cannot read.</td></tr>
+      <tr><td>Header names look like data</td><td>Untick <em>First row is a header</em> and load again.</td></tr>
+      <tr><td>Not under an allowed folder (COMPARE_DATA_DIR)</td><td>Move the file into <code>COMPARE_DATA_DIR</code> (<code>/data</code> in Docker), or upload it.</td></tr>
+      <tr><td>Saves must stay under …</td><td><code>COMPARE_OUT_DIR</code> is set; use the default folder offered.</td></tr>
+      <tr><td>SQL Server needs the pymssql package</td><td><code>pip install -r requirements.txt</code>.</td></tr>
+      <tr><td>Only SELECT or WITH statements are sent · UPDATE is not allowed in a read-only statement</td><td>One <code>SELECT</code> or <code>WITH</code>; quote columns named like keywords.</td></tr>
+      <tr><td>Type the password above first</td><td>Type it in the Database panel once per session, or <strong>Change password</strong>.</td></tr>
+      <tr><td>The fetch failed - …</td><td>Press <em>Test</em> in Connections to tell connection from statement.</td></tr>
+      <tr><td>A cap without an ORDER BY can give the two sides different rows</td><td>A warning: add an ORDER BY or fetch everything.</td></tr>
+      <tr><td>Stopped: under 1 GB free in the work folder</td><td>Point <code>COMPARE_WORK_DIR</code> at a bigger disk, or lower the cap.</td></tr>
       <tr><td>A change to a file in tablecmp/ does nothing</td><td>Restart the app.</td></tr>
-      <tr><td>duckdb too old</td><td><code>pip install -U duckdb</code>. DuckDB 1.2+ is needed.</td></tr>
-      <tr><td>Port 8501 is in use</td><td>Another app holds it (an older copy of this app, say): stop it, or <code>python compare_app.py --port 8600</code>.</td></tr>
+      <tr><td>duckdb too old</td><td><code>pip install -U duckdb</code> (1.2+ needed).</td></tr>
+      <tr><td>Port 8501 is in use</td><td>Stop the other app, or <code>python compare_app.py --port 8600</code>.</td></tr>
     </table>
   </div>
 </section>
+
 </main>
 </body>
 </html>

@@ -1,5 +1,6 @@
 import type { Meta } from "../api/client";
 import { useConnections } from "../connections/ConnectionsManager";
+import { Logo } from "../ui/icons";
 import { Button } from "../ui/kit";
 import { useLog } from "./LogPanel";
 import { ModeToggle } from "./ModeToggle";
@@ -17,7 +18,8 @@ export function AppHeader({ meta, page, setPage }: { meta?: Meta; page: Page; se
   return (
     <header className="app-header">
       <a className="brand" href="#" onClick={(e) => { e.preventDefault(); flip("Compare"); }}>
-        {words.slice(0, -1).join(" ")} <em>{words[words.length - 1]}</em>
+        <Logo />
+        <span>{words.slice(0, -1).join(" ")} <em>{words[words.length - 1]}</em></span>
       </a>
       <div className="mode" role="radiogroup" aria-label="Page">
         {(["Compare", "Profiling"] as Page[]).map((p) => (

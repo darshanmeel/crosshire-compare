@@ -5,7 +5,8 @@
 import { Bar, Callout, Chip, num, Panel, pctText, Pill } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import { marks } from "../ui/marks";
-import { ColumnsTable } from "./ColumnsTable";
+import { castsOf, castType } from "./casts";
+import { ColumnsTable, openColumn } from "./ColumnsTable";
 import { DepGraph } from "./DepGraph";
 import { DepMatrix } from "./DepMatrix";
 import { keyColumns, madeAt, rowsOf } from "./frame";
@@ -15,7 +16,7 @@ import { KeySearch } from "./KeySearch";
 import { SaveRow } from "./SaveRow";
 import { standout, type Finding } from "./standout";
 import type { Profile, ProfilingView } from "./types";
-import { useSaveDefaults } from "./useProfiling";
+import { useCasts, useSaveDefaults } from "./useProfiling";
 import "./profiling.css";
 
 export const NOTHING_STANDS_OUT = "Nothing stands out - no nulls, no duplicates, no constant columns, no outliers.";
@@ -161,6 +162,34 @@ function FoldBody({ p, fold }: { p: Profile; fold: Fold }) {
   );
 }
 
+/** Text columns that would read as another type: the column, the type it would take, how many
+ *  of its values would - the column opens its detail. */
+function CouldBeTypes({ made }: { made: string }) {
+  const rows = useCasts(made).data?.columns ?? [];
+  if (!rows.length) return null;
+  return (
+    <Panel title="Could be another type" sub="read as text or a number, but the values read as a number, a date or a timestamp">
+      <div className="panel-body">
+        <ul className="prof-points" aria-label="Could be another type">
+          {rows.map((r) => {
+            const [{ kind, hit }] = castsOf(r);
+            const { type, form } = castType(kind, hit);
+            const p = (100 * hit.any) / r.filled;
+            return (
+              <li key={r.column} className={hit.any === r.filled ? "ok" : "warn"}>
+                <span className="dot" aria-hidden="true" />
+                <span className="l"><button type="button" className="col-open" onClick={() => openColumn(r.column)}>{r.column}</button></span>
+                <span className="v"><Bar pct={p} tone={hit.any === r.filled ? "ok" : "warn"} label={<>{num(hit.any)} <span className="pc">· {pctText(hit.any, r.filled)}%</span></>} /></span>
+                <span className="n">{r.kind} → <code>{type}</code>{form && <> · <code>{form}</code></>}{hit.any < r.filled ? ` · ${num(r.filled - hit.any)} would not convert` : ""}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </Panel>
+  );
+}
+
 /** The verdict, the Columns table across the page, then the findings, frequencies and files -
  *  two to a row on a wide screen, one on a phone. */
 export function ProfileView({ view, name }: { view: ProfilingView; name: string }) {
@@ -180,6 +209,7 @@ export function ProfileView({ view, name }: { view: ProfilingView; name: string 
               : <ul className="bullets"><li><i className="ok" /><span>{NOTHING_STANDS_OUT}</span></li></ul>}
           </div>
         </Panel>
+        <CouldBeTypes made={view.made} />
         <KeyCandidates p={p} />
         {FOLDS.map((f) => (
           <Panel key={f} className="prof-fold" title={<span id={`fold-${f}`}>{f}</span>}>

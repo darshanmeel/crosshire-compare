@@ -49,7 +49,11 @@ The result: the headline sentence and the row-outcome bar, then the Summary tab 
 Differences · 2,960 rows matched on emp_id · 5 columns compared · 649 rows (21.93%) differ in 687 cells · 40 only in HR · 25 only in Payroll · 0.4s at 22:32:04
 ```
 
-![The Summary tab](docs/app-result.png)
+<p align="center">
+  <img src="docs/app-result.png" alt="A comparison result" width="49%">
+  <img src="docs/app-profile-column.png" alt="One column profiled" width="49%">
+</p>
+<p align="center"><sub>A comparison of HR against Payroll, and one column of a profile. Every screen, with pictures: <a href="README.html">README.html</a>.</sub></p>
 
 ## Install and run
 
@@ -124,11 +128,7 @@ The DuckDB file holds every column as text, so here the column table's *looks li
 
 The page is a header and a step rail. The header holds the **Compare** | **Profile** switch, **Connections**, **Run from config**, the **Log** and the light / dark button; the rail under it says where things stand - *Sources*, *Columns*, *Rows*, *Results* - each with a one-line summary, and carries **Auto · figure it all out** and **Compare** on the right. Before anything is loaded the page is the two source cards.
 
-![The app before anything is loaded](docs/app-home.png)
-
 1. **Load A and B on the source cards.** Upload, give a path, or fetch from a database. Each side has a name (Left and Right by default) that is shown everywhere and names every output file - `<left>_compare_<right>__report.html` - so name them; the card reminds you while a side is still called Left or Right. For a big file open *Rows to read* first and cut it down. Each card offers a 10-row preview and nothing else runs.
-
-   ![The app with both files loaded](docs/app-loaded.png)
 
 2. **Check the column table** under the cards. Pairs by name are already made. Fix the rest with the dropdowns, set *Read as*, and set each row to **Key**, **Compare** or **Skip**. The line under the table says what it amounts to: the key, how many columns are compared, what is skipped and which pairs are guesses to check.
 3. **Transform where a side needs it.** Click a pair's Transform cell and add steps - trim, left 10, to date (%d/%m/%Y) - previewed on the first five rows, on one side or on both at once. **Add a column** makes a new one from an expression, such as the date out of a datetime.
@@ -183,8 +183,6 @@ In key and position mode every file but `paired.csv` is present after every run 
 **The zip.** **Zip the whole run** writes `<pair>__<run_id>.zip`, the whole run folder, and hands it out - written when the button is pressed, not before, and again after Parquet copies are added. Above it a picker holds every file of the run with its size - *Cell differences*, *Rows only in HR*, *Rows only in Payroll*, *Paired rows*, *Columns*, *Profile*, *Summary*, *Settings and result*, *Report*, *Engine report* - and the Parquet copies when they exist - and only the file picked is read: a browser download holds the whole file in memory, and ten of them on every rerun is what made a big run's page slow.
 
 The Downloads tab: the whole run as one zip, then every file of the run folder, the table format switch, and **Save everything to folder**.
-
-![The Downloads tab](docs/app-downloads.png)
 
 **Save everything to folder** copies the run folder to the folder in the box beside it. The default is `<COMPARE_OUT_DIR>/<pair>__<run_id>` when the variable is set - and then every save must stay under it, or it is refused with *Saves must stay under …* - otherwise a folder of that name next to file A, or under your Downloads folder for an upload; the next run's box defaults beside the last save. The report is written at run time, so the folder and the zip always hold it.
 

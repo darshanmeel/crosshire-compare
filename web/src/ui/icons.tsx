@@ -43,3 +43,15 @@ export function Icon({ name, size = "md", label, ...rest }:
     </svg>
   );
 }
+
+/** The mark from the README banner: two rings, a filled disc and a plus. Accent colour from the theme. */
+export function Logo({ size = 28 }: { size?: number }) {
+  return (
+    <svg className="logo" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+      <circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.55" />
+      <circle cx="20" cy="20" r="13.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray="1.2 2.2" opacity="0.75" />
+      <circle cx="20" cy="20" r="9" fill="currentColor" />
+      <path d="M20 15.5v9M15.5 20h9" className="logo-plus" strokeWidth="1.8" />
+    </svg>
+  );
+}
