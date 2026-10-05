@@ -1,4 +1,20 @@
 /* web/src/profiling/column/key.css - the key column's page: the sections spaced as the other
-   column pages, the compare button under its points. */
+   column pages, the sequence bar and its legend, the compare button under its points. */
 .key-view { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.key-view > .findings { margin-bottom: 0; }
 .key-view .key-open { margin-top: 4px; }
+
+/* the number part in order: runs green, gaps red, the ids past the largest run amber */
+.key-bar { display: flex; gap: 1px; height: 16px; border-radius: 4px; overflow: hidden; background: var(--fs-surface2); margin: 4px 0 12px; }
+.key-bar span { flex-basis: 0; min-width: 4px; background: var(--fs-pos); }
+.key-bar span.gap { background: var(--fs-neg); }
+.key-bar span.past { background: var(--fs-warn); }
+
+.key-legend { list-style: none; margin: 0 0 8px; padding: 0 0 12px; display: flex; flex-wrap: wrap; gap: 8px 24px;
+  border-bottom: 1px solid var(--fs-line); font-size: 13px; }
+.key-legend li { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.key-legend li > i { width: 10px; height: 10px; border-radius: 2px; background: var(--fs-pos); flex: none; }
+.key-legend li.gap > i { background: var(--fs-neg); }
+.key-legend li.past > i { background: var(--fs-warn); }
+.key-legend strong { font-weight: 600; }
+.key-legend .n { color: var(--fs-text2); }

@@ -386,6 +386,7 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <li><b>Filters at compare</b> - on the common names, for both sides or one: <code>=</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>in</code> <code>between</code> <code>like</code> <code>is null</code>…</li>
       <li><b>Filter values</b> - matched exactly, read as the column's type; a bad date or number is refused in a sentence.</li>
       <li><b>Profile by bucket</b> - count a column in every bucket; the Summary then shows which rows match worst.</li>
+      <li><b>Column profile</b> - <em>Simple</em> (the top values, as before) or <em>Extended</em>: a row of findings per column and side - nulls, distinct, the top value, range or length, the common shape, the first and last three characters, and values spelled more than one way - counted on the bucket's rows only.</li>
       <li><b>Profile both files</b> - null %, distinct, min and max per column, side by side, plus each side's top and bottom 10 values.</li>
       <li><b>Run settings</b> - <em>Re-run on every change</em>, <em>Profile both sides first</em> (with Auto), rows to display per section. Downloads hold every row.</li>
       <li><b>Compare HR against Payroll</b> - runs it, with a caption of columns, key and filters.</li>
@@ -553,6 +554,7 @@ python -m tablecmp.run config.json --pairs pairs.csv --out results           # l
       <li><b>Types</b> - read from the values: <code>12,686.95</code> is a number, <code>06-Nov-2019</code> a date, <code>Y</code>/<code>N</code> a boolean</li>
       <li><b>Progress</b> - the running panel shows each step; the Log gets the run and its <em>Profile notes</em></li>
       <li><b>Big tables</b> - too big to hold in memory, each measure reads the file instead; slower, any size works (see <a href="#speed">Speed</a>)</li>
+      <li><b>Done means ready</b> - before it says done, <strong>Profile</strong> works out every column's page too; on a million rows that is about 40 s once, and each column then opens at once</li>
       <li><b>Bar under the header</b> - <strong>Profile</strong>; once a profile is on screen, <strong>Save to folder</strong> and <strong>profile.csv</strong> too</li>
     </ul>
 
@@ -603,6 +605,21 @@ python -m tablecmp.run config.json --pairs pairs.csv --out results           # l
       <li><b>Parts</b> - a number by its digits before and after the point in bands (1-3, 4-6 …), a date by year, month and weekday (and hour), text by its most common first and last 1 to 5 characters</li>
     </ul>
 
+    <figure class="shot"><img src="docs/app-profile-findings-row.png" alt="Column page header for salary: read as number, 0 to 2 places fits DECIMAL(7,2), amount, then the findings pills" loading="lazy"><figcaption>Every column page opens on its findings - one pill each, green, amber, red or grey</figcaption></figure>
+    <ul class="pts">
+      <li><b>Header</b> - the column, what it is <em>read as</em> (a select when its values read as another type), a guess at what it holds - <em>identifier</em>, <em>event time</em>, <em>amount</em>, <em>category</em>, <em>person name</em> - and the form, e.g. <code>whole · fits DECIMAL(8,0)</code> or <code>Y / N</code></li>
+      <li><b>Findings</b> - a bold name and a short detail: <em>Weekend dates 28.17%</em>, <em>3 near-duplicate groups</em>, <em>No nulls</em></li>
+      <li><b>The page below</b> - made for the column's type, as in the table</li>
+    </ul>
+    <table>
+      <tr><th>Type</th><th>Its page</th></tr>
+      <tr><td>Timestamp, date</td><td>Range and span, rows per minute, hour, day, week, month or year, weekends, future and placeholder dates (1900-01-01, 9999-12-31), the precision the values carry, stamps that repeat; then year, month, weekday and hour as parts. A text column whose values read as a date or a timestamp opens here, read in the form most of them take, fractions of 1 to 9 digits</td></tr>
+      <tr><td>Number</td><td>Digits before and after the point, the <code>DECIMAL(p, s)</code> every value fits, round lots (multiples of 10, 100, 1,000), the distribution, outliers and parts</td></tr>
+      <tr><td>Boolean</td><td>True, false and null, the spellings each was written in (<code>Y</code>, <code>yes</code>, <code>1</code>) and the true rate by another column - as it is, by year or in number bands</td></tr>
+      <tr><td>Key</td><td>Nulls and blanks, duplicates, case and space variants, width, shapes, the prefix and the number part with its runs and gaps, the order in the file and the next id; after a comparison, the ids each side has that the other does not</td></tr>
+      <tr><td>Text</td><td>A category (its values, spelling variants), free text (parts, lengths) or a date in disguise; <em>Similar values</em> groups values probably spelled twice - by fingerprint, 3-gram overlap, a shared start or the same other column - and keeps the most frequent spelling</td></tr>
+    </table>
+
     <figure class="shot"><img src="docs/app-profile-outliers.png" alt="Outliers and Shapes panels for salary" loading="lazy"><figcaption>Then outliers, shapes, frequencies and dependencies - two to a row</figcaption></figure>
     <ul class="pts">
       <li><b>Outside the fence</b> - count and %, and which side: low, high or both; <em>none</em> on salary</li>
@@ -640,6 +657,7 @@ python -m tablecmp.run config.json --pairs pairs.csv --out results           # l
       <li><b>Databases</b> - fetched once in 50,000-row batches into Parquet; put the WHERE in the SQL, ORDER BY with a cap.</li>
       <li><b>Memory</b> - DuckDB gets 2 GB and spills up to 20 GB to disk; change both under <em>Run settings</em>.</li>
       <li><b>Big files</b> - cut them in <em>Rows to read</em> first (a date filter or a top N) and keep the Parquet snapshot on.</li>
+      <li><b>Profile once, open at once</b> - <strong>Profile</strong> works out every column page while it runs and keeps the table in memory for them: a 1,000,000-row table profiles in about 40 s, then each column opens in under 0.15 s (it was 2 to 10 s a page).</li>
       <li><b>Rough timings</b> - the sample pair in about a second; 500,000 × 6 in 16 s for a whole Auto run; 100,000 × 200 in 57 s.</li>
     </ul>
   </div>

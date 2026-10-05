@@ -1,23 +1,26 @@
-// web/src/profiling/ProfileView.tsx - the profile of one table (screen 15): the verdict, the Columns
-// panel across the page, then what stands out folded into a few findings, then the key candidates,
-// each across the page - then the Outliers, Patterns and Dependencies tables across the page (the
-// dependencies drawn as a graph too), the value frequencies and the files.
+// web/src/profiling/ProfileView.tsx - the profile of one table (screen 15): the verdict and a row of
+// findings across the table (GET /api/profiling/findings), the Columns panel across the page, then
+// what stands out folded into a few findings, the key candidates beside the strongest dependencies
+// - then the Outliers, Patterns and Dependencies tables across the page (the dependencies drawn as
+// a graph too), the value frequencies and the files.
 import { Bar, Callout, Chip, num, Panel, pctText, Pill } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import { marks } from "../ui/marks";
 import { castsOf, castType } from "./casts";
 import { ColumnsTable, openColumn } from "./ColumnsTable";
 import { DepGraph } from "./DepGraph";
-import { DepMatrix } from "./DepMatrix";
+import { DepMatrix, SHOWN as STRONG } from "./DepMatrix";
 import { keyColumns, madeAt, rowsOf } from "./frame";
 import { FrameTable } from "./FrameTable";
 import { FreqSection } from "./FreqSection";
 import { KeySearch } from "./KeySearch";
 import { SaveRow } from "./SaveRow";
-import { standout, type Finding } from "./standout";
+import { Findings } from "./column/Findings";
+import { standout, useFindings, type DepPair, type Finding, type FindingsBody } from "./standout";
 import type { Profile, ProfilingView } from "./types";
 import { useCasts, useSaveDefaults } from "./useProfiling";
 import "./profiling.css";
+import "./overview.css";
 
 export const NOTHING_STANDS_OUT = "Nothing stands out - no nulls, no duplicates, no constant columns, no outliers.";
 export const STALE = "This profile is from earlier settings - run it again to refresh.";
@@ -25,12 +28,13 @@ export const STALE = "This profile is from earlier settings - run it again to re
 type Fold = "Outliers" | "Patterns" | "Dependencies";
 const FOLDS: Fold[] = ["Outliers", "Patterns", "Dependencies"];
 
-function Verdict({ p, name, made, stale }: { p: Profile; name: string; made: string; stale: boolean }) {
+function Verdict({ p, name, made, stale, f }: { p: Profile; name: string; made: string; stale: boolean; f?: FindingsBody }) {
   const stats = rowsOf(p.stats);
   const keys = keyColumns(p);
   const rows = Number(stats[0]?.Rows ?? 0);
   const nulls = stats.reduce((s, r) => s + Number(r.Nulls ?? 0), 0);
   const dup = /([\d,]+) duplicate rows?/.exec(p.headline)?.[1];
+  const looks = (f?.looks ?? []).filter((l) => l.kind === "text").length;
   return (
     <section className="verdict prof-verdict" aria-label="Profile result">
       <div className="meta">
@@ -42,10 +46,12 @@ function Verdict({ p, name, made, stale }: { p: Profile; name: string; made: str
           ? <>Key {keys.map((k, i) => <span key={k}>{i > 0 && " + "}<code>{k}</code></span>)} — unique on every row</>
           : <>No key — nothing up to four columns is unique</>}
         {" · "}<strong>{num(rows)}</strong> rows × <strong>{num(stats.length)}</strong> columns
-        {dup !== undefined && <> · <strong>{dup}</strong> duplicate rows</>}
         {" · "}<strong className={nulls ? "neg" : undefined}>{num(nulls)}</strong> nulls
+        {dup !== undefined && <> · <strong className={dup !== "0" ? "neg" : undefined}>{dup}</strong> duplicate rows</>}
+        {looks > 0 && <> · <strong className="neg">{num(looks)}</strong> {looks === 1 ? "column reads" : "columns read"} as text that {looks === 1 ? "looks" : "look"} like something else</>}
       </p>
       <span className="sub">{p.headline}</span>
+      {f?.items?.length ? <Findings label="Table findings" items={f.items.map((i) => ({ tone: i.tone, label: i.label, detail: i.detail }))} /> : null}
     </section>
   );
 }
@@ -99,11 +105,14 @@ function KeyCandidates({ p }: { p: Profile }) {
             {rows.map((r, i) => {
               const unique = r.Unique === "yes";
               const why = reasons(String(r.Why ?? ""));
+              const d = Number(r.Distinct ?? 0), nk = Number(r["Null keys"] ?? 0);
+              const all = d + Number(r["Duplicate rows"] ?? 0) + nk;
               return (
                 <li key={i}>
                   <span className="head">
                     {String(r["Key columns"]).split(" + ").map((c) => <Chip key={c} tone={unique && i === 0 ? "key" : undefined}>{c}</Chip>)}
                     <span className={unique ? "yes" : "no"}>{unique ? (String(r["Key columns"]).includes(" + ") ? "unique together" : "unique by itself") : "not unique"}</span>
+                    <span className="key-sum">· {num(d)} distinct of {num(all)} · {nk ? `${num(nk)} null keys` : "no nulls"}</span>
                   </span>
                   <KeyFigs r={r} />
                   {why.length > 0 && <ul className="why">{why.map((w, k) => <li key={k}>{marks(w)}</li>)}</ul>}
@@ -190,6 +199,36 @@ function CouldBeTypes({ made }: { made: string }) {
   );
 }
 
+/** The strongest pairs of the dependency matrix, the key left out: X → Y, a bar for how far X
+ *  decides Y beyond chance, faint under STRONG; and what the strongest full pair is, in counts. */
+function DepPairs({ p, pairs, keys }: { p: Profile; pairs: DepPair[]; keys: string[] }) {
+  if (!pairs.length) return null;
+  const distinct = Object.fromEntries(rowsOf(p.stats).map((r) => [String(r.Column), Number(r.Distinct ?? 0)]));
+  const full = pairs.find((x) => x.v >= 100);
+  const back = full && pairs.find((x) => x.x === full.y && x.y === full.x);
+  return (
+    <Panel className="dep-pairs" title="Dependencies across the table" sub="how far one column decides another beyond chance · 0 is chance, 100% every value has one">
+      <div className="panel-body">
+        <ul className="dep-pairs-list" aria-label="Strongest dependencies">
+          {pairs.map((x) => (
+            <li key={`${x.x}>${x.y}`} className={x.v < STRONG ? "faint" : undefined}>
+              <span className="xy"><code>{x.x}</code><Icon name="arrow" size="sm" /><code>{x.y}</code></span>
+              <Bar pct={x.v} tone={x.v >= 100 ? "ok" : "accent"} />
+              <span className="v">{x.v.toFixed(2)}%</span>
+            </li>
+          ))}
+        </ul>
+        <p className="caption">
+          {keys.length > 0 && <>The key ({keys.join(" + ")}) decides every column by being unique and is left out. </>}
+          {full && <>Every {full.x} has one {full.y}: {num(distinct[full.x] ?? 0)} values of {full.x} go with {num(distinct[full.y] ?? 0)} of {full.y}
+            {back ? <>; the other way, {full.y} decides {full.x} {back.v.toFixed(2)}%</> : null}. </>}
+          Under {STRONG}% is faint - not conclusive.{p.matrix_note && <> Measured {p.matrix_note}.</>}
+        </p>
+      </div>
+    </Panel>
+  );
+}
+
 /** The verdict, the Columns table across the page, then the findings, frequencies and files -
  *  two to a row on a wide screen, one on a phone. */
 export function ProfileView({ view, name }: { view: ProfilingView; name: string }) {
@@ -197,11 +236,14 @@ export function ProfileView({ view, name }: { view: ProfilingView; name: string 
   const defaults = useSaveDefaults(name, view.made).data;
   const keys = keyColumns(p);
   const found = standout(p.notes);
+  const casts = useCasts(view.made);
+  const f = useFindings(view.made, casts.isSuccess).data;
+  const pairs = f?.pairs ?? [];
   return (
     <>
-      <Verdict p={p} name={name} made={view.made} stale={view.stale} />
+      <Verdict p={p} name={name} made={view.made} stale={view.stale} f={f} />
       <div className="prof-stack">
-        <ColumnsTable p={p} keyCols={keys} />
+        <ColumnsTable p={p} keyCols={keys} findings={f} />
         <Panel title="What stands out" sub="each finding once, with the columns it is about">
           <div className="panel-body">
             {found.length
@@ -210,7 +252,10 @@ export function ProfileView({ view, name }: { view: ProfilingView; name: string 
           </div>
         </Panel>
         <CouldBeTypes made={view.made} />
-        <KeyCandidates p={p} />
+        <div className={pairs.length ? "prof-duo" : "prof-one"}>
+          <KeyCandidates p={p} />
+          <DepPairs p={p} pairs={pairs} keys={keys} />
+        </div>
         {FOLDS.map((f) => (
           <Panel key={f} className="prof-fold" title={<span id={`fold-${f}`}>{f}</span>}>
             <div className="panel-body" id={`fold-${f}-body`} role="region" aria-labelledby={`fold-${f}`}>

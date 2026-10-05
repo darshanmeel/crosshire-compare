@@ -7,3 +7,6 @@
 .flag-by { display: inline-flex; align-items: center; gap: 10px; font: inherit; }
 .flag-by .sel { width: auto; min-height: 36px; }
 .flag-rates .panel-head { align-items: center; flex-wrap: wrap; }
+.flag-kv li.o .bar i { background: var(--fs-neg); }
+.flag-kv .m .to { color: var(--fs-text3); margin: 0 2px; }
+.flag-kv .m em { font-style: normal; color: var(--fs-neg); }

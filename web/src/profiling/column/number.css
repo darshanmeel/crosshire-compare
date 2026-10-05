@@ -1,6 +1,11 @@
-/* web/src/profiling/column/number.css - the number column's page: the distribution's bars and axis. */
+/* web/src/profiling/column/number.css - the number column's page: the distribution's bars and axis,
+   the percentile strip, the least frequent seen once. */
 .num-hist { height: 140px; }
 .num-hist-x { display: flex; gap: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--fs-text3); font-variant-numeric: tabular-nums; }
 .num-hist-x span { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; }
-.num-once { margin: 8px 0 0; }
-.num-once .m { font-family: var(--font-mono); color: var(--fs-text2); font-variant-numeric: tabular-nums; }
+.num-strip { display: flex; gap: 2px; height: 44px; margin: 8px 0 12px; }
+.num-strip span { flex: 1 1 0; min-width: 6px; position: relative; background: var(--fs-accent-fill); border: 1px solid var(--fs-accent-edge); border-radius: 3px; }
+.num-strip span:nth-child(even) { background: var(--fs-surface2); }
+.num-strip em { position: absolute; left: 4px; bottom: 4px; font-style: normal; font-family: var(--font-mono); font-size: 11px; color: var(--fs-text2); white-space: nowrap; overflow: hidden; max-width: calc(100% - 6px); text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.num-once { margin: 4px 0 0; line-height: 1.7; }
+.num-once.m { font-family: var(--font-mono); font-size: 12.5px; color: var(--fs-text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }

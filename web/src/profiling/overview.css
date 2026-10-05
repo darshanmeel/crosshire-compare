@@ -1,0 +1,35 @@
+/* web/src/profiling/overview.css - the Profile overview's v3 pieces: the findings row under the
+   verdict, the Columns table's read as / semantic / what stands out cells, the key summary and the
+   dependencies across the table. */
+
+/* the findings row across the table, under the verdict */
+.prof-verdict .findings { margin: 14px 0 0; }
+
+/* Columns table: read as · looks like, semantic, what stands out, the arrow */
+.prof-stats.prof-stats-wide { min-width: 1240px; }
+.prof-stats .readas { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 260px; }
+.prof-stats .readas svg { color: var(--fs-text3); flex: none; }
+.prof-stats .readas .from { font-size: 11.5px; color: var(--fs-text2); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prof-stats .chip.looks { background: var(--fs-accent-subtle); color: var(--fs-accent); box-shadow: inset 0 0 0 1px var(--fs-accent-line); }
+.prof-stats .chip.sem { background: transparent; box-shadow: inset 0 0 0 1px var(--fs-border2); color: var(--fs-text2); font-family: inherit; font-size: 12px; }
+.prof-stats td.range { max-width: 200px; }
+.prof-stats td.stands-cell { min-width: 240px; max-width: 360px; white-space: normal; }
+.prof-stats .stands { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; line-height: 1.45; color: var(--fs-text2); }
+.prof-stats td.go { width: 44px; text-align: right; }
+.prof-stats .row-go { width: 32px; height: 32px; }
+
+/* key candidates: the one-line summary beside the verdict */
+.prof-keys .key-sum { font-size: 12.5px; color: var(--fs-text2); font-variant-numeric: tabular-nums; }
+
+/* key candidates beside the dependencies across the table - one above the other on a phone */
+.prof-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 20px; align-items: start; }
+.prof-one { display: contents; }
+.dep-pairs-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dep-pairs-list li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(80px, 1fr) 64px; align-items: center; gap: 12px; min-height: 28px; }
+.dep-pairs-list .xy { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.dep-pairs-list .xy code { font-family: var(--font-mono); font-size: 12.5px; color: var(--fs-text); overflow: hidden; text-overflow: ellipsis; }
+.dep-pairs-list .xy svg { color: var(--fs-text3); flex: none; }
+.dep-pairs-list .bar { height: 6px; }
+.dep-pairs-list .v { text-align: right; font-family: var(--font-mono); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--fs-text); }
+.dep-pairs-list li.faint .xy code, .dep-pairs-list li.faint .v { color: var(--fs-text3); }
+.dep-pairs .caption { margin: 0; }

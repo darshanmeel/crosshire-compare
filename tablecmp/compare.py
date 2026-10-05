@@ -830,6 +830,46 @@ def _paired_profile(run: dict, keys: list[str], bucket: str, todo: list[str],
             cache[c] = _counts_frame(df, total, ["Value", "Rows A", "Rows B"])
 
 
+def bucket_rows(run: dict, keys: list[str], bucket: str, cols: list[str]) -> dict[str, list[tuple[str, str]]]:
+    """A bucket's rows held as the table `bucket_rows` on the run's connection, with the columns
+    asked for - {column: [(side, its name in the table)]}: a key once (A's), a column only one
+    file has on its side, any other compared column a side each (a_<col>, b_<col>); the
+    one-sided buckets read their own file, one side. Empty when the bucket has no rows to hold."""
+    con, cfg = run["con"], run["cfg"]
+    if bucket in ("left", "right"):
+        f = run["files"].get(f"{cfg['name']}__{bucket}_only.csv")
+        if not f:
+            return {}
+        con.execute(f"CREATE OR REPLACE TABLE bucket_rows AS SELECT * FROM read_csv({lit(str(f))}, all_varchar=true)")
+        have = {r[0] for r in con.execute("DESCRIBE bucket_rows").fetchall()}
+        side = "A" if bucket == "left" else "B"
+        return {c: [(side, c)] for c in cols if c in have}
+    if not keys or (bucket != "matched" and not cells_table(run)):
+        return {}
+    pair_views(run, keys)
+    own = bucket_columns(run, bucket)
+    picks, where = [], {}
+    for c in cols:
+        if c in keys:
+            picks.append(f"l.{ident(c)} AS {ident(c)}")
+            where[c] = [("A", c)]
+        elif own.get(c) in ("A", "B"):
+            s = own[c]
+            picks.append(f"{'l' if s == 'A' else 'r'}.{ident(c)} AS {ident(s.lower() + '_' + c)}")
+            where[c] = [(s, s.lower() + "_" + c)]
+        else:
+            picks += [f"l.{ident(c)} AS {ident('a_' + c)}", f"r.{ident(c)} AS {ident('b_' + c)}"]
+            where[c] = [("A", "a_" + c), ("B", "b_" + c)]
+    if not picks:
+        return {}
+    sql = f"SELECT {', '.join(picks)} FROM cmp_l l JOIN cmp_r r ON {join_on(keys)}"
+    if bucket != "matched":                       # paired on the key, but not equal
+        occ = cd_occ(run)
+        sql += f" WHERE {row_key(keys, 'l.', '__occ' if occ else None)} IN (SELECT {row_key(keys, '', occ)} FROM cd)"
+    con.execute(f"CREATE OR REPLACE TABLE bucket_rows AS {sql}")
+    return where
+
+
 def near_match(cells_path: str) -> pd.DataFrame:
     """How close the differing values are - high similarity means formatting, not data."""
     con = scratch()

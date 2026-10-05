@@ -5,7 +5,7 @@ workspace - its DataFrames never leave Python, only their rows do."""
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -16,9 +16,11 @@ from pydantic import BaseModel, Field
 from .. import profiling, setup
 from ..loading import DEFAULT_NAMES
 from ..outputs import default_save_folder, run_id
-from ..sql import ident, lit, scratch
-from ..values import ColSpec, ReadOptions, register
+from ..sql import ident, lit
+from ..values import ColSpec, ReadOptions
 from . import jobs
+from . import profile_held
+from .profile_held import held_answer
 from .sides import PAGE, side
 from .workspace import Workspace, workspace
 
@@ -145,6 +147,7 @@ def run_profile(body: RunIn, ws: Workspace = Depends(workspace)) -> dict:
         found = profiling.make_profile(P, name, opts, ctx.say, body.key_cols, body.top_keys,
                                        shortlist=body.shortlist)
         ws.data[HELD] = (key, found, run_id())
+        profile_held.warm(ws, found, ctx.say)     # each column's page worked out now, drawn at once later
         ctx.label = profiling.ready_label(found)
         # the notes as their own entry, the way Auto's decisions are logged
         jobs.note(ws, "Profile notes", profiling.notes_label(found["notes"]), found["notes"])
@@ -175,27 +178,22 @@ def _when(seconds: float, kind: str) -> str:
     return t.date().isoformat() if kind == "date" else t.isoformat(sep=" ")
 
 
-def histogram(P, spec: ColSpec, opts: ReadOptions, bins: int) -> list[dict]:
+def histogram(con, rel: str, spec: ColSpec, bins: int) -> list[dict]:
     """Equal-width bins over one number, date or timestamp column of the table as it is read
     now (its steps and type applied): [{lo, hi, n}], the last bin closed at the top. Dates and
     timestamps are binned on their epoch seconds and given back as ISO text."""
-    con = scratch()
-    try:
-        register(con, P, "prof", [spec], "A", opts)
-        c = ident(spec.canon)
-        x = (f"try_cast({c} AS DOUBLE)" if spec.kind == "number"
-             else f"epoch(try_cast({c} AS TIMESTAMP))")
-        x = f"(SELECT {x} AS x FROM prof) WHERE isfinite(x)"   # NaN and Infinity read as numbers but have no bin
-        lo, hi = con.execute(f"SELECT min(x), max(x) FROM {x}").fetchone()
-        if lo is None:
-            return []
-        lo, hi = float(lo), float(hi)
-        width = (hi - lo) / bins
-        rows = con.execute(
-            f"SELECT least(coalesce(CAST(floor((x - ?) / nullif(?, 0)) AS BIGINT), 0), ?) AS k, count(*) "
-            f"FROM {x} GROUP BY k", [lo, width, bins - 1]).fetchall()
-    finally:
-        con.close()
+    c = ident(spec.canon)
+    x = (f"try_cast({c} AS DOUBLE)" if spec.kind == "number"
+         else f"epoch(try_cast({c} AS TIMESTAMP))")
+    x = f"(SELECT {x} AS x FROM {rel}) WHERE isfinite(x)"   # NaN and Infinity read as numbers but have no bin
+    lo, hi = con.execute(f"SELECT min(x), max(x) FROM {x}").fetchone()
+    if lo is None:
+        return []
+    lo, hi = float(lo), float(hi)
+    width = (hi - lo) / bins
+    rows = con.execute(
+        f"SELECT least(coalesce(CAST(floor((x - ?) / nullif(?, 0)) AS BIGINT), 0), ?) AS k, count(*) "
+        f"FROM {x} GROUP BY k", [lo, width, bins - 1]).fetchall()
     counts = {int(k): int(n) for k, n in rows}
     if width == 0:                                    # one value: one bin
         edges = [(lo, hi)]
@@ -226,7 +224,8 @@ def hist(column: str = Query(..., max_length=1000), bins: int = Query(10, ge=1, 
         raise HTTPException(409, "Load a table first.")
     if spec.kind not in HIST_KINDS:
         return {"column": column, "kind": spec.kind, "bins": []}
-    return {"column": column, "kind": spec.kind, "bins": histogram(P, spec, read_options(ws), bins)}
+    return {"column": column, "kind": spec.kind,
+            "bins": held_answer(ws, prof, ("hist", column, bins), lambda con: histogram(con, "prof", spec, bins))}
 
 
 # the forms a text value is tried in: ISO by a plain cast, then these, the best one kept - a
@@ -237,7 +236,6 @@ _TIMES = ("%d/%m/%Y %H:%M:%S", "%m/%d/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%m/%d/%Y 
           "%Y/%m/%d %H:%M:%S", "%d-%m-%Y %H:%M:%S", "%Y%m%d %H:%M:%S", "%Y%m%d-%H:%M:%S",
           "%Y%m%dT%H%M%S", "%Y%m%d%H%M%S")
 TIME_FORMATS = _TIMES + tuple(f + ".%n" for f in _TIMES if f.endswith("%S"))
-CASTS = "profile_casts_P"     # (profile, answer) - worked out once per profile
 READS_AS = 0.9                # of the filled values: a column read as a date or a timestamp from this share
 
 
@@ -282,38 +280,49 @@ def _value(s: ColSpec) -> str:
             else f"regexp_replace(CAST({c} AS VARCHAR), '[.]0$', '')")
 
 
-def casts(P, specs: list[ColSpec], opts: ReadOptions) -> list[dict]:
-    """Every text and number column, one read: how many filled values would read as a number
-    (text only), a date or a
-    timestamp - in any of the forms tried, and in the one most of them take: [{column, filled,
-    number|date|timestamp: {any, form, n}}], a type left out when no value takes it. A number
-    also says its most digits before and after the point."""
+CAST_SAMPLE = 20_000          # rows each form is first tried on - a form none of them take is not tried on the rest
+
+
+def casts(con, rel: str, specs: list[ColSpec]) -> list[dict]:
+    """Every text and number column, read twice: how many filled values would read as a number
+    (text only), a date or a timestamp - in any of the forms tried, and in the one most of them
+    take: [{column, filled, number|date|timestamp: {any, form, n}}], a type left out when no
+    value takes it. A number also says its most digits before and after the point. The forms
+    are tried on a sample first and only the ones some value there takes on every row - a
+    column of names is not parsed seventeen ways a row."""
     text = [s for s in specs if s.kind in ("text", "number")]
     if not text:
         return []
-    con = scratch()
-    try:
-        register(con, P, "prof", text, "A", opts)
-        aggs, keys = [], []
-        for s in text:
-            v = _value(s)
-            aggs.append(f"count({v})")
-            keys.append((s.canon, "filled", ""))
-            for kind, tries in _tries(v, s.kind == "number").items():
-                anyway = " OR ".join(f"({c})" for _, c in tries)
-                aggs.append(f"count(*) FILTER (WHERE {anyway})")
-                keys.append((s.canon, kind, None))
-                if kind == "number":      # the widest of them, for the DECIMAL(p, s) they would fit
-                    bare = f"regexp_replace(replace({v}, ',', ''), '^[-+]', '')"
-                    aggs += [f"max(length(split_part({bare}, '.', 1))) FILTER (WHERE {anyway})",
-                             f"max(length(split_part({bare}, '.', 2))) FILTER (WHERE {anyway})"]
-                    keys += [(s.canon, kind, "before"), (s.canon, kind, "after")]
-                for form, cond in tries:
+    tries = {s.canon: _tries(_value(s), s.kind == "number") for s in text}
+    probe = [(col, kind, form, cond) for col, t in tries.items() for kind, ts in t.items() for form, cond in ts]
+    seen = con.execute(f"SELECT {', '.join(f'count(*) FILTER (WHERE {c})' for *_, c in probe)} "
+                       f"FROM (SELECT * FROM {rel} USING SAMPLE {CAST_SAMPLE} ROWS)").fetchone()
+    kept: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for (col, kind, form, cond), n in zip(probe, seen):
+        if n:
+            kept.setdefault((col, kind), []).append((form, cond))
+    aggs, keys = [], []
+    for s in text:
+        v = _value(s)
+        aggs.append(f"count({v})")
+        keys.append((s.canon, "filled", ""))
+        for kind in tries[s.canon]:
+            forms = kept.get((s.canon, kind))
+            if not forms:
+                continue
+            anyway = " OR ".join(f"({c})" for _, c in forms)
+            aggs.append(f"count(*) FILTER (WHERE {anyway})")
+            keys.append((s.canon, kind, None))
+            if kind == "number":      # the widest of them, for the DECIMAL(p, s) they would fit
+                bare = f"regexp_replace(replace({v}, ',', ''), '^[-+]', '')"
+                aggs += [f"max(length(split_part({bare}, '.', 1))) FILTER (WHERE {anyway})",
+                         f"max(length(split_part({bare}, '.', 2))) FILTER (WHERE {anyway})"]
+                keys += [(s.canon, kind, "before"), (s.canon, kind, "after")]
+            if len(forms) > 1:
+                for form, cond in forms:
                     aggs.append(f"count(*) FILTER (WHERE {cond})")
                     keys.append((s.canon, kind, form))
-        got = con.execute(f"SELECT {', '.join(aggs)} FROM prof").fetchone()
-    finally:
-        con.close()
+    got = con.execute(f"SELECT {', '.join(aggs)} FROM {rel}").fetchone()
     kinds = {s.canon: s.kind for s in text}
     out: dict[str, dict] = {}
     for (col, kind, form), n in zip(keys, got):
@@ -322,7 +331,9 @@ def casts(P, specs: list[ColSpec], opts: ReadOptions) -> list[dict]:
             row["filled"] = int(n)
         elif form is None:
             if n:
-                row[kind] = {"any": int(n), "form": "", "n": 0}
+                one = kept[(col, kind)]
+                row[kind] = {"any": int(n), "form": one[0][0] if len(one) == 1 else "",
+                             "n": int(n) if len(one) == 1 else 0}
         elif form in ("before", "after"):
             if kind in row:
                 row[kind][form] = int(n or 0)
@@ -340,15 +351,10 @@ def cast_counts(ws: Workspace = Depends(workspace)) -> dict:
 
 
 def _casts_held(ws: Workspace, prof: dict) -> dict:
-    held = ws.data.get(CASTS)
-    if held and held[0] is prof:
-        return held[1]
-    P = side(ws, "P")
-    if not P.loaded:
+    if not side(ws, "P").loaded:
         raise HTTPException(409, "Load a table first.")
-    answer = {"columns": casts(P, [ColSpec(**s) for s in prof.get("specs", [])], read_options(ws))}
-    ws.data[CASTS] = (prof, answer)
-    return answer
+    return held_answer(ws, prof, ("casts",),
+                       lambda con: {"columns": casts(con, "prof", [ColSpec(**s) for s in prof.get("specs", [])])})
 
 
 def reads_as(row: dict | None) -> str:
@@ -377,35 +383,33 @@ def _when_groups(kind: str) -> list[tuple[str, str, str]]:
     return groups
 
 
-def parts(P, spec: ColSpec, opts: ReadOptions, n: int, when: str = "", as_number: bool = False,
+def parts(con, rel: str, spec: ColSpec, n: int, when: str = "", as_number: bool = False,
           form: str = "") -> list[dict]:
     """One column taken apart: a number by its digits before and after the point, a date or a
     timestamp by year, month, weekday (and hour), text by its first and last `n` characters -
     [{title, total, rows: [{label, n}]}] - total counts every value, the top ten shown or not - each group's rows in their natural order or by count."""
-    con = scratch()
     try:
-        register(con, P, "prof", [spec], "A", opts)
         c = ident(spec.canon)
         if when:            # text or a number that reads as a date or a timestamp: taken apart as one
             # parsed once into a table: the forms are tried per value, the groups below read it 3-4 times
             con.execute(f"CREATE TEMP TABLE t AS SELECT v FROM (SELECT {read_when(_value(spec), when, form)} AS v "
-                        "FROM prof) WHERE v IS NOT NULL")
+                        f"FROM {rel}) WHERE v IS NOT NULL")
             groups = _when_groups(when)
         elif spec.kind == "number" or as_number:
             # as the shapes read it: the number as text, a trailing .0 dropped, the sign ignored
             x = f"replace(trim({c}), ',', '')" if as_number else c      # text read as a number: its , dropped
             con.execute(f"CREATE TEMP VIEW t AS SELECT regexp_replace(CAST({x} AS VARCHAR), '[.]0$', '') AS v "
-                        f"FROM prof WHERE isfinite(try_cast({x} AS DOUBLE))")
+                        f"FROM {rel} WHERE isfinite(try_cast({x} AS DOUBLE))")
             b = "length(regexp_replace(split_part(v, '.', 1), '[^0-9]', '', 'g'))"
             a = "length(split_part(v, '.', 2))"
             groups = [("Digits before the point", _band(b, 15), "k"), ("Places after the point", _band(a, 9), "k"),
                       ("Before · after", f"({_band(b, 15)}) || ' · ' || ({_band(a, 9)})", "n")]
         elif spec.kind in ("date", "timestamp"):
-            con.execute(f"CREATE TEMP VIEW t AS SELECT v FROM (SELECT try_cast({c} AS TIMESTAMP) AS v FROM prof) "
+            con.execute(f"CREATE TEMP VIEW t AS SELECT v FROM (SELECT try_cast({c} AS TIMESTAMP) AS v FROM {rel}) "
                         "WHERE v IS NOT NULL")
             groups = _when_groups(spec.kind)
         else:
-            con.execute(f"CREATE TEMP VIEW t AS SELECT CAST({c} AS VARCHAR) AS v FROM prof WHERE {c} IS NOT NULL AND {c} <> ''")
+            con.execute(f"CREATE TEMP VIEW t AS SELECT CAST({c} AS VARCHAR) AS v FROM {rel} WHERE {c} IS NOT NULL AND {c} <> ''")
             groups = [(f"First {n} characters", f"left(v, {n})", "n"), (f"Last {n} characters", f"right(v, {n})", "n")]
         out = []
         for title, expr, order in groups:
@@ -419,8 +423,12 @@ def parts(P, spec: ColSpec, opts: ReadOptions, n: int, when: str = "", as_number
                 rows = sorted(rows)
             name = (lambda k: MONTHS[int(k) - 1]) if order == "m" else (lambda k: WEEKDAYS[int(k) - 1]) if order == "w" else str
             out.append({"title": title, "total": total, "rows": [{"label": name(k), "n": int(m)} for k, m in rows]})
-    finally:
-        con.close()
+    finally:                         # a table or a view of the same name: the next call makes its own
+        for what in ("TABLE", "VIEW"):
+            try:
+                con.execute(f"DROP {what} IF EXISTS t")
+            except Exception:
+                pass
     return out
 
 
@@ -449,7 +457,8 @@ def column_parts(column: str = Query(..., max_length=1000), n: int = Query(3, ge
     form = (next((r for r in _casts_held(ws, prof)["columns"] if r["column"] == column), None) or {}
             ).get(when, {}).get("form", "") if when else ""
     return {"column": column, "kind": spec.kind, "reads_as": when or ("number" if num else ""),
-            "groups": parts(P, spec, read_options(ws), n, when, num, form)}
+            "groups": held_answer(ws, prof, ("parts", column, n, when, num),
+                                  lambda con: parts(con, "prof", spec, n, when, num, form))}
 
 
 def _spec(prof: dict, column: str) -> ColSpec:
@@ -470,14 +479,10 @@ def column_spelling(column: str = Query(..., max_length=1000), ws: Workspace = D
         raise HTTPException(409, "Load a table first.")
     if spec.kind != "text":
         return {"column": column, "distinct": 0, "folded": 0, "padded": 0}
-    con = scratch()
-    try:
-        register(con, P, "prof", [spec], "A", read_options(ws))
-        v = f"CAST({ident(spec.canon)} AS VARCHAR)"
-        d, f, pad = con.execute(f"SELECT count(DISTINCT {v}), count(DISTINCT lower(trim({v}))), "
-                                f"count(*) FILTER (WHERE {v} <> trim({v})) FROM prof").fetchone()
-    finally:
-        con.close()
+    v = f"CAST({ident(spec.canon)} AS VARCHAR)"
+    d, f, pad = held_answer(ws, prof, ("spelling", column), lambda con: con.execute(
+        f"SELECT count(DISTINCT {v}), count(DISTINCT lower(trim({v}))), "
+        f"count(*) FILTER (WHERE {v} <> trim({v})) FROM prof").fetchone())
     return {"column": column, "distinct": int(d), "folded": int(f), "padded": int(pad)}
 
 

@@ -1,0 +1,26 @@
+/* web/src/profiling/column/text.css - the text column's page: similar values and the grouped value list */
+.sim-method { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 12px; }
+.sim-method .caption { flex: 1 1 240px; }
+.sim-method .seg button { white-space: nowrap; }
+.sim-groups { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.sim-group { border: 1px solid var(--fs-line); border-radius: 8px; background: var(--fs-surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.sim-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; color: var(--fs-text2); }
+.sim-head strong { color: var(--fs-text); }
+.sim-head .num { font-variant-numeric: tabular-nums; color: var(--fs-text); }
+.sim-head .dot { color: var(--fs-text3); }
+.sim-head code { font-family: var(--font-mono); font-size: 12px; background: var(--fs-surface2); padding: 1px 6px; border-radius: 4px; }
+.sim-head .btn { margin-left: auto; }
+.sim-members { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sim-m { display: inline-flex; align-items: center; gap: 8px; color: var(--fs-text3); }
+.sim-v { display: inline-flex; align-items: baseline; gap: 8px; min-height: 36px; padding: 6px 10px; border: 1px solid var(--fs-border); border-radius: 6px;
+  background: var(--fs-panel); color: var(--fs-text); font: inherit; cursor: pointer; }
+.sim-v code { font-family: var(--font-mono); font-size: 13px; }
+.sim-v .n { font-family: var(--font-mono); font-size: 11.5px; color: var(--fs-text3); font-variant-numeric: tabular-nums; }
+.sim-v:hover { border-color: var(--fs-accent-edge); }
+.sim-v.keep { border: 2px solid var(--fs-pos); padding: 5px 9px; }
+.sim-v.keep .n { color: var(--fs-pos); }
+.sim-v:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+.text-values li.sub > .m { padding-left: 18px; color: var(--fs-accent); }
+@media (max-width: 640px) {
+  .sim-head .btn { margin-left: 0; }
+}

@@ -3,6 +3,8 @@
 // column with outliers on another - in place of one line per note. What the page already shows
 // elsewhere is left out: the key (Key candidates), a column's value list (its own page), a type
 // read as suggested (the Columns table) and the lines that say where a cap cut a list.
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../api/client";
 
 export interface Hit { col: string; fig?: string }
 export interface Finding { title: string; hits: Hit[]; more?: number }
@@ -56,4 +58,48 @@ export function standout(notes: string[]): Finding[] {
     if (fig !== null) byRule[k].hits.push({ col, fig });
   }
   return [dup, ...byRule, deps, corr, other].filter((f) => f.hits.length);
+}
+
+/** A column's own notes, said short for the Columns table's "What stands out" - the value list,
+ *  a type read as suggested (the Read as column) and the key line left out. */
+export function notesByColumn(notes: string[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  for (const n of notes) {
+    if (SKIP.test(n)) continue;
+    const at = n.indexOf(": ");
+    if (at <= 0) continue;
+    const col = n.slice(0, at), what = n.slice(at + 2);
+    if (/^\d+ values - |^read as an? /.test(what) || /^(.+) (→|↔) (.+)$/.test(col)) continue;
+    (out[col] ??= []).push(what);
+  }
+  return out;
+}
+
+/** What a text column's values were read as by the loader, from its note: "read as a boolean - Y/N". */
+export function readFrom(notes: string[]): Record<string, { as: string; how: string }> {
+  const out: Record<string, { as: string; how: string }> = {};
+  for (const n of notes) {
+    const m = n.match(/^(.+?): read as an? (\S+) - (.+)$/);
+    if (m) out[m[1]] = { as: m[2], how: m[3] };
+  }
+  return out;
+}
+
+/** GET /api/profiling/findings - what stands out across the table (tablecmp/web/routes_overview.py). */
+export type OverviewItem = { tone: "pos" | "warn" | "neg" | "info"; label: string; detail: string; columns: string[] };
+export type LooksLike = { column: string; kind: string; as: "number" | "date" | "timestamp" | "boolean"; form: string; n: number; filled: number };
+export type DepPair = { x: string; y: string; v: number };
+export type FindingsBody = {
+  rows: number; nulls: number; duplicates: number | null; items: OverviewItem[]; columns: Record<string, string[]>;
+  looks: LooksLike[]; pairs: DepPair[]; clean: string[]; casts: boolean;
+  gaps: { column: string; count: number; ids: number; largest: { from: string; to: string; n: number } } | null;
+};
+
+/** The overview's findings, worked out once per profile on the server - asked again once the
+ *  casts are in (`casts`), which add what the text columns look like. */
+export function useFindings(made: string, casts: boolean) {
+  return useQuery({ queryKey: ["profiling-findings", made, casts], enabled: !!made, staleTime: Infinity,
+                    // the answer without the casts stays up while the one with them comes
+                    placeholderData: (prev, q) => (q?.queryKey[1] === made ? prev : undefined),
+                    queryFn: () => api.get<FindingsBody>("/api/profiling/findings") });
 }

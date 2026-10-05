@@ -1,7 +1,7 @@
 // web/src/profiling/ColumnDetail.tsx - one column of the profile (screen 16): back to all columns,
 // previous / next, its statistics, its distribution (GET /api/profiling/hist), outliers, shapes,
 // most and least frequent values and what determines it - all from the profile held.
-import { Bar, Button, Callout, Chip, num, Panel, Seg, StatGrid } from "../ui/kit";
+import { Bar, Button, Chip, num, Panel, Seg } from "../ui/kit";
 import { useState, type ReactNode } from "react";
 import { setView } from "../shell/view";
 import { castsOf, castType } from "./casts";
@@ -11,15 +11,15 @@ import { fmt, keyColumns, pct, rowsOf, statsOf, type Row } from "./frame";
 import { FreqBars, splitFreq } from "./FreqSection";
 import type { CastRow, Frame, HistBin, Profile } from "./types";
 import { useCasts, useFreq, useHist, useParts, useSpelling } from "./useProfiling";
-import { FlagView } from "./column/FlagView";
+import { semantic } from "./column/Findings";
+import { FlagView, useFlagForm } from "./column/FlagView";
 import { KeyView } from "./column/KeyView";
-import { NumberView } from "./column/NumberView";
+import { NumberView, useNumberFormText } from "./column/NumberView";
 import type { ColumnViewProps } from "./column/types";
+import { TextView, textForm } from "./column/TextView";
 import { WhenView } from "./column/WhenView";
 import "./profiling.css";
 
-const BINNED = ["number", "date", "timestamp"];
-const CATEGORY = 20;     // distinct values up to which a text column reads as a category
 const NEAR_KEY = 10;     // distinct % of rows from which a column is a near-key: it decides others by that alone
 const READS_AS = 0.9;    // of the filled values: a column that reads as a date or a timestamp from this share
 
@@ -396,28 +396,6 @@ function readings(kind: string, cast?: CastRow) {
   return [kind, ...(cast ? castsOf(cast).map((c) => c.kind) : []).filter((k) => k !== kind)];
 }
 
-/** One line on a text column: what it is and what to do with it. */
-function TextVerdict({ st, cast, when, category, spell }: { st: Row; cast?: CastRow; when: string; category: boolean; spell?: { distinct: number; folded: number } }) {
-  const distinct = Number(st.Distinct), filled = Number(st.Rows) - Number(st.Nulls);
-  const nulls = Number(st["Null %"] ?? 0) > 0 ? `${pct(st["Null %"])} null` : "no nulls";
-  const empty = Number(st["Null %"] ?? 0) >= 50 ? <> Mostly empty - {pct(st["Null %"])} null.</> : null;
-  const hit = when === "date" || when === "timestamp" ? cast?.[when] : undefined;
-  if (cast && hit) {
-    const { type, form } = castType(when as "date" | "timestamp", hit);
-    return <Callout tone="pos" icon="check"><strong>Text that reads as a {when}.</strong> {pct(share(hit.any, cast.filled))} of the filled values read as <code>{type}</code>{form && <> in <code>{form}</code></>} - its parts are counted by date below.{empty}</Callout>;
-  }
-  if (category) {
-    if (!spell) return null;          // said once the spelling is counted, so a clean verdict never flips to variants
-    const variants = spell.distinct - spell.folded;
-    return variants > 0
-      ? <Callout tone="warn"><strong>A category with spelling variants.</strong> {num(distinct)} values, {num(spell.folded)} once case and outer spaces are ignored - tidy them with a step before comparing.{empty}</Callout>
-      : <Callout tone="pos" icon="check"><strong>A clean category.</strong> {num(distinct)} value{distinct > 1 ? "s" : ""}, {nulls}, no case or whitespace variants. In Compare this is a good <em>Profile by bucket</em> column.{empty}</Callout>;
-  }
-  if (Number(st["Distinct % of filled"] ?? 0) >= 95)
-    return <Callout icon="key"><strong>Nearly every value different.</strong> {num(distinct)} distinct of {num(filled)} filled - an id or free text, a key candidate rather than a category.{empty}</Callout>;
-  return empty ? <Callout tone="warn"><strong>Sparse.</strong>{empty}</Callout> : null;
-}
-
 export function ColumnDetail({ p, column, made, name, label }: { p: Profile; column: string; made: string; name: string; label: string }) {
   const all = rowsOf(p.stats).map((r) => String(r.Column));
   const i = all.indexOf(column);
@@ -425,110 +403,38 @@ export function ColumnDetail({ p, column, made, name, label }: { p: Profile; col
   const kind = String(st.Type);
   const isNum = kind === "number";
   const isText = kind === "text";
-  const o = rowsOf(p.outliers).find((r) => r.Column === column);
   const shapes = rowsOf(p.patterns).filter((r) => r.Column === column);
   const prev = i > 0 ? all[i - 1] : null;
   const next = i < all.length - 1 ? all[i + 1] : null;
-  const has = (v: unknown) => v != null && v !== "";
   const cast = useCasts(made).data?.columns?.find((x) => x.column === column);
   const when = cast ? (["timestamp", "date"] as const).find((k) => cast[k] && cast[k]!.any >= READS_AS * cast.filled) ?? "" : "";
   // read as: the column's own type unless its values read as a date or a timestamp; a pick holds for this column only
   const [pick, setPick] = useState<{ column: string; as: string } | null>(null);
   const as = pick?.column === column ? pick.as : when || kind;
   const asWhen = as === "date" || as === "timestamp";
-  const category = isText && !asWhen && as !== "number" && Number(st.Distinct) > 0 && Number(st.Distinct) <= CATEGORY;
-  const spell = useSpelling(column, made, isText).data;
-  const variants = spell ? spell.distinct - spell.folded : 0;
-  const stats = isText ? [
-    { label: "Rows", value: num(st.Rows as number) },
-    { label: "Nulls", value: <>{num(st.Nulls as number)} <span className="pc">· {pct(st["Null %"])}</span></> },
-    { label: "Distinct", value: num(st.Distinct as number),
-      sub: category ? "a category" : Number(st["Distinct % of filled"] ?? 0) >= 95 ? "nearly all different" : `${pct(st["Distinct % of filled"])} of filled` },
-    ...(has(st["Top value"]) ? [{ label: "Top value", value: fmt(st["Top value"]), sub: pct(st["Top %"]) }] : []),
-    ...(has(st["Min length"]) ? [{ label: "Length",
-      value: Number(st["Min length"]) === Number(st["Max length"]) ? num(Number(st["Min length"])) : `${num(Number(st["Min length"]))} - ${num(Number(st["Max length"]))}`,
-      sub: `avg ${fmt(st["Avg length"])} characters` }] : []),
-    ...(spell && !asWhen ? [{ label: "Case · spaces",
-      value: variants || spell.padded ? <span className="warn-t">{variants ? `${num(variants)} variant${variants === 1 ? "" : "s"}` : "padded"}</span> : <span className="ok-t">clean</span>,
-      sub: variants ? "values that differ only in case or outer spaces" : spell.padded ? `${num(spell.padded)} with outer spaces` : "one spelling per value" }] : []),
-  ] : [
-    { label: "Rows", value: num(st.Rows as number) },
-    { label: "Nulls", value: <>{num(st.Nulls as number)} <span className="pc">· {pct(st["Null %"])}</span></> },
-    { label: "Distinct", value: <>{num(st.Distinct as number)} <span className="pc">· {pct(st["Distinct % of rows"])}</span></>,
-      sub: `${pct(st["Distinct % of filled"])} of filled` },
-    { label: "Min", value: fmt(st.Min, isNum) },
-    ...(o && has(o.P25) ? [{ label: "Q1", value: fmt(o.P25, isNum) }] : []),
-    ...(o && has(o.Median) ? [{ label: "Median", value: fmt(o.Median, isNum) }] : []),
-    ...(has(st.Mean) ? [{ label: "Mean", value: fmt(st.Mean) }] : []),
-    ...(o && has(o.P75) ? [{ label: "Q3", value: fmt(o.P75, isNum) }] : []),
-    { label: "Max", value: fmt(st.Max, isNum) },
-    ...(o && has(o["Std dev"]) ? [{ label: "Std dev", value: fmt(o["Std dev"]) }] : []),
-    ...(has(st["Top value"]) ? [{ label: "Top value", value: fmt(st["Top value"], isNum), sub: pct(st["Top %"]) }] : []),
-  ].filter((s) => s.value !== "");
   const keys = keyColumns(p);
   const opts = readings(kind, cast);
   // beside the reading: the format a date or a timestamp is read in, a number's places, a text key's leading zeros
   const hit = (as === "date" || as === "timestamp" || as === "number") && as !== kind ? cast?.[as] : undefined;
   const places = isNum && shapes.length ? Math.max(...shapes.map((r) => (String(r.Pattern).split(".")[1] ?? "").length)) : -1;
   const read = hit && castType(as as "date" | "timestamp" | "number", hit);
+  // the same queries the column's page makes, so each is asked once: a number's places and the
+  // DECIMAL it fits, a flag's spellings, a text column's case and space variants
+  const numForm = useNumberFormText(column, made, isNum && as === "number");
+  const flagForm = useFlagForm(column, made, kind === "boolean");
+  const spell = useSpelling(column, made, isText && as === "text").data;
+  const isKey = keys.length === 1 && keys[0] === column;
   const form = read ? (read.form ? `${read.type} · ${read.form}` : read.type)
-    : places === 0 ? "whole" : places > 0 ? `${places} place${places > 1 ? "s" : ""}`
-    : isText && keys.length === 1 && keys[0] === column ? "keep leading zeros" : "";
-  const allShown = Number(st.Distinct) + (Number(st.Nulls) > 0 ? 1 : 0) <= 10;    // the frequent list already holds every value
-  const deps = <Dependencies p={p} column={column} />;
-  const parts = <Parts column={column} kind={kind} made={made} as={as} />;
+    : numForm || flagForm
+    || (places === 0 ? "whole" : places > 0 ? `${places} place${places > 1 ? "s" : ""}` : "")
+    || (isText && isKey ? "keep leading zeros" : isText && as === "text" ? textForm(st, spell) : "");
   const view: ColumnViewProps = { p, column, made, st, as, cast };
-  // a page per kind of column: the key, a date or a timestamp (or text read as one), a number, a flag - text below
-  const own = keys.length === 1 && keys[0] === column ? <KeyView {...view} />
+  // a page per kind of column: the key, a date or a timestamp (or text read as one), a number, a flag, text
+  const body = keys.length === 1 && keys[0] === column ? <KeyView {...view} />
     : asWhen ? <WhenView {...view} />
     : kind === "number" ? <NumberView {...view} />
     : kind === "boolean" ? <FlagView {...view} />
-    : null;
-  let body: ReactNode;
-  if (own) body = own;
-  else if (category) {
-    // a category: its shapes folded into the values, parts and outliers said to be left out
-    body = (
-      <div className="prof-grid prof-col-grid">
-        <div className="prof-stack">
-          <Frequent column={column} made={made} st={st} title="Values"
-            sub={allShown ? `all ${num(st.Distinct as number)} - every row, most to least frequent` : `${num(st.Distinct as number)} distinct`}>
-            {shapes.length > 0 && <Points name="Shape findings" items={[{ label: "Shapes", tone: "ok",
-              value: <span className="m">{shapes.map((r) => readShape(String(r.Pattern))).join(" · ")}</span>,
-              note: "the Shapes panel is folded in here for a column with so few values" }]} />}
-          </Frequent>
-          <NotShown items={[
-            { label: "Parts", why: `first and last characters only tell you something about free text - with ${num(st.Distinct as number)} values they repeat the list above` },
-            { label: "Outliers", why: "looked for in number, date and timestamp columns" },
-            ...(allShown ? [{ label: "Least frequent", why: `the same ${num(st.Distinct as number)} values` }] : []),
-          ]} />
-        </div>
-        {deps}
-      </div>
-    );
-  } else if (isText && !asWhen) {
-    // free text or ids: no outliers - its parts take their place, after the values
-    body = (<>
-      <div className="prof-grid prof-col-grid">
-        <Frequent column={column} made={made} st={st} />
-        {parts}
-        <Shapes rows={shapes} kind={kind} st={st} />
-        {deps}
-      </div>
-      <NotShown items={[{ label: "Outliers", why: "looked for in number, date and timestamp columns" }]} />
-    </>);
-  } else {
-    // numbers, dates and text read as a date: the parts across the page, then two panels to a row
-    body = (<>
-      {parts}
-      <div className="prof-grid prof-col-grid">
-        {isText ? <Frequent column={column} made={made} st={st} /> : <Outliers o={o} kind={kind} filled={Number(st.Rows) - Number(st.Nulls)} st={st} made={made} />}
-        <Shapes rows={shapes} kind={kind} st={st} />
-        {!isText && <Frequent column={column} made={made} st={st} />}
-        {deps}
-      </div>
-    </>);
-  }
+    : <TextView {...view} />;
   return (
     <>
       <div className="sec-head prof-colhead">
@@ -543,20 +449,15 @@ export function ColumnDetail({ p, column, made, name, label }: { p: Profile; col
               {form && <code className="readas-form">{form}</code>}
             </label>
           : <span className="prof-readas"><span>read as</span><Chip>{kind}</Chip>{form && <code className="readas-form">{form}</code>}</span>}
-        <span className="sub">column {i + 1} of {all.length} · {name}{label ? ` · ${label}` : ""} · {num(st.Rows as number)} values</span>
+        <span className="prof-sem" title="what the column most likely holds - a guess from its name, type and values">
+          {semantic(column, as, Number(st.Distinct), Number(st.Rows), keys.length === 1 && keys[0] === column, shapes[0] ? String(shapes[0].Pattern) : "")}</span>
+        <span className="sub">column {i + 1} of {all.length} · {name}{label ? ` · ${label}` : ""}</span>
         <div className="actions">
           <Button icon="arrowl" disabled={!prev} onClick={() => prev && openColumn(prev)}>Previous{prev && ` · ${prev}`}</Button>
           <Button iconAfter="arrow" disabled={!next} onClick={() => next && openColumn(next)}>Next{next && ` · ${next}`}</Button>
         </div>
       </div>
-      {own ? body : <>
-        <StatGrid stats={stats} />
-        {isText && <TextVerdict st={st} cast={cast} when={asWhen ? as : ""} category={category} spell={spell} />}
-        {BINNED.includes(kind) && <Distribution column={column} kind={kind} made={made} />}
-        {/* the banner already says what a text column reads as when that is its one other type */}
-        {(isNum || (isText && !(asWhen && opts.length === 2))) && <CouldBe column={column} made={made} />}
-        {body}
-      </>}
+      {body}
     </>
   );
 }

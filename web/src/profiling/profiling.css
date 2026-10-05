@@ -177,3 +177,15 @@
 .warn-t { color: var(--fs-warn); }
 .prof-points.plain .v { font-family: inherit; font-size: 13px; color: var(--fs-text2); white-space: normal; }
 .readas-form { font-family: var(--font-mono); font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--fs-surface2); border: 1px solid var(--fs-line); color: var(--fs-text2); }
+
+/* findings: a row of pills under a column's header and the profile's headline */
+.findings { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.finding { display: inline-flex; align-items: baseline; gap: 8px; min-height: 28px; padding: 4px 12px; border-radius: 999px;
+  border: 1px solid var(--fs-line); background: var(--fs-surface2); color: var(--fs-text); font-size: 13px; }
+.finding > i { width: 7px; height: 7px; border-radius: 50%; background: var(--fs-text2); align-self: center; flex: none; }
+.finding strong { font-weight: 500; }
+.finding .d { font-size: 11.5px; color: var(--fs-text2); }
+.finding.pos { background: var(--fs-pos-bg); border-color: transparent; } .finding.pos > i { background: var(--fs-pos); }
+.finding.warn { background: var(--fs-warn-bg); border-color: transparent; } .finding.warn > i { background: var(--fs-warn); }
+.finding.neg { background: var(--fs-neg-bg); border-color: transparent; } .finding.neg > i { background: var(--fs-neg); }
+.prof-sem { font-size: 12px; padding: 2px 8px; border: 1px solid var(--fs-line); border-radius: 999px; color: var(--fs-text2); }

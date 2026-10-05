@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import results as rs
 from ..columns import role_tone
-from ..compare import (bucket_profile, cells_table, column_ledger, diffs_by_key_value, differing_rows,
+from ..column_facts import column_facts
+from ..compare import (bucket_profile, bucket_rows, cells_table, column_ledger, diffs_by_key_value, differing_rows,
                        ledger_counts, near_match, side_labels, value_pairs)
 from ..profile import label
 from ..sql import ident, lit, scratch
@@ -131,16 +132,46 @@ def bucket_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> 
         *compared_groups(run, bucket, [c for c in cols if c not in keys], item),
         {"title": "Not compared", "tone": "nc", "items": [item(c) for c in own if c not in keys and c not in cols]},
     ) if g["items"]]
-    asked = set(add)
-    can = set(shown) | set(others) | (set() if apart else set(keys))
-    prof = bucket_profile(run, keys, cols, bucket,
-                          only=[c for c in can if c in asked] if exact else shown + [c for c in others if c in asked])
+    prof = bucket_profile(run, keys, cols, bucket, only=_counted(keys, shown, others, apart, add, exact))
     out["profiles"] = [{"column": col,
                         "title": f"**{col}**" + (" · key" if col in keys else
                                                  f" · :orange[only in {side_name[own[col]]}]" if col in own else ""),
                         "table": sw.frame(df)} for col, df in prof.items()]
     out["empty"] = "" if prof else "Nothing to profile for this bucket."
     return out
+
+
+def _counted(keys: list[str], shown: list[str], others: list[str], apart: bool, add: list[str], exact: bool) -> list[str]:
+    """The columns a bucket counts: the plan's own plus `add`, or with `exact` `add` alone."""
+    asked = set(add)
+    can = set(shown) | set(others) | (set() if apart else set(keys))
+    return [c for c in can if c in asked] if exact else shown + [c for c in others if c in asked]
+
+
+def facts_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> dict:
+    """The extended column profile of one bucket: for each column it counts (the same choice as
+    bucket_body), its facts a side each - nulls, distinct, the top value, the range, the length,
+    shapes, first and last characters, values spelled two ways. Each column measured once per
+    bucket and kept on the run."""
+    NA, NB = run["names"]
+    res = run["result"]
+    keys, cols = rs.run_keys(run), rs.run_columns(run)
+    if bucket not in dict(rs.bucket_list(res, keys, NA, NB)):
+        raise HTTPException(404, "This run has no such bucket of rows.")
+    label_a, label_b = side_labels(NA, NB)
+    apart = bucket == "differ" and bool(diffs_by_key_value(run, keys))
+    own, shown, others = rs.bucket_plan(run, bucket, keys, cols, keys_apart=apart)
+    wanted = _counted(keys, shown, others, apart, add, exact)
+    cache: dict[str, list] = run.setdefault("_facts", {}).setdefault(bucket, {})
+    todo = [c for c in wanted if c not in cache]
+    if todo:
+        where = bucket_rows(run, keys, bucket, todo)
+        names = [n for c in todo for _, n in where.get(c, [])]
+        got = column_facts(run["con"], "bucket_rows", names)
+        for c in todo:
+            cache[c] = [{"side": s, "label": label_a if s == "A" else label_b, **got[n]} for s, n in where.get(c, [])]
+        run["con"].execute("DROP TABLE IF EXISTS bucket_rows")
+    return {"bucket": bucket, "columns": [{"column": c, "sides": cache[c]} for c in wanted if cache.get(c)]}
 
 
 def columns_body(run: dict, limit: int, pick: list[str]) -> dict:
@@ -207,6 +238,16 @@ def bucket(run_id: str, bucket: str, add: list[str] = Query(default=[]), exact: 
         run = runs.run_of(ws, run_id)
         with runs.guard(run, "Summary"):
             return bucket_body(run, bucket, add, exact)
+
+
+@router.get("/{run_id}/buckets/{bucket}/facts")
+def bucket_facts(run_id: str, bucket: str, add: list[str] = Query(default=[]), exact: bool = False,
+                 ws: Workspace = Depends(workspace)) -> dict:
+    """The extended column profile of a bucket - asked for when the page shows it, read-only."""
+    with ws.lock:
+        run = runs.run_of(ws, run_id)
+        with runs.guard(run, "Summary"):
+            return facts_body(run, bucket, add, exact)
 
 
 @router.get("/{run_id}/columns")

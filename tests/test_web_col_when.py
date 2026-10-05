@@ -80,3 +80,88 @@ def test_calendar_checks_count_placeholders_the_future_and_a_long_span_by_month(
     m = c.get("/api/profiling/when", params={"column": "day", "bin": "month"}).json()   # 2,394 months: filled ones only
     assert m["bins"] == [{"label": "1900-01", "n": 1}, {"label": "1970-01", "n": 1},
                          {"label": "2024-03", "n": 2}, {"label": "2099-06", "n": 1}]
+
+
+def test_how_text_stamps_are_written_the_session_and_the_parts(c, tmp_path):
+    f = tmp_path / "s.csv"
+    stamps = ["20261001 05:30:00.128158Z", "20261001 07:17:59.375000Z", "20261001 07:17:59.375000Z", "20261001 09:05:12.5Z"]
+    stamps += [f"20261001 {h:02d}:10:00.000000Z" for h in range(10, 17)] + ["20261001 17:30:41.059000Z"]
+    f.write_text("id,OrderTime\n" + "".join(f"{i},{s}\n" for i, s in enumerate(stamps)), encoding="utf-8")
+    load_p(c, f)
+    profile(c)
+    w = c.get("/api/profiling/when", params={"column": "OrderTime", "as": "timestamp"}).json()
+    wr = w["written"]
+    assert wr["shapes"][0] == {"shape": "99999999 99:99:99.999999A", "n": 11, "example": "20261001 05:30:00.128158Z",
+                               "spelled": "8 digits · space · hh:mm:ss · point · 6 digits · Z"}
+    assert wr["shape_count"] == 2 and wr["fractions"] == [{"digits": 1, "n": 1}, {"digits": 6, "n": 11}]
+    assert wr["text_last"] == {"text": "20261001 17:30:41.059000Z", "read": "2026-10-01 17:30:41.059000"}
+    assert (wr["first_over_12"], wr["second_over_12"]) == (0, 0)
+    s = w["session"]
+    assert (s["before"], s["after"]) == (0, 0) and s["from"] <= "05:30" and s["to"] >= "17:30"
+    assert [h["label"] for h in w["hours"]][:2] == ["00", "01"] and len(w["hours"]) == 24
+    assert {h["label"]: h["n"] for h in w["hours"] if h["n"]} == {"05": 1, "07": 2, "09": 1, **{f"{h}": 1 for h in range(10, 17)}, "17": 1}
+    assert w["years"] == [{"label": "2026", "n": 12}]
+    assert sum(m["n"] for m in w["months"]) == 12 and w["months"][9] == {"label": "Oct", "n": 12}
+
+
+def test_text_dates_day_first_and_the_latest_text_is_not_the_latest_date(c, tmp_path):
+    f = tmp_path / "h.csv"
+    rows = ["28/12/2024", "01/09/2026", "01/09/2026", "15/03/2019", "28/09/2026", "05/06/2020", "unknown"]
+    f.write_text("id,HireDate\n" + "".join(f"{i},{d}\n" for i, d in enumerate(rows)), encoding="utf-8")
+    load_p(c, f)
+    profile(c)
+    w = c.get("/api/profiling/when", params={"column": "HireDate", "as": "date"}).json()
+    assert w["kind"] == "date" and w["form"] == "%d/%m/%Y" and w["last"] == "2026-09-28"
+    assert w["session"] is None and w["hours"] == []
+    wr = w["written"]
+    assert (wr["first_over_12"], wr["second_over_12"]) == (3, 0)        # 28, 15, 28 in the first slot
+    assert wr["text_last"] == {"text": "28/12/2024", "read": "2024-12-28"}
+    assert wr["shapes"][0]["shape"] == "99/99/9999" and wr["shapes"][0]["spelled"] == "2 digits · / · 2 digits · / · 4 digits"
+    assert wr["fractions"] == []
+    assert [y["label"] for y in w["years"]] == ["2019", "2020", "2024", "2026"]
+    assert w["repeated"] == [{"value": "2026-09-01", "n": 2, "weekday": "Tue"}]
+
+
+def test_when_facts_runs_on_any_relation_and_flags_stamps_outside_the_session():
+    from datetime import date
+
+    from tablecmp.sql import scratch
+    from tablecmp.values import ColSpec
+    from tablecmp.web.routes_col_when import WhenError, when_facts
+    con = scratch()
+    try:
+        stamps = [f"2026-10-0{d} {h:02d}:15:00" for d in (1, 2) for h in range(9, 17)] + ["2026-10-02 03:00:00"]
+        con.execute("CREATE TABLE mismatched AS SELECT CAST(x AS TIMESTAMP) AS OrderTime FROM (SELECT unnest(?) AS x)", [stamps])
+        w = when_facts(con, "mismatched", ColSpec("OrderTime", "OrderTime", "OrderTime", "timestamp"),
+                       kind="timestamp", today=date(2026, 10, 5))
+        assert w["column"] == "OrderTime" and w["filled"] == 17 and w["days"] == 2 and w["bin"] == "day"
+        assert w["session"]["before"] == 1 and w["session"]["after"] == 0
+        assert w["written"] is None and w["today"] == "2026-10-05"
+        assert con.execute("SELECT count(*) FROM duckdb_tables() WHERE table_name = '__when_t'").fetchone()[0] == 0
+        try:
+            when_facts(con, "mismatched", ColSpec("OrderTime", "OrderTime", "OrderTime", "timestamp"), kind="date", bin="hour")
+            raise AssertionError("a date has no hour")
+        except WhenError:
+            pass
+    finally:
+        con.close()
+
+
+def test_when_facts_reads_the_form_most_values_take_and_the_rest_in_any_other():
+    """The form /casts found goes first on its own; the values it does not read still get every other form."""
+    from datetime import date
+
+    from tablecmp.sql import scratch
+    from tablecmp.values import ColSpec
+    from tablecmp.web.routes_col_when import when_facts
+    con = scratch()
+    try:
+        con.execute("CREATE TABLE mismatched AS SELECT * FROM (VALUES ('13/01/2026 10:00:00'), ('14/01/2026 11:30:00.123'), "
+                    "('2026-01-15 09:00:00'), ('not a stamp'), (NULL)) v(OrderTime)")
+        spec = ColSpec("OrderTime", "OrderTime", "OrderTime", "text")
+        w = when_facts(con, "mismatched", spec, kind="timestamp", read_from=True, form="%d/%m/%Y %H:%M:%S", today=date(2026, 10, 5))
+        assert w["filled"] == 3 and w["first"].startswith("2026-01-13 10:00:00") and w["last"].startswith("2026-01-15 09:00:00")
+        assert {f["digits"] for f in w["written"]["fractions"]} == {0, 3}
+        assert when_facts(con, "mismatched", spec, kind="timestamp", read_from=True, form="", today=date(2026, 10, 5))["filled"] == 3
+    finally:
+        con.close()

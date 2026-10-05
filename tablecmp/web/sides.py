@@ -15,7 +15,7 @@ PAGE = {"A": "Compare", "B": "Compare", "P": "Profiling"}      # whose run disc 
 # what is worked out from the sides - gone when one is loaded again (state.drop_result / finish)
 DROPPED_ON_NEW_SIDE = {"AB": ("result", "cmap", "cmap_seed", "profile", "key_report", "key_suggestions",
                               "data_match", "compare_said"),
-                       "P": ("profile_P",)}
+                       "P": ("profile_P", "profile_memo_P")}
 
 
 @dataclass
@@ -63,6 +63,10 @@ def put_side(ws: Workspace, tag: str, new: Side) -> None:
     p.side = new
     if tag != "P":
         close_run(ws.data.get("result"))
+    else:                                          # the profile's held table (profile_held.DB)
+        held = ws.data.pop("profile_db_P", None)
+        if held:
+            held[1].close()
     for k in DROPPED_ON_NEW_SIDE["P" if tag == "P" else "AB"]:
         ws.data.pop(k, None)
 

@@ -106,6 +106,8 @@ function serve(calls: Call[], st: () => CompareState = () => state()) {
     if (url === "/api/sources") return json(body());
     if (url === "/api/log") return json({ entries: [], last: {} });
     if (url === "/api/results/r1/summary") return json(SUMMARY);
+    const fx = url.match(/^\/api\/results\/r1\/buckets\/(\w+)\/facts/);
+    if (fx) return json(FACTS(fx[1]));
     const b = url.match(/^\/api\/results\/r1\/buckets\/(\w+)/);
     if (b) return json(bucketBody(b[1]));
     const p = url.match(/^\/api\/results\/r1\/pairs\/(\w+)\?limit=5$/);
@@ -117,6 +119,14 @@ function serve(calls: Call[], st: () => CompareState = () => state()) {
     return json({ detail: "not here" }, 404);
   });
 }
+
+const side = (side: "A" | "B", label: string, nulls: number) => ({
+  side, label, rows: 649, nulls, null_pct: nulls ? 1.54 : 0, distinct: 649, top: { value: "E1", n: 1, pct: 0.15 },
+  length: { min: 2, max: 5 }, number: null, date: null, shapes: [{ shape: "A9999", n: 640, pct: 98.61 }],
+  prefixes: [{ value: "E10", n: 100, pct: 15.41 }], suffixes: [{ value: "-UK", n: 300, pct: 46.22 }],
+  spellings: side === "B" ? [{ members: ["Finance", "finance"], rows: 12, why: "differ only in case" }] : [],
+});
+const FACTS = (bucket: string) => ({ bucket, columns: [{ column: "emp_id", sides: [side("A", "HR", 0), side("B", "Right", 10)] }] });
 
 test("the head reads the verdict, the row outcome and the tabs, bound to the view", async () => {
   vi.stubGlobal("fetch", serve([]));
@@ -282,4 +292,26 @@ test("near-match runs on its button when nothing has read it yet", async () => {
   mount(<ColumnsView run={RUN} />);
   await userEvent.click(await screen.findByRole("button", { name: "Run near-match analysis" }));
   expect(await screen.findByRole("table", { name: "Near-match analysis" })).toBeInTheDocument();
+});
+
+test("Profile by bucket: Simple by default, Extended reads each column's facts as pills a side each", async () => {
+  const calls: Call[] = [];
+  vi.stubGlobal("fetch", serve(calls));
+  mount(<ResultsView run={RUN} limit={1000} />);
+  const depth = await screen.findByRole("group", { name: "Column profile" });
+  expect(within(depth).getByRole("button", { name: "Simple" })).toHaveAttribute("aria-pressed", "true");
+  await screen.findByText("Every column across these rows");
+  expect(calls.some(([u]) => u.includes("/facts"))).toBe(false);          // simple asks nothing more
+  await userEvent.click(within(depth).getByRole("button", { name: "Extended" }));
+  await waitFor(() => expect(calls.some(([u]) => u === "/api/results/r1/buckets/differ/facts")).toBe(true));
+  const a = await screen.findByRole("list", { name: "Facts · HR" });
+  expect(a).toHaveTextContent("Nullsnone");
+  expect(a).toHaveTextContent("TopE1 · 0.15%");
+  expect(a).toHaveTextContent("ShapeA9999 · 98.61%");
+  expect(a).toHaveTextContent("Ends…-UK · 46.22%");
+  const b = screen.getByRole("list", { name: "Facts · Right" });
+  expect(within(b).getByText("Nulls").closest("li")).toHaveClass("warn");
+  expect(b).toHaveTextContent("10 · 1.54%");
+  expect(b).toHaveTextContent("2 spellingsFinance / finance");
+  expect(within(depth).getByRole("button", { name: "Extended" })).toHaveAttribute("aria-pressed", "true");
 });

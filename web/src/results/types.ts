@@ -12,6 +12,15 @@ export type BucketBody = {
   empty: string;
   shown: string[]; groups: { title: string; tone?: "nc"; items: { name: string; label: string }[] }[];   // the plan's own, every column by kind
 };
+/** GET /api/results/{run}/buckets/{bucket}/facts - the extended column profile, a side each. */
+export type Top = { value: string; n: number; pct: number };
+export type SideFacts = {
+  side: "A" | "B"; label: string; rows: number; nulls: number; null_pct: number; distinct: number; top: Top | null;
+  length: { min: number; max: number } | null; number: { min: number; max: number; mean: number } | null;
+  date: { min: string; max: string } | null; shapes: { shape: string; n: number; pct: number }[];
+  prefixes: Top[]; suffixes: Top[]; spellings: { members: string[]; rows: number; why: string }[];
+};
+export type BucketFacts = { bucket: string; columns: { column: string; sides: SideFacts[] }[] };
 export type Card = { column: string; head: string; warning: string; pairs: Frame | null };
 export type ColumnsBody = {
   hash_caption: string; tips?: string[]; differ_error?: string;

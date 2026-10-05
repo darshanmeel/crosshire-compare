@@ -15,6 +15,12 @@ beforeEach(() => { resetForms(); resetView(); resetPicks(); resetKept(); });
 const FREQ = { column: "emp_id", title: "", top: T(["Value", "Count", "%"], [["Support", 412, 13.73]]), bottom: T(["Value", "Count", "%"], [["Legal", 355, 11.83]]) };
 const CASTS = { columns: [{ column: "department", kind: "text", filled: 3000,
   number: { any: 2990, form: "with , removed", n: 2990, before: 4, after: 2 } }] };
+const FINDINGS = { rows: 3000, nulls: 0, duplicates: 0, casts: true, clean: ["no nulls"], gaps: null,
+  items: [{ tone: "warn", label: "1 text column looks like number", detail: "department → number", columns: ["department"] },
+          { tone: "pos", label: "No nulls · no duplicate rows", detail: "", columns: [] }],
+  columns: { department: ["reads as number - 2,990 of 3,000"], emp_id: ["unique", "ascending in the file"] },
+  looks: [{ column: "department", kind: "text", as: "number", form: "with , removed", n: 2990, filled: 3000 }],
+  pairs: [{ x: "department", y: "salary", v: 100 }, { x: "salary", y: "department", v: 12.5 }] };
 const loaded = () => body({ sides: { ...body().sides,
   P: view("P", { loaded: true, label: "hr.csv", rows: 3000, columns: ["emp_id", "department"] }) } });
 
@@ -28,11 +34,15 @@ function stub(calls: Call[], over: (url: string) => Response | undefined = () =>
     if (url === "/api/profiling") return json(profiling());
     if (url.startsWith("/api/profiling/freq?")) return json(FREQ);
     if (url === "/api/profiling/casts") return json(CASTS);
+    if (url === "/api/profiling/findings") return json(FINDINGS);
     if (url.startsWith("/api/profiling/parts?column=salary")) return json({ column: "salary", kind: "number", groups: [
       { title: "Digits before the point", total: 3000, rows: [{ label: "4-6", n: 3000 }] }, { title: "Places after the point", total: 3000, rows: [{ label: "1-3", n: 3000 }] }] });
     if (url.startsWith("/api/profiling/keycheck?column=emp_id")) return json({ column: "emp_id", rows: 3000, filled: 3000, nulls: 0, blanks: 0,
       distinct: 3000, duplicates: 0, case_variants: 0, spaces: 0, width: { min: 6, max: 6 }, shapes: [{ shape: "A99999", n: 3000, example: "E10001" }],
       prefix: { text: "E", n: 3000 }, number: { min: 10001, max: 13000, distinct: 3000, gaps: 0, leading_zeros: 0 }, order: "ascending", next_id: "E13001" });
+    if (url.startsWith("/api/profiling/similar?column=department")) return json({ column: "department", kind: "text", method: "fingerprint",
+      counts: { fingerprint: 0, ngram: 0, prefix: 0, same: 0 }, groups: [], by: "", threshold: 0.5, distinct: 8, filled: 3000, scanned: 8,
+      capped: false, values: [{ value: "Support", n: 412 }, { value: "Legal", n: 355 }], more: 0, shortest: "Legal", longest: "Engineering" });
     if (url.startsWith("/api/profiling/spelling?column=department")) return json({ column: "department", distinct: 8, folded: 8, padded: 0 });
     if (url.startsWith("/api/profiling/spelling?")) return json({ column: "emp_id", distinct: 3000, folded: 3000, padded: 0 });
     if (url.startsWith("/api/profiling/hist?")) return json({ column: "salary", kind: "number", bins: [{ lo: 0, hi: 5, n: 2 }, { lo: 5, hi: 10, n: 8 }] });
@@ -53,15 +63,31 @@ test("the profile: verdict with the engine's headline, columns, key candidates, 
   mount(<ProfilingPage />);
   expect(await screen.findByText("3,000 rows × 7 columns · key: emp_id · 0 duplicate rows")).toBeInTheDocument();
   const verdict = screen.getByRole("region", { name: "Profile result" });
-  expect(verdict).toHaveTextContent(/Key emp_id — unique on every row · 3,000 rows × 2 columns · 0 duplicate rows · 0 nulls/);
+  expect(verdict).toHaveTextContent(/Key emp_id — unique on every row · 3,000 rows × 2 columns · 0 nulls · 0 duplicate rows/);
+  // the findings across the table (/findings), and the count of text columns that look like another type
+  const pills = await within(verdict).findByRole("list", { name: "Table findings" });
+  expect(pills).toHaveTextContent("1 text column looks like number");
+  expect(pills).toHaveTextContent("No nulls · no duplicate rows");
+  expect(verdict).toHaveTextContent("· 1 column reads as text that looks like something else");
   // Columns: a row per column, the key marked, the name opens the detail
   const table = screen.getByRole("table", { name: "Columns" });
   expect(within(table).getAllByRole("row")).toHaveLength(3);
   expect(within(table).getByRole("img", { name: "key" })).toBeInTheDocument();
   expect(within(table).getByText("100.00%", { exact: false })).toBeInTheDocument();
+  // read as · looks like, the semantic guess, what stands out, an arrow to the column's page
+  expect(within(table).getByText("number · remove thousands separators")).toBeInTheDocument();
+  expect(within(table).getByText("identifier")).toBeInTheDocument();
+  expect(within(table).getByText("category")).toBeInTheDocument();
+  expect(within(table).getByText("unique · ascending in the file")).toBeInTheDocument();
+  expect(within(table).getByRole("button", { name: "Open the page of department" })).toBeInTheDocument();
   // Key candidates: the chosen key, why, and the engine's sentence
   const keys = screen.getByRole("list", { name: "Key candidates" });
   expect(within(keys).getByText("unique by itself")).toBeInTheDocument();
+  expect(within(keys).getByText("· 3,000 distinct of 3,000 · no nulls")).toBeInTheDocument();
+  // the strongest dependencies across the table, each with its bar
+  const pairs = screen.getByRole("list", { name: "Strongest dependencies" });
+  expect(within(pairs).getAllByRole("listitem")).toHaveLength(2);
+  expect(pairs).toHaveTextContent("100.00%");
   // the engine's note, a bullet per sentence
   expect(screen.getByText("Found by measuring every column")).toBeInTheDocument();
   // What stands out: the key and a column's list of values are said elsewhere, so nothing is left
@@ -132,7 +158,7 @@ test("a column name opens its detail: stats, histogram, outliers, frequencies, d
   mount(<ProfilingPage />);
   await userEvent.click(await screen.findByRole("button", { name: "salary" }));
   expect(await screen.findByRole("heading", { name: "salary" })).toBeInTheDocument();
-  expect(screen.getByText("column 3 of 3 · Table · hr.csv · 3,000 values")).toBeInTheDocument();
+  expect(screen.getByText("column 3 of 3 · Table · hr.csv")).toBeInTheDocument();
   for (const [label, value] of [["Q1", "5,384.16"], ["Median", "8,672.87"], ["Mean", "8,619.01"], ["Q3", "11,826.14"], ["Std dev", "3,714.93"], ["Max", "14,979.57"]])
     expect(within(document.querySelector<HTMLElement>(".stat-grid")!).getByText(label).nextSibling).toHaveTextContent(value);
   // the histogram from /hist
