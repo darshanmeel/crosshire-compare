@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log (every run, chronological) · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log<span class='count'>4</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='01-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Sources</span><span class='s'>HR 3,000 · Payroll 2,985</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='04-loaded.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Columns</span><span class='s'>6 pairs · key emp_id</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='06-rows.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Rows</span><span class='s'>all rows · no filter</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>compared in 0.4s</span></span></a></li></ol><div class='grow'></div><div class='actions'><a class='btn' href='04-loaded.html'>Edit setup</a><a class='btn primary' href='11-results-report.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3v12m-5-5l5 5 5-5M4 21h16'/></svg>Download report</a></div></nav>
+<main class="page tight">
+
+  <div class="sec-head">
+    <h2 style="margin:0;font-size:17px;font-weight:600">Log</h2><span class="sub">everything this session did, newest last · 6 entries</span>
+    <span class="grow"></span>
+    <div class="actions"><button class="btn" type="button">Copy as text</button><button class="btn" type="button">Clear</button><a class="btn" href="08-results-summary.html"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 6l12 12M18 6L6 18'/></svg>Close</a></div>
+  </div>
+
+  <section class="panel log" aria-label="Log entries">
+    <div class="entry"><span class="at">15:48:40</span><span class="kind">load</span><span class="l"><strong style="color:var(--ink)">HR</strong> · hr_employees.csv · path on disk · 3,000 rows × 7 columns · 0.3s<span class="sub">delimiter "," · header row · Parquet snapshot written</span></span></div>
+    <div class="entry"><span class="at">15:48:41</span><span class="kind">load</span><span class="l"><strong style="color:var(--ink)">Payroll</strong> · payroll_employees.csv · path on disk · 2,985 rows × 7 columns · 0.3s<span class="sub">delimiter "," · header row · Parquet snapshot written</span></span></div>
+    <div class="entry"><span class="at">15:48:55</span><span class="kind">auto</span><span class="l">Figure it all out · 1.4s<span class="sub">paired 3 by name (emp_id, department, salary) · 1 by similarity (hire_date ⇄ HireDate, active ⇄ IsActive) · 2 × 2 leftovers by values: last_name ⇄ FullName (guess), first_name / CostCenter unpaired</span><span class="sub">types: salary number · hire_date date · active boolean · key: emp_id — unique on both sides, 98.7% overlap</span></span></div>
+    <div class="entry"><span class="at">15:48:58</span><span class="kind">values</span><span class="l">Steps added on Payroll<span class="sub">Salary: remove thousands separators → number · HireDate: to date %d/%m/%Y · FullName: trim, part 2 split by " "</span></span></div>
+    <div class="entry"><span class="at">15:49:02</span><span class="kind">compare</span><span class="l"><strong style="color:var(--ink)">HR against Payroll</strong> · 2,960 matched on emp_id · 649 differ (687 cells) · 40 only in HR · 25 only in Payroll · 0.4s<span class="sub">department 337 · salary 319 · active 31 · hire_date 0 · last_name 0</span></span></div>
+    <div class="entry"><span class="at">15:49:02</span><span class="kind">write</span><span class="l">C:\runs\HR_compare_Payroll__20261004-154902<span class="sub">report.html · summary.json · summary.csv · differences.csv · differences.parquet · one_sided_HR.csv · one_sided_Payroll.csv · config.json · columns.csv</span></span></div>
+  </section>
+
+  <div class="callout"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg><span>Entries stay for this session. Each compare also keeps its complete setup in the run folder's <code>config.json</code>, so any line here can be rerun: <code>python -m tablecmp.run config.json --out results</code>.</span></div>
+
+</main>
+
+</body>
+</html>

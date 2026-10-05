@@ -1,0 +1,5 @@
+# requirements-dev.txt - what the tests need on top of the app
+-r requirements.txt
+pytest
+httpx                           # FastAPI's TestClient, which the web tests use
+pytest-playwright               # the browser runs in tests/e2e; then once: python -m playwright install chromium

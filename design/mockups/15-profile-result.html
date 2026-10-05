@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profile · Result · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html'>Compare</a><a href='14-profile-home.html' class='on'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    
+    <a class='btn' href='13-log.html'>Log<span class='count'>2</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='14-profile-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Source</span><span class='s'>HR · 3,000 rows × 7 columns</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='15-profile-result.html'><span class='n'>2</span><span><span class='t'>Profile</span><span class='s'>ready in 0.3s</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn' type='button'>Save to folder</button><button class='btn primary' type='button'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3v12m-5-5l5 5 5-5M4 21h16'/></svg>profile.csv</button></div></nav>
+<main class="page tight">
+
+  <section class="card" aria-label="Source" style="padding:14px 20px;gap:12px">
+    <div class="card-head">
+      <span class="side-badge k" aria-hidden="true"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 5h18v14H3zM3 10h18M9 5v14'/></svg></span>
+      <label class="lbl" for="name">Name</label><input class="in name" id="name" type="text" value="HR" style="width:120px">
+      <div class="seg" role="group" aria-label="Source"><button type="button">Upload</button><button type="button" class="on">Path on disk</button><button type="button">Database</button></div>
+      <label class="lbl" for="path">Path</label>
+      <input class="in mono grow" id="path" type="text" value="D:\darshanmeel\crosshire-compare\examples\hr_employees.csv" style="flex-basis:260px">
+      <button class="btn" type="button">Browse…</button>
+      <span class="pill ok"><i></i>Loaded · 0.3s</span>
+    </div>
+    <div class="card-foot" style="align-items:center">
+      <span><strong>hr_employees.csv</strong> · 3,000 rows × 7 columns · Parquet snapshot</span>
+      <span class="cols">delimiter , · first row is a header</span>
+      <span class="grow"></span>
+      <button class="link-btn" type="button" style="height:30px">Rows to read: all<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+      <button class="link-btn" type="button" style="height:30px">Advanced<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+      <a href="#preview" style="font-family:var(--sans);font-size:13px;font-weight:500">Preview 10 rows</a>
+      <button class="btn dark sm" type="button"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16m0 4v-4h-4'/></svg>Profile again</button>
+    </div>
+  </section>
+
+  <section class="verdict" aria-label="Profile result">
+    <div class="meta"><span class="eyebrow accent">Profile</span><span class="eyebrow">HR · 04 Oct 2026 15:49 · 0.3s</span></div>
+    <p>Key <code>emp_id</code> — unique on every row · <strong>3,000</strong> rows × <strong>7</strong> columns · <strong>0</strong> duplicate rows · <strong>0</strong> nulls</p>
+  </section>
+
+  <div class="split">
+
+    <section class="panel main" aria-labelledby="h-stats">
+      <div class="panel-head"><h2 id="h-stats">Columns</h2><span class="sub">every column measured · open a row for its distribution, outliers, shapes and frequencies</span></div>
+      <div class="tblwrap"><table class="tbl" style="min-width:820px">
+        <thead><tr><th style="width:130px">Column</th><th style="width:90px">Type</th><th class="num" style="width:64px">Nulls</th><th>Distinct</th><th style="width:112px">Min</th><th style="width:112px">Max</th><th style="width:170px">Top value</th></tr></thead>
+        <tbody>
+          <tr><td class="m" style="font-weight:500">emp_id <span class="key-ico"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.8 12.2L21 2m-3 3l3 3m-6 0l2 2'/></svg></span></td><td><span class="chip">text</span></td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i class="ok" style="width:100%"></i></span><span class="v" style="min-width:112px">3,000 <span style="color:var(--ink3)">· 100%</span></span></div></td><td class="m dim">E10001</td><td class="m dim">E13000</td><td class="m">E10001 <span style="color:var(--ink3)">0.03%</span></td></tr>
+          <tr><td class="m" style="font-weight:500"><a href="16-profile-column.html" style="text-decoration:none;color:var(--ink)">first_name</a></td><td><span class="chip">text</span></td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i style="width:1%"></i></span><span class="v" style="min-width:112px">20 <span style="color:var(--ink3)">· 0.67%</span></span></div></td><td class="m dim">Aarav</td><td class="m dim">Zofia</td><td class="m">Jonas <span style="color:var(--ink3)">5.77%</span></td></tr>
+          <tr><td class="m" style="font-weight:500">last_name</td><td><span class="chip">text</span></td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i style="width:1%"></i></span><span class="v" style="min-width:112px">18 <span style="color:var(--ink3)">· 0.60%</span></span></div></td><td class="m dim">Costa</td><td class="m dim">Tanaka</td><td class="m">Ibrahim <span style="color:var(--ink3)">6.40%</span></td></tr>
+          <tr><td class="m" style="font-weight:500">department</td><td><span class="chip">text</span></td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i style="width:1%"></i></span><span class="v" style="min-width:112px">8 <span style="color:var(--ink3)">· 0.27%</span></span></div></td><td class="m dim">Engineering</td><td class="m dim">Support</td><td class="m">Support <span style="color:var(--ink3)">13.73%</span></td></tr>
+          <tr style="background:var(--accent-bg);box-shadow:inset 3px 0 0 var(--accent)"><td class="m" style="font-weight:500"><a href="16-profile-column.html" style="text-decoration:none;color:var(--ink)">salary</a></td><td><span class="chip">number</span></td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i style="width:99.83%"></i></span><span class="v" style="min-width:112px">2,995 <span style="color:var(--ink3)">· 99.83%</span></span></div></td><td class="m dim">2,152.33</td><td class="m dim">14,979.57</td><td class="m">11,837.57 <span style="color:var(--ink3)">0.07%</span></td></tr>
+          <tr><td class="m" style="font-weight:500">hire_date</td><td><span class="chip">date</span></td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i style="width:62.57%"></i></span><span class="v" style="min-width:112px">1,877 <span style="color:var(--ink3)">· 62.57%</span></span></div></td><td class="m dim">2018-01-01</td><td class="m dim">2026-09-28</td><td class="m">2026-09-26 <span style="color:var(--ink3)">0.20%</span></td></tr>
+          <tr><td class="m" style="font-weight:500">active</td><td><span class="chip">boolean</span></td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i style="width:1%"></i></span><span class="v" style="min-width:112px">2 <span style="color:var(--ink3)">· 0.07%</span></span></div></td><td class="m dim">false</td><td class="m dim">true</td><td class="m">true <span style="color:var(--ink3)">84.93%</span></td></tr>
+        </tbody></table></div>
+      <div class="panel-foot"><span>Distinct bar = share of rows that are distinct · 100% means a candidate key · selected: <a href="16-profile-column.html">salary → open its detail</a></span></div>
+    </section>
+
+    <div class="side">
+      <section class="panel" aria-labelledby="h-keys">
+        <div class="panel-head"><h2 id="h-keys">Key candidates</h2><span class="sub">single columns first, then pairs, threes and fours</span></div>
+        <div class="panel-body">
+          <div class="row" style="padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);gap:10px">
+            <span class="chip key"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.8 12.2L21 2m-3 3l3 3m-6 0l2 2'/></svg>emp_id</span><span style="font-size:13px;color:var(--pos);font-weight:500">unique by itself</span>
+            <span style="font-size:12.5px;color:var(--ink2)">· 3,000 distinct of 3,000 · no nulls · 0 duplicate rows · name says identifier</span>
+          </div>
+          <p style="margin:0;font-size:12.5px;color:var(--ink3)">A column unique by itself is the key, so no combination was tried. <code>pip install desbordante</code> adds exact discovery (HyUCC / PyroUCC).</p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-stands">
+        <div class="panel-head"><h2 id="h-stands">What stands out</h2></div>
+        <div class="panel-body">
+          <ul class="bullets">
+            <li><i></i><span><strong>Leading spaces</strong> in some text values — trim before comparing (on by default)</span></li>
+            <li><i></i><span><strong>Case variants</strong> of the same value — consider <em>Ignore case</em></span></li>
+            <li><i></i><span><strong>Leading zeros</strong> in a numeric-looking column — read as text to keep them</span></li>
+            <li><i class="ok"></i><span><strong>No duplicates, no nulls</strong> — every row identified by <code>emp_id</code></span></li>
+          </ul>
+          <div class="actions"><button class="fchip" type="button">Outliers<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button><button class="fchip" type="button">Shapes and patterns<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button><button class="fchip" type="button">Dependencies<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-freq">
+        <div class="panel-head" style="align-items:center"><h2 id="h-freq">Value frequencies</h2><button class="fchip" type="button" style="height:28px;font-family:var(--mono);font-weight:400">department<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button><span class="sub">8 distinct · all 3,000 rows</span></div>
+        <div class="panel-body">
+          <ul class="kv">
+            <li><span>Support</span><span class="bar"><i class="warn" style="width:100%"></i></span><span class="v">412 <span style="color:var(--ink3)">· 13.73%</span></span></li>
+            <li><span>Marketing</span><span class="bar"><i class="warn" style="width:94%"></i></span><span class="v">389 <span style="color:var(--ink3)">· 12.97%</span></span></li>
+            <li><span>Operations</span><span class="bar"><i class="warn" style="width:92%"></i></span><span class="v">377 <span style="color:var(--ink3)">· 12.57%</span></span></li>
+            <li><span>Engineering</span><span class="bar"><i class="warn" style="width:91%"></i></span><span class="v">374 <span style="color:var(--ink3)">· 12.47%</span></span></li>
+            <li><span>Finance</span><span class="bar"><i class="warn" style="width:90%"></i></span><span class="v">370 <span style="color:var(--ink3)">· 12.33%</span></span></li>
+            <li><span>Sales</span><span class="bar"><i class="warn" style="width:89%"></i></span><span class="v">365 <span style="color:var(--ink3)">· 12.17%</span></span></li>
+            <li><span>People</span><span class="bar"><i class="warn" style="width:87%"></i></span><span class="v">358 <span style="color:var(--ink3)">· 11.93%</span></span></li>
+            <li><span>Legal</span><span class="bar"><i class="warn" style="width:86%"></i></span><span class="v">355 <span style="color:var(--ink3)">· 11.83%</span></span></li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+  </div>
+
+</main>
+
+</body>
+</html>

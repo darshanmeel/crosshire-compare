@@ -1,0 +1,77 @@
+/* web/src/keys/keys.css - the rows page (SPEC §06) and the setup's Rows card. Tokens only. */
+
+/* sub-sections of the rows page: a smaller head than the page's own */
+.rows-sub .sec-head h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fs-text); }
+
+/* How they pair up */
+.pairup-top { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: flex-start; }
+.pairup-top > .field { gap: 8px; }
+.pairup-keys { flex: 1 1 320px; }
+.pairup-keys .row { gap: 8px 10px; }
+.pairup-keys select { height: 32px; max-width: 100%; }
+.pairup-line { font-size: 12.5px; color: var(--fs-text2); }
+.pairup-line.success b, .pairup-line.success strong { color: var(--fs-pos); }
+.pairup-line.warning b, .pairup-line.warning strong { color: var(--fs-warn); }
+.pairup .seg { max-width: 100%; flex-wrap: wrap; }
+.pairup .chip.key { height: 28px; padding: 0 4px 0 10px; }
+.chip-x { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; opacity: .75; }
+.chip-x:hover { opacity: 1; background: var(--fs-surface2); color: var(--fs-text); }
+.pairup-explain { font-size: 12.5px; }
+.pairup .callout .tips { margin: 6px 0 0; font-size: 12.5px; }
+.pairup-sugg, .pairup-formats { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--fs-border); }
+.row.format { flex-wrap: nowrap; align-items: center; }
+.row.format > .note, .row.format > .caption { flex: 1; }
+@media (max-width: 640px) { .row.format { flex-wrap: wrap; } }
+
+/* chips that are buttons: suggested keys, columns to list */
+.pairup button.chip, .profilebox button.chip { cursor: pointer; height: 30px; padding: 0 12px; border: 1px solid var(--fs-border2); background: var(--fs-panel); color: var(--fs-text); }
+.pairup button.chip:hover, .profilebox button.chip:hover { border-color: var(--fs-accent); color: var(--fs-accent); }
+.pairup button.chip.on, .profilebox button.chip.on { background: var(--fs-text); border-color: var(--fs-text); color: var(--fs-panel); }
+.pairup button.chip .ov, .profilebox button.chip .ov { color: var(--fs-text3); padding-left: 6px; border-left: 1px solid var(--fs-border2); }
+.pairup button.chip.on .ov, .profilebox button.chip.on .ov { color: inherit; opacity: .8; }
+
+details.pairup-more > summary, details.rtr-build > summary { cursor: pointer; font-size: 12.5px; color: var(--fs-text3); min-height: 32px; display: flex; align-items: center; }
+details.pairup-more > summary:hover, details.rtr-build > summary:hover { color: var(--fs-accent); }
+details.rtr-build[open] > summary { margin-bottom: 6px; }
+
+/* Rows to read */
+.rtr textarea { width: 100%; min-height: 84px; resize: vertical; }
+.rtr .rtr-order { align-items: flex-end; flex-wrap: wrap; }
+.rtr .rtr-order .grow { flex: 1 1 200px; }
+.rtr .rtr-order input[type=text] { width: 100%; }
+.rtr .rtr-top { width: 96px; text-align: right; font-variant-numeric: tabular-nums; }
+.rtr .rtr-desc { min-height: 36px; }
+.rtr .rtr-cut { margin: -6px 0 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
+.rtr .rtr-build .row > select { flex: 0 1 auto; max-width: 100%; }
+.rtr .rtr-build .row > input { flex: 1 1 140px; min-width: 0; }
+.warn-text { color: var(--fs-warn); }
+
+/* Filters at compare */
+.atcompare .filters-tbl select, .atcompare .filters-tbl input { height: 32px; min-width: 96px; width: 100%; }
+.atcompare .filters-tbl td { white-space: nowrap; }
+.atcompare .filters-tbl .icon-btn { width: 32px; height: 32px; }
+.atcompare .filters-foot { padding-top: 12px; }
+
+/* Profile by bucket and Run settings: one row of controls */
+.card.bucket, .card.runset { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 20px; }
+.bucket .bucket-col { width: 240px; max-width: 100%; }
+.bucket-say { font-size: 12.5px; color: var(--fs-text2); }
+.runset-rows { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--fs-text2); }
+.runset-rows input { width: 96px; height: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+.runset-help { flex: 1 1 260px; }
+
+/* Profile both files */
+.profilebox .panel-head { align-items: center; }
+.profilebox .freq { border-top: 1px solid var(--fs-border); padding-top: 14px; }
+.profilebox .freq-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.profilebox .side-a { color: var(--fs-side-a); } .profilebox .side-b { color: var(--fs-side-b); }
+.profilebox .callout.warn { align-items: center; }
+
+/* the bottom: Compare and what it will do */
+.rows-go { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }
+.rows-go .caption { font-size: 13px; }
+
+/* the setup's Rows card */
+.card.rows-sum { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 20px; }
+.rows-sum .v { font-size: 13.5px; color: var(--fs-text); }
+.rows-sum code { font-family: var(--font-mono); font-size: 12.5px; }

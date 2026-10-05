@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CrossHire Compare</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/theme.css" />
+    <script>
+      try {
+        var m = localStorage.getItem("fs-mode");
+        if (m !== "light" && m !== "dark") m = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        document.documentElement.setAttribute("data-fs-mode", m);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

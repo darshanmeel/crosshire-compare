@@ -1,0 +1,67 @@
+/* web/src/sources/sources.css - the A / B / P source cards (screens 01, 03, 04, 07, 14, 15). Colours only
+   through the --fs-* tokens, so the light and dark looks both come from /theme.css. */
+
+/* the source choice and A table / SQL query: radios that look like the segmented control */
+.src-seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--fs-surface2); border-radius: 999px; align-self: flex-start; }
+.src-seg label { position: relative; display: inline-flex; align-items: center; height: 30px; padding: 0 14px; border-radius: 999px; color: var(--fs-text2); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.src-seg label:hover { color: var(--fs-text); }
+.src-seg label.on { background: var(--fs-panel); color: var(--fs-text); box-shadow: 0 1px 2px var(--fs-border2); }
+.src-seg label input[type=radio] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.src-seg label:has(input:focus-visible) { outline: 2px solid var(--fs-accent); outline-offset: 1px; }
+
+/* the card */
+.side-card .card-head .lbl { letter-spacing: .14em; }
+.side-card .opts .lbl { letter-spacing: .1em; }
+.side-card .opts .link-btn.open svg, .side-card .card-foot .link-btn.open svg { transform: rotate(180deg); }
+.side-card .pathbox, .side-card .dbbox, .side-card .upload, .side-card .rows-to-read { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.side-card .upload .caption .staged { color: var(--fs-text); font-family: var(--font-mono); font-weight: 500; }
+.side-card .in.cap { width: 120px; height: 32px; }
+.side-card .db-empty { justify-content: space-between; }
+.side-card .cols-found { margin: 0; font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.side-card .load-row { gap: 12px; }
+.side-card .load-row .hint { font-size: 12.5px; color: var(--fs-text3); min-width: 0; }
+.side-card .load-row .hint strong { color: var(--fs-text2); font-weight: 600; }
+.side-card .caption { margin: 0; }
+.side-card .hint.caption { margin-top: -4px; }
+
+/* Rows to read / Advanced open inside the card, under their links */
+.card-panel { border: 1px solid var(--fs-line); border-radius: var(--r-md); background: var(--fs-surface); padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.card-panel .tips { margin: 0; padding-left: 1.1rem; font-size: 12.5px; color: var(--fs-text3); }
+.card-panel .tips li::marker { color: var(--fs-accent); }
+.card-panel .quick { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.card-panel .quick .field { flex: 1 1 140px; }
+.card-panel select[multiple].order { height: auto; min-height: 88px; padding: 4px; background-image: none; }
+.card-panel textarea { min-height: 64px; }
+
+/* the foot once loaded */
+.side-card .card-foot.loaded { align-items: center; }
+.side-card .card-foot .what { overflow-wrap: anywhere; }
+.side-card .card-foot .link-btn { font-family: var(--font-sans); height: 30px; }
+.side-card .preview-wrap { min-width: 0; }
+.side-card .preview-wrap .table-wrap { max-height: 420px; }
+
+/* the Profile page: one card, 720 px while empty; compact once loaded (screen 15) */
+.profile-source { display: flex; flex-direction: column; gap: 14px; }
+.profile-source:not(.loaded) > .side-card { max-width: 720px; }
+.side-card.compact { padding: 14px 20px; gap: 12px; }
+.side-card.compact .in.name { width: 120px; }
+.side-card.compact .card-foot .btn.load-again { margin-left: 4px; }
+
+/* while a run is going: a side on one line (screen 07) */
+.side-line { padding: 14px 20px; }
+.side-line .nm { font-size: 15px; font-weight: 600; color: var(--fs-text); }
+.side-line .card-head { flex-wrap: nowrap; }
+.side-line .what { flex: 1 1 auto; min-width: 0; font-family: var(--font-mono); font-size: 12px; color: var(--fs-text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-line .nm { white-space: nowrap; }
+
+@media (max-width: 520px) {
+  .side-card { padding: 14px 16px 16px; }
+  .side-card .in.name, .side-card.compact .in.name { width: auto; flex: 1 1 120px; }
+  .side-card .opts { gap: 10px 14px; }
+  .side-card .opts .grow { display: none; }
+  .side-card .lbl.w { width: auto; flex-basis: 100%; }
+  .src-seg label { padding: 0 11px; }
+}
+
+/* the foot's actions sit at its right end: Preview 10 rows, then Load to read the side again */
+.side-card .card-foot .foot-end { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-left: auto; }

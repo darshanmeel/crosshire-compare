@@ -1,0 +1,80 @@
+/* web/src/values/values.css - the values editor (SPEC §05: pairs, How values are read, the step
+   pipeline, Add a step, the preview) and the Rows filters' table cells. Colours are tokens only. */
+
+/* the two panels: pairs narrow on the left, the editor wide on the right; stacked under 960 px */
+.vx { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.vx > .vx-pairs { flex: 1 1 360px; min-width: 0; }
+.vx > .vx-edit { flex: 2 1 560px; min-width: 0; }
+
+/* the pairs table: the first cell is the button that picks the pair */
+.vx-pairs .tbl { min-width: 340px; }
+.vx-pairs .tbl tr.on td { background: var(--fs-accent-subtle); }
+.vx-pairs .tbl tr.on td:first-child { box-shadow: inset 3px 0 0 var(--fs-accent); }
+.vx-pick { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0; border: 0; background: none;
+           color: var(--fs-side-a); font-family: var(--font-mono); font-size: 12.5px; cursor: pointer; text-align: left; }
+.vx-pick:hover { text-decoration: underline; }
+.vx-pairs tr.on .vx-pick, .vx-pairs tr.on .cb { font-weight: 600; }
+
+/* How values are read, under the pairs */
+.vx-how { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid var(--fs-border); }
+.vx-how .field { width: 100%; }
+.vx-how .tol { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.vx-how .tol input { width: 72px; height: 32px; text-align: center; font-family: var(--font-mono); }
+.vx-how .hint, .vx-hint { font-size: 12px; color: var(--fs-text3); }
+.vx-h { margin: 0; font: 600 14px var(--font-sans); letter-spacing: 0; text-transform: none; color: var(--fs-text); }
+
+/* the editor's head: A chip, swap, B chip, type, case, how the pair was made */
+.vx-edit .panel-head { align-items: center; }
+.vx-pairname { display: inline-flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; }
+.vx-edit .panel-body { padding-top: 4px; }
+.vx-say { margin: 0; font-size: 13px; color: var(--fs-text2); }
+.vx-side .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 8px; vertical-align: middle; }
+
+/* the pipeline */
+.pstep .op strong { font-weight: 600; color: var(--fs-text); }
+.pstep .actions { display: flex; gap: 6px; }
+.pstep .actions .btn.ico { width: 32px; padding: 0; justify-content: center; }
+.vx-param { display: inline-flex; align-items: center; gap: 6px; }
+.vx-param .lbl { letter-spacing: .1em; }
+.vx-param input, .vx-param select { height: 32px; font-family: var(--font-mono); font-size: 12.5px; }
+.vx-param input[type=number] { width: 72px; }
+.vx-param input.short { width: 64px; }
+.vx-param input.wide { width: min(320px, 60vw); }
+.pstep.draft { border-style: dashed; border-color: var(--fs-accent-line); background: var(--fs-panel); }
+.pstep.draft .n { background: var(--fs-accent-fill); color: var(--fs-on-fill); }
+.vx-empty { padding: 12px 14px; border: 1px dashed var(--fs-border2); border-radius: var(--r-sm); font-size: 13px; color: var(--fs-text3); }
+.vx-tools { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+
+/* Add a step chips */
+.vx .ops button { color: var(--fs-text); }
+.vx .ops button[aria-pressed="true"] { border-color: var(--fs-text); background: var(--fs-surface2); }
+.vx .ops button:disabled { opacity: .5; cursor: default; }
+.vx-fn { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+
+/* the preview */
+.vx-preview { border-radius: var(--r-sm); }
+.vx-preview .panel-head { padding: 10px 14px 8px; align-items: center; }
+.vx-preview .vx-h { font-size: 13.5px; }
+.vx-preview .tbl { min-width: 520px; }
+.vx-preview td.match { width: 70px; }
+.vx-preview .vx-cap { padding: 8px 14px 10px; font-size: 12px; color: var(--fs-text3); }
+.vx-check { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Other conversions this run */
+.vx-other { display: inline-flex; align-items: center; gap: 6px; }
+.vx-other .m { font-family: var(--font-mono); font-size: 12px; color: var(--fs-text2); }
+
+@media (max-width: 640px) {
+  .pstep { grid-template-columns: 28px minmax(0, 1fr); }
+  .pstep .actions { grid-column: 2; }
+}
+
+/* the Rows filters (FiltersBox) */
+.row.four { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; align-items: end; }
+@media (max-width: 900px) { .row.four { grid-template-columns: 1fr 1fr; } }
+table.grid td select, table.grid td input[type=text] { padding: .2rem .35rem; font-size: 13px; }
+.vx-edit > .panel-foot { border-top: 1px solid var(--fs-border); }
+.vx-edit .panel-head .note { flex-basis: 100%; }
+.vx-pairs .tbl td.m { white-space: nowrap; }
+
+.vx-add-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare · Transform and convert values · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log<span class='count'>3</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='01-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Sources</span><span class='s'>HR 3,000 · Payroll 2,985</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='04-loaded.html'><span class='n'>2</span><span><span class='t'>Columns</span><span class='s'>6 pairs · key emp_id</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='06-rows.html'><span class='n'>3</span><span><span class='t'>Rows</span><span class='s'>all rows · no filter</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>press Compare</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn' type='button'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM5 17l.8 2 2 .8-2 .8L5 22l-.8-2-2-.8 2-.8zM19 15l.6 1.6 1.6.6-1.6.6L19 19.4l-.6-1.6-1.6-.6 1.6-.6z'/></svg>Auto · figure it all out</button><a class='btn primary' href='07-running.html'>Compare<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></a></div></nav>
+<main class="page">
+
+  <section class="sec" aria-labelledby="h-values">
+    <div class="sec-head">
+      <span class="eyebrow accent">02</span><h2 id="h-values">Columns · transform &amp; convert values</h2><span class="sub">steps run in DuckDB before the compare — each side separately</span>
+      <span class="grow"></span>
+      <div class="actions"><a class="btn" href="04-loaded.html"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M19 12H5M11 6l-6 6 6 6'/></svg>Back to the column table</a></div>
+    </div>
+
+    <div class="split">
+
+      <section class="panel main" aria-label="Pairs" style="flex:1 1 360px">
+        <div class="panel-head"><h3>Pairs</h3><span class="sub">pick one to edit its steps</span></div>
+        <div class="tblwrap"><table class="tbl compact" style="min-width:360px">
+          <thead><tr><th><span class="sw a"></span>HR</th><th><span class="sw b"></span>Payroll</th><th>Read as</th><th>Steps</th></tr></thead>
+          <tbody>
+            <tr><td class="m ca">emp_id <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.8 12.2L21 2m-3 3l3 3m-6 0l2 2'/></svg></td><td class="m cb">EmployeeId</td><td><span class="chip">text</span></td><td class="dim">—</td></tr>
+            <tr style="background:var(--accent-bg);box-shadow:inset 3px 0 0 var(--accent)"><td class="m ca"><strong>last_name</strong></td><td class="m cb"><strong>FullName</strong></td><td><span class="chip">text</span></td><td class="m">B · 2 steps</td></tr>
+            <tr><td class="m ca">department</td><td class="m cb">Dept</td><td><span class="chip">text</span></td><td class="dim">—</td></tr>
+            <tr><td class="m ca">salary</td><td class="m cb">Salary</td><td><span class="chip">number</span></td><td class="m">B · 1 step</td></tr>
+            <tr><td class="m ca">hire_date</td><td class="m cb">HireDate</td><td><span class="chip">date</span></td><td class="m">B · 1 step</td></tr>
+            <tr><td class="m ca">active</td><td class="m cb">IsActive</td><td><span class="chip">boolean</span></td><td class="dim">—</td></tr>
+          </tbody></table></div>
+        <div class="panel-foot" style="flex-direction:column;align-items:flex-start;gap:10px;border-top:1px solid var(--line2)">
+          <h3 style="margin:0;font-size:14px;font-weight:600">How values are read</h3>
+          <div class="field" style="width:100%"><label class="lbl" for="nulls">Null tokens</label><input class="in mono" id="nulls" type="text" value="NULL, \N, N/A, NA, NaN, None, (null)"></div>
+          <label class="check"><input type="checkbox" checked>Empty string is null</label>
+          <label class="check"><input type="checkbox" checked>Trim whitespace</label>
+          <label class="check"><input type="checkbox">Ignore case in values</label>
+          <div class="row"><label class="lbl" for="tol" style="letter-spacing:.1em">Numeric tolerance</label><input class="in tiny" id="tol" type="text" value="0" style="width:64px"><span style="font-size:12px;color:var(--ink3)">absolute · 0 = exact</span></div>
+        </div>
+      </section>
+
+      <section class="panel side" aria-label="Steps for last_name and FullName" style="flex:2 1 560px;gap:0">
+        <div class="panel-head" style="align-items:center">
+          <h3 style="display:flex;align-items:center;gap:10px"><span class="chip a">last_name</span><span class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></span><span class="chip b">FullName</span></h3>
+          <span class="chip">text</span><span class="chip">ignore case</span>
+          <span class="grow"></span>
+          <span class="pill warn"><i></i>paired by values · check</span>
+        </div>
+        <div class="panel-body">
+          <p style="margin:0;font-size:13px;color:var(--ink2)">Payroll holds the full name in one column. Two steps on the Payroll side turn <code>Omar Okafor</code> into <code>Okafor</code> so it lines up with HR's <code>last_name</code>. The same HR column can also sit in a second pair for <code>first_name</code> (part 1).</p>
+
+          <div class="seg" role="group" aria-label="Which side"><button type="button"><span class="sw a" style="display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:middle"></span>HR steps · 0</button><button type="button" class="on"><span class="sw b" style="display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:8px;vertical-align:middle"></span>Payroll steps · 2</button></div>
+
+          <div class="pipe">
+            <div class="pstep">
+              <span class="n">1</span>
+              <div class="op"><strong>trim</strong><span class="sql">trim(x)</span></div>
+              <div class="actions"><button class="btn sm" type="button" aria-label="Move up">↑</button><button class="btn sm" type="button" aria-label="Remove"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 6l12 12M18 6L6 18'/></svg></button></div>
+            </div>
+            <div class="pstep">
+              <span class="n">2</span>
+              <div class="op"><strong>part N split by S</strong><span class="row"><label class="lbl" for="sep" style="letter-spacing:.1em">separator</label><input class="in tiny" id="sep" type="text" value=" " aria-label="separator"><label class="lbl" for="pn" style="letter-spacing:.1em">N</label><input class="in tiny" id="pn" type="text" value="2"></span><span class="sql">split_part(x, ' ', 2)</span></div>
+              <div class="actions"><button class="btn sm" type="button" aria-label="Move up">↑</button><button class="btn sm" type="button" aria-label="Remove"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 6l12 12M18 6L6 18'/></svg></button></div>
+            </div>
+          </div>
+
+          <div class="field"><span class="lbl">Add a step</span>
+            <div class="ops">
+              <button type="button">trim</button><button type="button">upper</button><button type="button">lower</button><button type="button">left N characters</button><button type="button">right N characters</button><button type="button">characters from N, M long</button><button type="button">replace text</button><button type="button">regex replace</button><button type="button">remove spaces</button><button type="button">collapse repeated spaces</button><button type="button">strip leading zeros</button><button type="button">pad left to N with C</button><button type="button">digits only</button><button type="button">letters and digits only</button><button type="button" style="border-color:var(--ink)">part N split by S</button><button type="button">remove thousands separators</button><button type="button">to number</button><button type="button">to date</button><button type="button">to timestamp</button><button type="button">to boolean</button><button type="button">custom expression…</button>
+            </div>
+          </div>
+
+          <div class="panel" style="border-radius:var(--r)">
+            <div class="panel-head" style="padding:10px 14px 6px"><h3 style="font-size:13.5px">Preview on the first rows</h3><span class="sub">2,960 of 2,960 paired rows match after these steps</span></div>
+            <div class="tblwrap"><table class="tbl compact preview" style="min-width:520px">
+              <thead><tr><th><span class="sw b"></span>FullName · before</th><th>after step 2</th><th><span class="sw a"></span>last_name</th><th style="width:70px">Match</th></tr></thead>
+              <tbody>
+                <tr><td class="m before">Omar Okafor</td><td class="m after">Okafor</td><td class="m ca">Okafor</td><td><span class="chip pos"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span></td></tr>
+                <tr><td class="m before">Ines Okafor</td><td class="m after">Okafor</td><td class="m ca">Okafor</td><td><span class="chip pos"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span></td></tr>
+                <tr><td class="m before">Amara Schmidt</td><td class="m after">Schmidt</td><td class="m ca">Schmidt</td><td><span class="chip pos"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span></td></tr>
+                <tr><td class="m before">Chen Kowalski</td><td class="m after">Kowalski</td><td class="m ca">Kowalski</td><td><span class="chip pos"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span></td></tr>
+                <tr><td class="m before">Fatima Ibrahim</td><td class="m after">Ibrahim</td><td class="m ca">Ibrahim</td><td><span class="chip pos"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span></td></tr>
+              </tbody></table></div>
+          </div>
+        </div>
+        <div class="panel-foot" style="border-top:1px solid var(--line2)">
+          <span>Other conversions this run:</span>
+          <span><span class="chip b">Salary</span> <span class="m" style="font-family:var(--mono);font-size:12px">remove thousands separators → number</span></span>
+          <span><span class="chip b">HireDate</span> <span style="font-family:var(--mono);font-size:12px">to date %d/%m/%Y</span></span>
+          <span><span class="chip b">IsActive</span> <span style="font-family:var(--mono);font-size:12px">Y/N → boolean (detected)</span></span>
+        </div>
+      </section>
+
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

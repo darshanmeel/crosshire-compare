@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Results · Differing rows · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log<span class='count'>4</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='01-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Sources</span><span class='s'>HR 3,000 · Payroll 2,985</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='04-loaded.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Columns</span><span class='s'>6 pairs · key emp_id</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='06-rows.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Rows</span><span class='s'>all rows · no filter</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>compared in 0.4s</span></span></a></li></ol><div class='grow'></div><div class='actions'><a class='btn' href='04-loaded.html'>Edit setup</a><a class='btn primary' href='11-results-report.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3v12m-5-5l5 5 5-5M4 21h16'/></svg>Download report</a></div></nav>
+<main class="page tight">
+
+  <section class='verdict' aria-label='Result'>
+  <div class='meta'><span class='eyebrow accent'>Result</span><span class='eyebrow'>HR against Payroll · 04 Oct 2026 15:49 · 0.4s</span></div>
+  <p><strong>2,960</strong> rows matched on <code>emp_id</code> · <strong class='neg'>649</strong> rows <span class='pct'>(21.93%)</span> differ in <strong class='neg'>687</strong> cells · <strong>40</strong> only in HR · <strong>25</strong> only in Payroll</p>
+</section>
+<section class='outcome' aria-label='Row outcome'>
+  <div class='head'><span class='eyebrow'>Row outcome</span><span class='sub'>3,025 distinct keys across both files</span></div>
+  <div class='stack' aria-hidden='true'><div class='c-full' style='width:76.4%'></div><div class='c-diff' style='width:21.5%'></div><div class='c-onlya' style='width:1.3%'></div><div class='c-onlyb' style='width:0.8%'></div></div>
+  <ul class='legend'><li><i class='c-full'></i>Fully matched <strong>2,311</strong></li><li><i class='c-diff'></i>Differ <strong>649</strong></li><li><i class='c-onlya'></i>Only in HR <strong>40</strong></li><li><i class='c-onlyb'></i>Only in Payroll <strong>25</strong></li></ul>
+</section>
+  <nav class='tabs' aria-label='Result views'><a href='08-results-summary.html'>Summary</a><a href='09-results-diffs.html' class='on'>Differing rows<span class='count'>649</span></a><a href='10-results-onesided.html'>One-sided rows<span class='count'>65</span></a><a href='11-results-report.html'>Report</a><a href='12-results-downloads.html'>Downloads</a></nav>
+
+  <div class="toolbar">
+    <div class="filters" role="group" aria-label="Filter by column">
+      <button class="fchip on" type="button">All differing<span class="n">649</span></button>
+      <button class="fchip" type="button">department<span class="n">337</span></button>
+      <button class="fchip" type="button">salary<span class="n">319</span></button>
+      <button class="fchip" type="button">active<span class="n">31</span></button>
+    </div>
+    <label class="search" for="find"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='11' cy='11' r='7'/><path d='M20 20l-3.5-3.5'/></svg><input id="find" type="search" placeholder="Find a key or value"></label>
+    <span class="grow"></span>
+    <button class="fchip" type="button">Show: all compared columns<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+    <button class="btn sm" type="button"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3v12m-5-5l5 5 5-5M4 21h16'/></svg>differences.csv</button>
+  </div>
+
+  <section class="panel" aria-label="Differing rows">
+    <div class="note">
+      <span>One row per key. A cell that differs reads</span>
+      <span class="diff" style="height:26px"><span class="a">HR value</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">Payroll value</span></span>
+      <span>· matching cells stay plain · sorted by cells that differ, most first</span>
+    </div>
+    <div class="tblwrap"><table class="tbl" style="min-width:1100px">
+      <thead><tr>
+        <th style="width:110px"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.8 12.2L21 2m-3 3l3 3m-6 0l2 2'/></svg> emp_id</th><th style="width:120px">last_name</th><th>department</th><th>salary</th><th style="width:120px">hire_date</th><th style="width:170px">active</th><th class="num" style="width:72px">Cells</th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="m" style="font-weight:500">E10402</td><td class="dim">Moreau</td><td><span class="diff"><span class="a">Sales</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">Sales EMEA</span></span></td><td class="m"><span class="diff"><span class="a">14,879.70</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">14,836.87</span></span></td><td class="m dim">2023-10-02</td><td class="m dim">false</td><td class="num m neg-n">2</td></tr>
+        <tr><td class="m" style="font-weight:500">E10468</td><td class="dim">Schmidt</td><td><span class="diff"><span class="a">Engineering</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">Eng</span></span></td><td class="m"><span class="diff"><span class="a">4,981.69</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">5,131.48</span></span></td><td class="m dim">2023-07-03</td><td class="m dim">true</td><td class="num m neg-n">2</td></tr>
+        <tr><td class="m" style="font-weight:500">E11936</td><td class="dim">Ibrahim</td><td><span class="diff"><span class="a">Engineering</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">Eng</span></span></td><td class="m"><span class="diff"><span class="a">6,109.68</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">6,160.07</span></span></td><td class="m dim">2019-01-23</td><td class="m dim">true</td><td class="num m neg-n">2</td></tr>
+        <tr><td class="m" style="font-weight:500">E12594</td><td class="dim">Tanaka</td><td><span class="diff"><span class="a">Finance</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">Finance &amp; Control</span></span></td><td class="m"><span class="diff"><span class="a">13,871.87</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">13,728.90</span></span></td><td class="m dim">2020-05-26</td><td class="m dim">false</td><td class="num m neg-n">2</td></tr>
+        <tr><td class="m" style="font-weight:500">E10466</td><td class="dim">Ibrahim</td><td class="dim">Legal</td><td class="m dim">8,453.00</td><td class="m dim">2025-03-17</td><td class="m"><span class="diff"><span class="a">true</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">false</span></span></td><td class="num m neg-n">1</td></tr>
+        <tr><td class="m" style="font-weight:500">E10003</td><td class="dim">Schmidt</td><td class="dim">Support</td><td class="m"><span class="diff"><span class="a">10,240.93</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">10,346.05</span></span></td><td class="m dim">2026-07-19</td><td class="m dim">false</td><td class="num m neg-n">1</td></tr>
+        <tr><td class="m" style="font-weight:500">E10006</td><td class="dim">Dubois</td><td class="dim">Legal</td><td class="m"><span class="diff"><span class="a">12,121.85</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">12,035.03</span></span></td><td class="m dim">2018-10-15</td><td class="m dim">true</td><td class="num m neg-n">1</td></tr>
+        <tr><td class="m" style="font-weight:500">E10034</td><td class="dim">Rossi</td><td><span class="diff"><span class="a">Sales</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">Sales EMEA</span></span></td><td class="m dim">2,424.52</td><td class="m dim">2025-11-26</td><td class="m dim">false</td><td class="num m neg-n">1</td></tr>
+        <tr><td class="m" style="font-weight:500">E10040</td><td class="dim">Schmidt</td><td><span class="diff"><span class="a">Finance</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">Finance &amp; Control</span></span></td><td class="m dim">5,338.18</td><td class="m dim">2026-09-09</td><td class="m dim">true</td><td class="num m neg-n">1</td></tr>
+        <tr><td class="m" style="font-weight:500">E10060</td><td class="dim">Okafor</td><td><span class="diff"><span class="a">Engineering</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">Eng</span></span></td><td class="m dim">10,684.87</td><td class="m dim">2022-07-13</td><td class="m dim">false</td><td class="num m neg-n">1</td></tr>
+        <tr><td class="m" style="font-weight:500">E10077</td><td class="dim">Ibrahim</td><td class="dim">Marketing</td><td class="m dim">7,113.26</td><td class="m dim">2025-02-07</td><td class="m"><span class="diff"><span class="a">true</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">false</span></span></td><td class="num m neg-n">1</td></tr>
+        <tr><td class="m" style="font-weight:500">E10194</td><td class="dim">Schmidt</td><td class="dim">Sales</td><td class="m dim">14,497.41</td><td class="m dim">2023-04-04</td><td class="m"><span class="diff"><span class="a">true</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="b">false</span></span></td><td class="num m neg-n">1</td></tr>
+      </tbody></table></div>
+    <div class="panel-foot">
+      <span>Showing <strong>12</strong> of 649 rows</span>
+      <span class="grow"></span>
+      <button class="btn sm" type="button">Load 50 more</button>
+      <button class="btn sm" type="button">Near-match analysis — formatting or real?</button>
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

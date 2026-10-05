@@ -1,0 +1,22 @@
+/* web/src/compare/running.css - the running panel (SPEC §07) and the Compare bar (SPEC §04 bottom). */
+.run-panel { margin-bottom: 4px; }
+.run-panel .disc { margin: 4px 0 0 4px; }
+.run-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.run-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; min-width: 0; }
+.run-head .run-now { min-width: 0; overflow-wrap: anywhere; }
+.run-head .run-meta { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.run-label { font-size: 13.5px; color: var(--fs-text2); }
+.run-panel .tasks li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
+.run-panel .tasks code { font-family: var(--font-mono); font-size: 12px; background: var(--fs-surface2); padding: 1px 5px; border-radius: 4px; }
+.run-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 600px) {
+  .run-panel { padding: 16px; gap: 14px; flex-direction: column; }
+  .run-panel .disc { width: 38px; height: 38px; }
+  .run-head .grow { display: none; }
+}
+
+.compare-bar { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+.compare-bar .actions { gap: 14px; }
+.compare-bar .help { font-size: 13px; color: var(--fs-text3); font-variant-numeric: tabular-nums; }
+.compare-bar .why { font-size: 13px; color: var(--fs-warn); }
+.compare-bar .btn.lg { max-width: 100%; white-space: normal; text-align: left; }

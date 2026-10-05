@@ -1,0 +1,17 @@
+/* Run from a config (SPEC §17). */
+.cfg { display: flex; flex-direction: column; gap: 20px; }
+.cfg .side-badge.k { color: var(--fs-panel); }
+.cfg .cfg-sub { font-size: 12.5px; color: var(--fs-text3); }
+.cfg .cfg-text { margin: 0; font-size: 13px; color: var(--fs-text2); line-height: 1.5; }
+.cfg .cfg-sum { flex-direction: column; align-items: flex-start; gap: 6px; overflow-wrap: anywhere; }
+.cfg .cfg-sum span { min-width: 0; max-width: 100%; }
+.cfg .drop .m { font-family: var(--font-mono); font-size: 12.5px; overflow-wrap: anywhere; }
+.cfg .cfg-other { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--fs-border); }
+.cfg code.cmd { display: block; padding: 10px 12px; border-radius: var(--r-sm); background: var(--fs-text); color: var(--fs-panel); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
+.cfg-batch .panel-foot code.cmd { flex: 0 1 auto; }
+.cfg-batch .panel-note code { font-size: 11.5px; }
+.cfg-pick { position: relative; }
+.cfg-pick input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+.cfg-pick:focus-within { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+:root[data-fs-mode="dark"] .cfg code.cmd { background: var(--fs-bg); color: var(--fs-text); border: 1px solid var(--fs-line); }
+.cfg-batch .tbl { min-width: 600px; }

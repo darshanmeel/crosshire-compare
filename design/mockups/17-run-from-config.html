@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run from a saved config · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log</a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step now' href='01-home.html'><span class='n'>1</span><span><span class='t'>Sources</span><span class='s'>nothing loaded yet</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='04-loaded.html'><span class='n'>2</span><span><span class='t'>Columns</span><span class='s'>—</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='06-rows.html'><span class='n'>3</span><span><span class='t'>Rows</span><span class='s'>—</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>—</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn' type='button' disabled><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM5 17l.8 2 2 .8-2 .8L5 22l-.8-2-2-.8 2-.8zM19 15l.6 1.6 1.6.6-1.6.6L19 19.4l-.6-1.6-1.6-.6 1.6-.6z'/></svg>Auto · figure it all out</button><button class='btn primary' type='button' disabled>Compare<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></button></div></nav>
+<main class="page">
+
+  <div class="sec-head">
+    <a class="btn sm" href="01-home.html"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M19 12H5M11 6l-6 6 6 6'/></svg>Back</a>
+    <h2 style="margin:0;font-size:17px;font-weight:600">Run from a config</h2>
+    <span class="sub">replay a comparison exactly — the config.json every run writes, or one you saved</span>
+  </div>
+
+  <div class="two">
+
+    <section class="card" aria-label="Config file">
+      <div class="card-head"><span class="side-badge k" aria-hidden="true"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg></span><strong style="font-size:15px">Config</strong><span class="grow"></span><span class="pill ok"><i></i>Read · 7 pairs · key emp_id</span></div>
+      <div class="seg" role="group" aria-label="Where the config is"><button type="button">Upload</button><button type="button" class="on">Path on disk</button></div>
+      <div class="row"><label class="lbl w" for="cfg">Path</label><input class="in mono grow" id="cfg" type="text" value="C:\runs\HR_compare_Payroll__20261004-154902\HR_compare_Payroll__config.json"><button class="btn" type="button">Browse…</button></div>
+      <div class="card-foot" style="flex-direction:column;align-items:flex-start;gap:6px">
+        <span><strong>Sources</strong> HR · hr_employees.csv — Payroll · payroll_employees.csv</span>
+        <span><strong>Pairs</strong> emp_id ⇄ EmployeeId (key) · last_name ⇄ FullName · department ⇄ Dept · salary ⇄ Salary · hire_date ⇄ HireDate · active ⇄ IsActive</span>
+        <span><strong>Steps</strong> Payroll: Salary remove thousands separators · HireDate to date %d/%m/%Y · FullName trim, part 2 split by " "</span>
+        <span><strong>Rows</strong> match on key · no filter · profile by bucket off</span>
+      </div>
+    </section>
+
+    <section class="card" aria-label="Override the files">
+      <div class="card-head"><span class="side-badge k" aria-hidden="true"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16m0 4v-4h-4'/></svg></span><strong style="font-size:15px">This run</strong><span class="grow"></span><span style="font-size:12.5px;color:var(--ink3)">leave blank to use the files named in the config</span></div>
+      <div class="row"><span class="side-badge a" aria-hidden="true" style="width:24px;height:24px;font-size:11px">A</span><label class="lbl w" for="left">Left</label><input class="in mono grow" id="left" type="text" placeholder="hr_employees_2026-10.csv"><button class="btn" type="button">Browse…</button></div>
+      <div class="row"><span class="side-badge b" aria-hidden="true" style="width:24px;height:24px;font-size:11px">B</span><label class="lbl w" for="right">Right</label><input class="in mono grow" id="right" type="text" placeholder="payroll_employees_2026-10.csv"><button class="btn" type="button">Browse…</button></div>
+      <div class="row"><label class="lbl w" for="out">Out</label><input class="in mono grow" id="out" type="text" value="C:\runs"><button class="btn" type="button">Browse…</button></div>
+      <div class="row" style="padding-top:4px"><a class="btn primary" href="07-running.html"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M7 4l12 8-12 8z'/></svg>Run this config</a><button class="btn" type="button">Open in the setup instead</button></div>
+    </section>
+
+  </div>
+
+  <section class="panel" aria-labelledby="h-batch">
+    <div class="panel-head"><h2 id="h-batch">Batch · many pairs, one config</h2><span class="sub">a pairs.csv with one line per left/right file — each pair gets its own run folder</span></div>
+    <div class="tblwrap"><table class="tbl compact" style="min-width:600px">
+      <thead><tr><th>left</th><th>right</th><th>name</th><th>out</th></tr></thead>
+      <tbody>
+        <tr><td class="m">exports/hr_2026-08.csv</td><td class="m">exports/payroll_2026-08.csv</td><td class="m">2026-08</td><td class="m dim">C:\runs\2026-08</td></tr>
+        <tr><td class="m">exports/hr_2026-09.csv</td><td class="m">exports/payroll_2026-09.csv</td><td class="m">2026-09</td><td class="m dim">C:\runs\2026-09</td></tr>
+        <tr><td class="m">exports/hr_2026-10.csv</td><td class="m">exports/payroll_2026-10.csv</td><td class="m">2026-10</td><td class="m dim">C:\runs\2026-10</td></tr>
+      </tbody></table></div>
+    <div class="panel-foot">
+      <code style="padding:10px 12px;border-radius:var(--r);background:var(--ink);color:#F4EAD6;font-size:12px;white-space:pre-wrap">python -m tablecmp.run HR_compare_Payroll__config.json --pairs pairs.csv --out C:\runs</code>
+      <span class="grow"></span>
+      <button class="btn" type="button"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 17V5m-5 5l5-5 5 5M4 21h16'/></svg>Load a pairs.csv</button>
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

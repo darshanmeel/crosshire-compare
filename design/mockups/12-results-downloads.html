@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Results · Downloads · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log<span class='count'>4</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='01-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Sources</span><span class='s'>HR 3,000 · Payroll 2,985</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='04-loaded.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Columns</span><span class='s'>6 pairs · key emp_id</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='06-rows.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Rows</span><span class='s'>all rows · no filter</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>compared in 0.4s</span></span></a></li></ol><div class='grow'></div><div class='actions'><a class='btn' href='04-loaded.html'>Edit setup</a><a class='btn primary' href='11-results-report.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3v12m-5-5l5 5 5-5M4 21h16'/></svg>Download report</a></div></nav>
+<main class="page tight">
+
+  <section class='verdict' aria-label='Result'>
+  <div class='meta'><span class='eyebrow accent'>Result</span><span class='eyebrow'>HR against Payroll · 04 Oct 2026 15:49 · 0.4s</span></div>
+  <p><strong>2,960</strong> rows matched on <code>emp_id</code> · <strong class='neg'>649</strong> rows <span class='pct'>(21.93%)</span> differ in <strong class='neg'>687</strong> cells · <strong>40</strong> only in HR · <strong>25</strong> only in Payroll</p>
+</section>
+<section class='outcome' aria-label='Row outcome'>
+  <div class='head'><span class='eyebrow'>Row outcome</span><span class='sub'>3,025 distinct keys across both files</span></div>
+  <div class='stack' aria-hidden='true'><div class='c-full' style='width:76.4%'></div><div class='c-diff' style='width:21.5%'></div><div class='c-onlya' style='width:1.3%'></div><div class='c-onlyb' style='width:0.8%'></div></div>
+  <ul class='legend'><li><i class='c-full'></i>Fully matched <strong>2,311</strong></li><li><i class='c-diff'></i>Differ <strong>649</strong></li><li><i class='c-onlya'></i>Only in HR <strong>40</strong></li><li><i class='c-onlyb'></i>Only in Payroll <strong>25</strong></li></ul>
+</section>
+  <nav class='tabs' aria-label='Result views'><a href='08-results-summary.html'>Summary</a><a href='09-results-diffs.html'>Differing rows<span class='count'>649</span></a><a href='10-results-onesided.html'>One-sided rows<span class='count'>65</span></a><a href='11-results-report.html'>Report</a><a href='12-results-downloads.html' class='on'>Downloads</a></nav>
+
+  <div class="toolbar">
+    <label class="lbl" for="runpath">Run folder</label>
+    <input class="in mono grow" id="runpath" type="text" value="C:\runs\HR_compare_Payroll__20261004-154902" style="max-width:560px">
+    <button class="btn" type="button"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 7h6l2 2h10v10H3z'/></svg>Open folder</button>
+    <span class="grow"></span>
+    <button class="btn" type="button">Download selected · 4</button>
+    <button class="btn primary" type="button"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM10 6h2M10 9h2M10 12h2M10 15h2'/></svg>Everything as one zip</button>
+  </div>
+
+  <section class="panel" aria-label="Files in this run">
+    <div class="panel-head"><h2>Files in this run</h2><span class="sub">9 written in 0.4s · tick what you want, or take the zip</span></div>
+    <ul class="files">
+      <li><input type="checkbox" checked aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> HR_compare_Payroll__report.html</span><span class="d">Standalone report — the Report tab, as one file</span><span class="r">opens anywhere</span></li>
+      <li><input type="checkbox" checked aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> HR_compare_Payroll__summary.json</span><span class="d">Every figure above — counts, per-column match, key, timings</span><span class="r">machine-readable</span></li>
+      <li><input type="checkbox" aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> HR_compare_Payroll__summary.csv</span><span class="d">The same summary as a flat table</span><span class="r">1 row per column</span></li>
+      <li><input type="checkbox" checked aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> HR_compare_Payroll__differences.csv</span><span class="d">Every differing cell — key, column, HR value, Payroll value</span><span class="r">687 rows</span></li>
+      <li><input type="checkbox" aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> HR_compare_Payroll__differences.parquet</span><span class="d">Same, for DuckDB, pandas or a warehouse</span><span class="r">687 rows</span></li>
+      <li><input type="checkbox" aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> HR_compare_Payroll__one_sided_HR.csv</span><span class="d">Rows with no partner in Payroll, as read</span><span class="r">40 rows</span></li>
+      <li><input type="checkbox" aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> HR_compare_Payroll__one_sided_Payroll.csv</span><span class="d">Rows with no partner in HR, as read</span><span class="r">25 rows</span></li>
+      <li><input type="checkbox" checked aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> HR_compare_Payroll__config.json</span><span class="d">Sources, pairs, steps, key, filters — reruns this exact comparison</span><span class="r">re-runnable</span></li>
+      <li><input type="checkbox" aria-label="select"><span class="f"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> columns.csv</span><span class="d">Column metadata for both sides — names, detected types, roles</span><span class="r">14 rows</span></li>
+      <li><input type="checkbox" disabled aria-label="select"><span class="f" style="color:var(--ink3)"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 2h8l4 4v16H6zM14 2v4h4'/></svg> profile.csv</span><span class="d" style="color:var(--ink3)">Per-column statistics — only when <em>Profile by bucket</em> or Profile ran</span><span class="r">not in this run</span></li>
+    </ul>
+  </section>
+
+  <div class="two">
+    <div class="callout"><div style="display:flex;flex-direction:column;gap:8px;min-width:0"><strong>Run it again without the UI</strong><span>The config file reproduces this comparison headless — in CI, on a schedule, or for a batch of pairs with <code>--pairs pairs.csv</code>.</span><code style="display:block;padding:10px 12px;border-radius:var(--r);background:var(--ink);color:#F4EAD6;font-size:12px;white-space:pre-wrap">python -m tablecmp.run HR_compare_Payroll__config.json \
+  --left hr_employees.csv --right payroll_employees.csv --out results</code></div></div>
+    <div class="callout"><div style="display:flex;flex-direction:column;gap:8px"><strong>Keep the setup, not the data</strong><span>Save mapping under Columns stores just the pairs and steps — load it next month against the new files and press Compare.</span><span class="actions"><a class="btn sm" href="04-loaded.html">Save mapping</a><a class="btn sm" href="17-run-from-config.html">Run from config</a></span></div></div>
+  </div>
+
+</main>
+
+</body>
+</html>

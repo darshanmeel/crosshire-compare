@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connections (drawer open) · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log<span class='count'>3</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='01-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Sources</span><span class='s'>HR 3,000 · Payroll 2,985</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='04-loaded.html'><span class='n'>2</span><span><span class='t'>Columns</span><span class='s'>6 pairs · key emp_id</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='06-rows.html'><span class='n'>3</span><span><span class='t'>Rows</span><span class='s'>all rows · no filter</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>press Compare</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn' type='button'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM5 17l.8 2 2 .8-2 .8L5 22l-.8-2-2-.8 2-.8zM19 15l.6 1.6 1.6.6-1.6.6L19 19.4l-.6-1.6-1.6-.6 1.6-.6z'/></svg>Auto · figure it all out</button><a class='btn primary' href='07-running.html'>Compare<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></a></div></nav>
+<div class="drawer-wrap">
+<main class="page" style="margin:0;max-width:none">
+
+  <section class="sec" aria-labelledby="h-sources">
+    <div class="sec-head"><span class="eyebrow accent">01</span><h2 id="h-sources">Sources</h2><span class="sub">CSV, JSON, Parquet or a database table on either side</span></div>
+    <div class="two">
+      <section class="card" aria-label="Side A">
+        <div class="card-head"><span class="side-badge a" aria-hidden="true">A</span><label class="lbl" for="nameA">Name</label><input class="in name" id="nameA" type="text" value="HR"><span class="grow"></span><span class="pill ok"><i></i>Loaded · 0.3s</span></div>
+        <div class="seg" role="group" aria-label="Source for A"><button type="button">Upload</button><button type="button" class="on">Path on disk</button><button type="button">Database</button></div>
+        <div class="row"><label class="lbl w" for="pathA">Path</label><input class="in mono grow" id="pathA" type="text" value="D:\darshanmeel\crosshire-compare\examples\hr_employees.csv"><button class="btn" type="button">Browse…</button></div>
+        <div class="card-foot"><span><strong>hr_employees.csv</strong> · 3,000 rows × 7 columns</span><a href="#previewA" style="margin-left:auto">Preview 10 rows</a></div>
+      </section>
+      <section class="card" aria-label="Side B">
+        <div class="card-head"><span class="side-badge b" aria-hidden="true">B</span><label class="lbl" for="nameB">Name</label><input class="in name" id="nameB" type="text" value="Payroll"><span class="grow"></span><span class="pill ok"><i></i>Loaded · 0.3s</span></div>
+        <div class="seg" role="group" aria-label="Source for B"><button type="button">Upload</button><button type="button" class="on">Path on disk</button><button type="button">Database</button></div>
+        <div class="row"><label class="lbl w" for="pathB">Path</label><input class="in mono grow" id="pathB" type="text" value="D:\darshanmeel\crosshire-compare\examples\payroll_employees.csv"><button class="btn" type="button">Browse…</button></div>
+        <div class="card-foot"><span><strong>payroll_employees.csv</strong> · 2,985 rows × 7 columns</span><a href="#previewB" style="margin-left:auto">Preview 10 rows</a></div>
+      </section>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-columns">
+    <div class="sec-head"><span class="eyebrow accent">02</span><h2 id="h-columns">Columns</h2><span class="sub">6 pairs · 1 only in HR · 1 only in Payroll</span></div>
+    <div class="panel"><div class="tblwrap"><table class="tbl compact" style="min-width:600px">
+      <thead><tr><th>Role</th><th><span class="sw a"></span>HR column</th><th></th><th><span class="sw b"></span>Payroll column</th><th>Read as</th><th>Matched by</th></tr></thead>
+      <tbody>
+        <tr><td><span class="chip key"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.8 12.2L21 2m-3 3l3 3m-6 0l2 2'/></svg>key</span></td><td class="m ca">emp_id</td><td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td><td class="m cb">EmployeeId</td><td><span class="chip">text</span></td><td class="dim">name</td></tr>
+        <tr><td><span class="chip">compare</span></td><td class="m ca">last_name</td><td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td><td class="m cb">FullName</td><td><span class="chip">text</span></td><td style="color:var(--warn);font-weight:500">guess · check</td></tr>
+        <tr><td><span class="chip">compare</span></td><td class="m ca">department</td><td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td><td class="m cb">Dept</td><td><span class="chip">text</span></td><td class="dim">name</td></tr>
+        <tr><td><span class="chip">compare</span></td><td class="m ca">salary</td><td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td><td class="m cb">Salary</td><td><span class="chip">number</span></td><td class="dim">name</td></tr>
+        <tr><td><span class="chip">compare</span></td><td class="m ca">hire_date</td><td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td><td class="m cb">HireDate</td><td><span class="chip">date</span></td><td class="dim">similarity</td></tr>
+        <tr><td><span class="chip">compare</span></td><td class="m ca">active</td><td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td><td class="m cb">IsActive</td><td><span class="chip">boolean</span></td><td class="dim">similarity</td></tr>
+      </tbody></table></div></div>
+  </section>
+
+</main>
+
+<aside class="drawer" aria-label="Connections">
+  <div class="row" style="justify-content:space-between">
+    <h2><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections <span class="count">2</span></h2>
+    <button class="btn sm" type="button" aria-label="Close"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 6l12 12M18 6L6 18'/></svg></button>
+  </div>
+  <p style="margin:0;font-size:13px;color:var(--ink2)">Saved in <code>~/.crosshire-compare/connections.json</code>. Pick one under <strong>Database</strong> on either side.</p>
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div class="conn">
+      <div class="top"><span class="name">sample-duckdb</span><span class="chip">DuckDB</span><span class="pill ok"><i></i>Connected</span><button class="btn sm" type="button">Edit</button></div>
+      <div class="uri">duckdb:///D:\darshanmeel\crosshire-compare\examples\sample.duckdb</div>
+      <div style="font-size:12.5px;color:var(--ink2)">schemas <code>hr</code> <code>payroll</code> · 2 tables · password: none</div>
+    </div>
+    <div class="conn">
+      <div class="top"><span class="name">warehouse</span><span class="chip">Snowflake</span><span class="pill idle"><i></i>Not tested</span><button class="btn sm" type="button">Edit</button></div>
+      <div class="uri">snowflake://[account]/[database]/[schema]</div>
+      <div style="font-size:12.5px;color:var(--ink2)">password from <code>COMPARE_CONN_WAREHOUSE</code> · never written to the file</div>
+    </div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px;padding-top:16px;border-top:1px solid var(--line2)">
+    <h3 style="margin:0;font-size:15px;font-weight:600">Add a connection</h3>
+    <div class="field"><label class="lbl" for="cname">Name</label><input class="in" id="cname" type="text" placeholder="e.g. finance-postgres"></div>
+    <div class="field"><label class="lbl" for="cdriver">Driver</label>
+      <select class="in" id="cdriver"><option>Snowflake</option><option>Databricks</option><option>SQL Server</option><option>Oracle</option><option selected>Postgres</option><option>DuckDB</option></select></div>
+    <div class="field"><label class="lbl" for="curi">Connection URI</label><input class="in mono" id="curi" type="text" placeholder="postgresql://user@host:5432/db"></div>
+    <div class="field"><span class="lbl">Password</span>
+      <div class="seg" role="group" aria-label="Where the password lives"><button type="button" class="on">In the file</button><button type="button">Environment variable</button></div>
+      <span style="font-size:12px;color:var(--ink3)">Environment: set <code>COMPARE_CONN_&lt;NAME&gt;=uri</code> and nothing secret touches disk.</span>
+    </div>
+    <div class="field"><label class="lbl" for="cpass">Password</label><input class="in" id="cpass" type="password" value=""></div>
+    <div class="actions"><button class="btn" type="button">Test connection</button><button class="btn dark" type="button">Save</button></div>
+  </div>
+
+  <p style="margin:auto 0 0;font-size:12px;color:var(--ink3)">Override the file location with <code>COMPARE_CONNECTIONS</code>. Restrict file paths to a folder with <code>COMPARE_DATA_DIR</code>.</p>
+</aside>
+</div>
+
+</body>
+</html>

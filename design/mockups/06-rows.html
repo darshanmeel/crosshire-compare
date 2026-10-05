@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare · Rows (match mode, filters, buckets) · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log<span class='count'>3</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='01-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Sources</span><span class='s'>HR 3,000 · Payroll 2,985</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='04-loaded.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Columns</span><span class='s'>6 pairs · key emp_id</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='06-rows.html'><span class='n'>3</span><span><span class='t'>Rows</span><span class='s'>all rows · no filter</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>press Compare</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn' type='button'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM5 17l.8 2 2 .8-2 .8L5 22l-.8-2-2-.8 2-.8zM19 15l.6 1.6 1.6.6-1.6.6L19 19.4l-.6-1.6-1.6-.6 1.6-.6z'/></svg>Auto · figure it all out</button><a class='btn primary' href='07-running.html'>Compare<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></a></div></nav>
+<main class="page">
+
+  <section class="sec" aria-labelledby="h-match">
+    <div class="sec-head"><span class="eyebrow accent">03</span><h2 id="h-match">Rows · how they pair up</h2><span class="sub">a key when there is one; position or a hash of the compared columns when there is not</span></div>
+    <div class="card">
+      <div class="row spread" style="align-items:flex-start">
+        <div class="field" style="gap:8px">
+          <span class="lbl">Match rows</span>
+          <div class="seg" role="group" aria-label="Match mode"><button type="button" class="on"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.8 12.2L21 2m-3 3l3 3m-6 0l2 2'/></svg>&nbsp;On a key</button><button type="button">By position</button><button type="button">By hash of compared columns</button></div>
+        </div>
+        <div class="field" style="gap:8px;flex:1 1 320px">
+          <span class="lbl">Key columns</span>
+          <div class="row"><span class="chip key"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.8 12.2L21 2m-3 3l3 3m-6 0l2 2'/></svg>emp_id ⇄ EmployeeId</span><button class="link-btn" type="button"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 5v14M5 12h14'/></svg>Add a column</button><button class="btn sm" type="button"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM5 17l.8 2 2 .8-2 .8L5 22l-.8-2-2-.8 2-.8zM19 15l.6 1.6 1.6.6-1.6.6L19 19.4l-.6-1.6-1.6-.6 1.6-.6z'/></svg>Suggest keys</button></div>
+          <span style="font-size:12.5px;color:var(--ink2)"><strong style="color:var(--pos)">Unique on both sides</strong> · 2,960 of 3,000 HR keys appear in Payroll (98.7% overlap) · up to four columns can form a key together</span>
+        </div>
+      </div>
+      <div class="callout" style="padding:10px 14px"><span style="font-size:12.5px"><strong>By position</strong> pairs line 1 with line 1 — for exports that keep their order. <strong>By hash</strong> finds rows that are identical across every compared column — when nothing identifies a row.</span></div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-read">
+    <div class="sec-head"><h2 id="h-read" style="font-size:15px">Rows to read</h2><span class="sub">cut either side down before it is compared — DuckDB SQL, applied at load</span></div>
+    <div class="two">
+
+      <section class="card" aria-label="Rows to read from HR">
+        <div class="card-head"><span class="side-badge a" aria-hidden="true">A</span><strong style="font-size:15px">HR</strong><span class="grow"></span><span class="pill ok"><i></i>3,000 of 3,000 rows</span></div>
+        <div class="field"><label class="lbl" for="whereA">Filter · WHERE</label><textarea class="in mono" id="whereA" placeholder="e.g. active = true AND hire_date >= '2024-01-01'"></textarea></div>
+        <div class="row spread">
+          <span class="field" style="flex:1 1 200px"><label class="lbl" for="orderA">Order by</label><input class="in mono" id="orderA" type="text" placeholder="emp_id"></span>
+          <span class="field"><label class="lbl" for="topA">Top N</label><input class="in tiny" id="topA" type="text" value="all" style="width:72px"></span>
+        </div>
+        <div class="row"><button class="btn" type="button">Apply to HR</button><button class="link-btn" type="button">Copy to Payroll</button></div>
+      </section>
+
+      <section class="card" aria-label="Rows to read from Payroll">
+        <div class="card-head"><span class="side-badge b" aria-hidden="true">B</span><strong style="font-size:15px">Payroll</strong><span class="grow"></span><span class="pill ok"><i></i>2,985 of 2,985 rows</span></div>
+        <div class="field"><label class="lbl" for="whereB">Filter · WHERE</label><textarea class="in mono" id="whereB" placeholder="e.g. IsActive = 'Y'"></textarea></div>
+        <div class="row spread">
+          <span class="field" style="flex:1 1 200px"><label class="lbl" for="orderB">Order by</label><input class="in mono" id="orderB" type="text" placeholder="EmployeeId"></span>
+          <span class="field"><label class="lbl" for="topB">Top N</label><input class="in tiny" id="topB" type="text" value="all" style="width:72px"></span>
+        </div>
+        <div class="row"><button class="btn" type="button">Apply to Payroll</button><button class="link-btn" type="button">Copy to HR</button></div>
+      </section>
+
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-bucket">
+    <div class="sec-head"><h2 id="h-bucket" style="font-size:15px">Profile by bucket</h2><span class="sub">optional — the Summary then shows match figures per group of rows</span></div>
+    <div class="card" style="flex-direction:row;flex-wrap:wrap;align-items:center;gap:16px;padding:14px 20px">
+      <label class="check"><input type="checkbox" checked>Group the result by</label>
+      <select class="in" style="width:220px;font-family:var(--mono);font-size:12.5px"><option>emp_id</option><option selected>department ⇄ Dept</option><option>hire_date ⇄ HireDate (by year)</option><option>active ⇄ IsActive</option></select>
+      <span style="font-size:12.5px;color:var(--ink2)">8 buckets on the HR side · the bucket column is compared as usual, too</span>
+      <span class="grow"></span>
+      <span style="font-size:12.5px;color:var(--ink3)">Which rows match worst? Which department renamed? That lands in <strong>Summary → by bucket</strong>.</span>
+    </div>
+  </section>
+
+  <div class="actions" style="padding-top:4px">
+    <a class="btn primary lg" href="07-running.html">Compare HR against Payroll<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></a>
+    <span style="font-size:13px;color:var(--ink3)">5 columns on 2,960 paired rows · no filters applied</span>
+  </div>
+
+</main>
+
+</body>
+</html>

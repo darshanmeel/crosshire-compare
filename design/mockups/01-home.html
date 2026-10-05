@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare · Home (nothing loaded) · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log</a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step now' href='01-home.html'><span class='n'>1</span><span><span class='t'>Sources</span><span class='s'>nothing loaded yet</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='04-loaded.html'><span class='n'>2</span><span><span class='t'>Columns</span><span class='s'>—</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='06-rows.html'><span class='n'>3</span><span><span class='t'>Rows</span><span class='s'>—</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>—</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn' type='button' disabled><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM5 17l.8 2 2 .8-2 .8L5 22l-.8-2-2-.8 2-.8zM19 15l.6 1.6 1.6.6-1.6.6L19 19.4l-.6-1.6-1.6-.6 1.6-.6z'/></svg>Auto · figure it all out</button><button class='btn primary' type='button' disabled>Compare<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></button></div></nav>
+<main class="page">
+
+  <section class="hero" aria-label="Welcome">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <span class="eyebrow accent">CrossHire Compare · CSV, JSON, Parquet or a database table, either side</span>
+      <h1>Two tables, <em>every difference.</em></h1>
+      <p>Read by DuckDB, paired in one table, compared row by row on a key you choose — or let <strong>Auto</strong> work the whole thing out.</p>
+      <div class="actions">
+        <a class="btn primary" href="04-loaded.html"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M7 4l12 8-12 8z'/></svg>Try the HR vs Payroll example</a>
+        <a class="btn" href="17-run-from-config.html">Run from a saved config</a>
+      </div>
+    </div>
+    <ol class="how">
+      <li><span class="n">1</span><span><strong>Load A and B.</strong> Upload a file, point at a path on this machine, or pick a database table. Big file? Cut it down under <em>Rows to read</em> first.</span></li>
+      <li><span class="n">2</span><span><strong>Pair the columns.</strong> Auto matches by name, then by the values themselves, detects numbers, dates and booleans, and suggests a key.</span></li>
+      <li><span class="n">3</span><span><strong>Compare.</strong> Every differing cell, the one-sided rows, and a standalone HTML report you can attach to a ticket.</span></li>
+    </ol>
+  </section>
+
+  <section class="sec" aria-labelledby="h-sources">
+    <div class="sec-head"><span class="eyebrow accent">01</span><h2 id="h-sources">Sources</h2><span class="sub">load both sides to continue</span></div>
+    <div class="two">
+
+      <section class="card" aria-label="Side A">
+        <div class="card-head">
+          <span class="side-badge a" aria-hidden="true">A</span>
+          <label class="lbl" for="nameA">Name</label><input class="in name" id="nameA" type="text" value="Left">
+          <span class="grow"></span>
+          <span class="pill idle"><i></i>Not loaded</span>
+        </div>
+        <div class="seg" role="group" aria-label="Source for A"><button type="button" class="on">Upload</button><button type="button">Path on disk</button><button type="button">Database</button></div>
+        <label class="drop" for="fileA">
+          <svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 17V5m-5 5l5-5 5 5M4 21h16'/></svg>
+          <span><strong>Drop a CSV, JSON or Parquet file</strong> here</span>
+          <span class="or">or <u>choose a file</u> · any size — it is copied to the temp folder first</span>
+          <input class="sr" id="fileA" type="file">
+        </label>
+        <div class="row spread">
+          <span class="row"><label class="lbl" for="delimA" style="letter-spacing:.1em">Delimiter</label><input class="in tiny" id="delimA" type="text" value=","></span>
+          <label class="check"><input type="checkbox" checked>First row is a header</label>
+          <span class="grow"></span>
+          <button class="link-btn" type="button">Rows to read: all<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+          <button class="link-btn" type="button">Advanced<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+        </div>
+        <div class="row"><button class="btn dark" type="button" disabled>Load A</button><span style="font-size:12.5px;color:var(--ink3)">A file on this machine reads in place from <strong>Path on disk → Browse…</strong></span></div>
+      </section>
+
+      <section class="card" aria-label="Side B">
+        <div class="card-head">
+          <span class="side-badge b" aria-hidden="true">B</span>
+          <label class="lbl" for="nameB">Name</label><input class="in name" id="nameB" type="text" value="Right">
+          <span class="grow"></span>
+          <span class="pill idle"><i></i>Not loaded</span>
+        </div>
+        <div class="seg" role="group" aria-label="Source for B"><button type="button" class="on">Upload</button><button type="button">Path on disk</button><button type="button">Database</button></div>
+        <label class="drop" for="fileB">
+          <svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 17V5m-5 5l5-5 5 5M4 21h16'/></svg>
+          <span><strong>Drop a CSV, JSON or Parquet file</strong> here</span>
+          <span class="or">or <u>choose a file</u> · any size — it is copied to the temp folder first</span>
+          <input class="sr" id="fileB" type="file">
+        </label>
+        <div class="row spread">
+          <span class="row"><label class="lbl" for="delimB" style="letter-spacing:.1em">Delimiter</label><input class="in tiny" id="delimB" type="text" value=","></span>
+          <label class="check"><input type="checkbox" checked>First row is a header</label>
+          <span class="grow"></span>
+          <button class="link-btn" type="button">Rows to read: all<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+          <button class="link-btn" type="button">Advanced<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+        </div>
+        <div class="row"><button class="btn dark" type="button" disabled>Load B</button><span style="font-size:12.5px;color:var(--ink3)">Snowflake, Databricks, SQL Server, Oracle, Postgres or DuckDB under <strong>Database</strong></span></div>
+      </section>
+
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-columns">
+    <div class="sec-head"><span class="eyebrow accent">02</span><h2 id="h-columns">Columns</h2><span class="sub">appears once both sides are loaded</span></div>
+    <div class="callout"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 5h18v14H3zM3 10h18M9 5v14'/></svg><span>Every column from either file lands in one table: pick each column's partner, what is the <strong>key</strong>, what is <strong>compared</strong>, and what type both sides become. <strong>Auto</strong> fills it in by name, then by the values.</span></div>
+  </section>
+
+</main>
+
+</body>
+</html>

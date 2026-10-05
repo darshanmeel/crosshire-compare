@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compare · Setup (both loaded, columns paired) · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log<span class='count'>3</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='01-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Sources</span><span class='s'>HR 3,000 · Payroll 2,985</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='04-loaded.html'><span class='n'>2</span><span><span class='t'>Columns</span><span class='s'>6 pairs · key emp_id</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='06-rows.html'><span class='n'>3</span><span><span class='t'>Rows</span><span class='s'>all rows · no filter</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>press Compare</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn' type='button'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM5 17l.8 2 2 .8-2 .8L5 22l-.8-2-2-.8 2-.8zM19 15l.6 1.6 1.6.6-1.6.6L19 19.4l-.6-1.6-1.6-.6 1.6-.6z'/></svg>Auto · figure it all out</button><a class='btn primary' href='07-running.html'>Compare<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></a></div></nav>
+<main class="page">
+
+  <section class="sec" aria-labelledby="h-sources">
+    <div class="sec-head"><span class="eyebrow accent">01</span><h2 id="h-sources">Sources</h2><span class="sub">CSV, JSON, Parquet or a database table on either side</span></div>
+    <div class="two">
+
+      <section class="card" aria-label="Side A">
+        <div class="card-head">
+          <span class="side-badge a" aria-hidden="true">A</span>
+          <label class="lbl" for="nameA">Name</label><input class="in name" id="nameA" type="text" value="HR">
+          <span class="grow"></span>
+          <span class="pill ok"><i></i>Loaded · 0.3s</span>
+        </div>
+        <div class="seg" role="group" aria-label="Source for A"><button type="button">Upload</button><button type="button" class="on">Path on disk</button><button type="button">Database</button></div>
+        <div class="row">
+          <label class="lbl w" for="pathA">Path</label>
+          <input class="in mono grow" id="pathA" type="text" value="D:\darshanmeel\crosshire-compare\examples\hr_employees.csv">
+          <button class="btn" type="button">Browse…</button>
+        </div>
+        <div class="row spread">
+          <span class="row"><label class="lbl" for="delimA" style="letter-spacing:.1em">Delimiter</label><input class="in tiny" id="delimA" type="text" value=","></span>
+          <label class="check"><input type="checkbox" checked>First row is a header</label>
+          <span class="grow"></span>
+          <button class="link-btn" type="button">Rows to read: all<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+          <button class="link-btn" type="button">Advanced<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+        </div>
+        <div class="card-foot">
+          <span><strong>hr_employees.csv</strong> · 3,000 rows × 7 columns</span>
+          <span class="cols">emp_id, first_name, last_name, department, salary, hire_date, active</span>
+          <a href="#previewA" style="margin-left:auto;white-space:nowrap">Preview 10 rows</a>
+        </div>
+      </section>
+
+      <section class="card" aria-label="Side B">
+        <div class="card-head">
+          <span class="side-badge b" aria-hidden="true">B</span>
+          <label class="lbl" for="nameB">Name</label><input class="in name" id="nameB" type="text" value="Payroll">
+          <span class="grow"></span>
+          <span class="pill ok"><i></i>Loaded · 0.3s</span>
+        </div>
+        <div class="seg" role="group" aria-label="Source for B"><button type="button">Upload</button><button type="button" class="on">Path on disk</button><button type="button">Database</button></div>
+        <div class="row">
+          <label class="lbl w" for="pathB">Path</label>
+          <input class="in mono grow" id="pathB" type="text" value="D:\darshanmeel\crosshire-compare\examples\payroll_employees.csv">
+          <button class="btn" type="button">Browse…</button>
+        </div>
+        <div class="row spread">
+          <span class="row"><label class="lbl" for="delimB" style="letter-spacing:.1em">Delimiter</label><input class="in tiny" id="delimB" type="text" value=","></span>
+          <label class="check"><input type="checkbox" checked>First row is a header</label>
+          <span class="grow"></span>
+          <button class="link-btn" type="button">Rows to read: all<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+          <button class="link-btn" type="button">Advanced<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+        </div>
+        <div class="card-foot">
+          <span><strong>payroll_employees.csv</strong> · 2,985 rows × 7 columns</span>
+          <span class="cols">EmployeeId, FullName, Dept, Salary, HireDate, IsActive, CostCenter</span>
+          <a href="#previewB" style="margin-left:auto;white-space:nowrap">Preview 10 rows</a>
+        </div>
+      </section>
+
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-columns">
+    <div class="sec-head">
+      <span class="eyebrow accent">02</span><h2 id="h-columns">Columns</h2><span class="sub">6 pairs · 1 only in HR · 1 only in Payroll</span>
+      <span class="grow"></span>
+      <div class="actions">
+        <button class="btn dark" type="button">Match by data</button>
+        <button class="btn" type="button">Reset to name matches</button>
+        <button class="btn" type="button">Save mapping</button>
+        <button class="btn" type="button">Load mapping…</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="tblwrap">
+        <table class="tbl" style="min-width:1180px">
+          <thead><tr>
+            <th style="width:168px">Role</th>
+            <th style="width:200px"><span class="sw a"></span>HR column</th>
+            <th style="width:36px"></th>
+            <th style="width:200px"><span class="sw b"></span>Payroll column</th>
+            <th style="width:128px">Read as</th>
+            <th>Transform</th>
+            <th style="width:150px">Matched by</th>
+            <th style="width:96px">Case</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td><div class="seg mini" role="group" aria-label="Role"><button type="button" class="on">Key</button><button type="button">Compare</button><button type="button">Skip</button></div></td>
+              <td><button class="sel a" type="button"><span>emp_id</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td>
+              <td><button class="sel b" type="button"><span>EmployeeId</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td><button class="sel type" type="button">text <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="dim"><button class="link-btn" type="button" style="height:28px;padding:0 8px">+ Add</button></td>
+              <td class="dim">name</td>
+              <td class="dim">exact</td>
+            </tr>
+            <tr>
+              <td><div class="seg mini" role="group" aria-label="Role"><button type="button">Key</button><button type="button" class="on">Compare</button><button type="button">Skip</button></div></td>
+              <td><button class="sel a" type="button"><span>last_name</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td>
+              <td><button class="sel b" type="button"><span>FullName</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td><button class="sel type" type="button">text <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="m"><a href="05-transform.html" style="text-decoration:none;color:var(--ink)">B · part 2, split by " "</a></td>
+              <td style="color:var(--warn);font-weight:500">guess · check</td>
+              <td class="dim">ignore</td>
+            </tr>
+            <tr>
+              <td><div class="seg mini" role="group" aria-label="Role"><button type="button">Key</button><button type="button" class="on">Compare</button><button type="button">Skip</button></div></td>
+              <td><button class="sel a" type="button"><span>department</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td>
+              <td><button class="sel b" type="button"><span>Dept</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td><button class="sel type" type="button">text <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="dim"><button class="link-btn" type="button" style="height:28px;padding:0 8px">+ Add</button></td>
+              <td class="dim">name</td>
+              <td class="dim">ignore</td>
+            </tr>
+            <tr>
+              <td><div class="seg mini" role="group" aria-label="Role"><button type="button">Key</button><button type="button" class="on">Compare</button><button type="button">Skip</button></div></td>
+              <td><button class="sel a" type="button"><span>salary</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td>
+              <td><button class="sel b" type="button"><span>Salary</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td><button class="sel type" type="button">number <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="m"><a href="05-transform.html" style="text-decoration:none;color:var(--ink)">B · remove thousands separators</a></td>
+              <td class="dim">name</td>
+              <td class="dim">—</td>
+            </tr>
+            <tr>
+              <td><div class="seg mini" role="group" aria-label="Role"><button type="button">Key</button><button type="button" class="on">Compare</button><button type="button">Skip</button></div></td>
+              <td><button class="sel a" type="button"><span>hire_date</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td>
+              <td><button class="sel b" type="button"><span>HireDate</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td><button class="sel type" type="button">date <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="m"><a href="05-transform.html" style="text-decoration:none;color:var(--ink)">B · to date %d/%m/%Y</a></td>
+              <td class="dim">similarity</td>
+              <td class="dim">—</td>
+            </tr>
+            <tr>
+              <td><div class="seg mini" role="group" aria-label="Role"><button type="button">Key</button><button type="button" class="on">Compare</button><button type="button">Skip</button></div></td>
+              <td><button class="sel a" type="button"><span>active</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td>
+              <td><button class="sel b" type="button"><span>IsActive</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td><button class="sel type" type="button">boolean <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="dim"><button class="link-btn" type="button" style="height:28px;padding:0 8px">+ Add</button></td>
+              <td class="dim">similarity</td>
+              <td class="dim">—</td>
+            </tr>
+            <tr class="muted">
+              <td><div class="seg mini" role="group" aria-label="Role"><button type="button">Key</button><button type="button">Compare</button><button type="button" class="on">Skip</button></div></td>
+              <td><button class="sel a" type="button"><span>first_name</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td>
+              <td><button class="sel none" type="button"><span>no partner</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td><button class="sel type" type="button">text <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td></td>
+              <td style="color:var(--neg)">only in HR</td>
+              <td>—</td>
+            </tr>
+            <tr class="muted">
+              <td><div class="seg mini" role="group" aria-label="Role"><button type="button">Key</button><button type="button">Compare</button><button type="button" class="on">Skip</button></div></td>
+              <td><button class="sel none" type="button"><span>no partner</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td class="swap"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M4 8h13l-3-3M20 16H7l3 3'/></svg></td>
+              <td><button class="sel b" type="button"><span>CostCenter</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td><button class="sel type" type="button">text <svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button></td>
+              <td></td>
+              <td style="color:var(--neg)">only in Payroll</td>
+              <td>—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="panel-foot">
+        <span><strong>Key</strong> <code>emp_id</code></span>
+        <span><strong>Compare</strong> 5 columns</span>
+        <span><strong>Skip</strong> 2 one-sided</span>
+        <span class="grow"></span>
+        <span style="display:inline-flex;align-items:center;gap:6px;color:var(--warn)"><i style="width:7px;height:7px;border-radius:50%;background:var(--warn-dot);display:block"></i>1 pair is a guess from the values — check <code>last_name ⇄ FullName</code></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" aria-labelledby="h-rows">
+    <div class="sec-head"><span class="eyebrow accent">03</span><h2 id="h-rows">Rows</h2><span class="sub">optional — narrow what is compared</span></div>
+    <div class="card" style="flex-direction:row;flex-wrap:wrap;align-items:center;gap:24px;padding:14px 20px">
+      <span class="field"><span class="lbl">Match rows</span><span style="font-size:13.5px">on key <code>emp_id</code></span></span>
+      <span class="field"><span class="lbl">Filter</span><span style="font-size:13.5px">none — all 3,000 and 2,985 rows</span></span>
+      <span class="field"><span class="lbl">Profile by bucket</span><span style="font-size:13.5px">off</span></span>
+      <span class="grow"></span>
+      <a class="btn" href="06-rows.html">Edit rows</a>
+    </div>
+  </section>
+
+  <div class="actions" style="padding-top:4px">
+    <a class="btn primary lg" href="07-running.html">Compare HR against Payroll<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></a>
+    <span style="font-size:13px;color:var(--ink3)">5 columns on 2,960 paired rows · runs in DuckDB · usually under a second at this size</span>
+  </div>
+
+</main>
+
+</body>
+</html>

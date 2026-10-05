@@ -1,0 +1,333 @@
+"""One CSV file, and which of its rows to read. DuckDB streams it from disk."""
+from __future__ import annotations
+
+import os
+import re
+import tempfile
+from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
+
+import pandas as pd
+
+from .sql import ident, lit, scratch
+
+
+@dataclass
+class Side:
+    name: str = ""          # what you call it - shown everywhere
+    label: str = ""         # the file name
+    csv_path: str = ""      # the file read: CSV / Parquet / JSON, or the Parquet a database fetch produced
+    kind: str = "csv"       # csv | parquet | json
+    origin: str = ""        # where a database fetch came from, for display ("Snowflake · HR.EMPLOYEES")
+    cache_path: str = ""    # Parquet snapshot of the rows read, when one was taken
+    delimiter: str = ","
+    header: bool = True
+    where: str = ""                                   # on the file's own columns
+    order_by: list[str] = field(default_factory=list)
+    desc: bool = False
+    limit: int = 0                                    # 0 = every row
+    schema: dict[str, str] = field(default_factory=dict)      # column -> detected type
+    source_columns: list[str] = field(default_factory=list)  # names as the file has them
+    rows: int | None = None
+    conn: str = ""          # connection name for a database side - never a URI or password
+    database: str = ""      # its kind: snowflake | databricks | mssql | oracle | postgresql | duckdb
+    query: str = ""         # the SQL that was fetched
+    fetched_at: str = ""    # HH:MM:SS of the fetch
+    cap: int = 0            # "fetch at most" that was applied (0 = all)
+    capped: bool = False    # the fetch hit the cap
+    folder: str = ""        # the folder connection a Path on disk side was picked from
+    derived: dict[str, str] = field(default_factory=dict)   # added column -> DuckDB expression on the file's columns
+
+    @property
+    def loaded(self) -> bool:
+        return bool(self.schema)
+
+    @property
+    def is_database(self) -> bool:
+        return bool(self.conn)
+
+    @property
+    def stem(self) -> str:
+        """The connection for a database, else the file's stem, slugged. Output files are named
+        after the side names instead (outputs.pair_name)."""
+        return slug(self.conn if self.is_database else Path(self.label).stem if self.label else "")
+
+    @property
+    def columns(self) -> list[str]:
+        return list(self.schema)
+
+    @property
+    def source_of(self) -> dict[str, str]:
+        """column name as shown -> the name the file actually uses."""
+        return dict(zip(self.columns, self.source_columns or self.columns))
+
+    @property
+    def read_key(self) -> list:
+        """Everything that decides which rows come out of this file."""
+        return [self.csv_path, self.kind, self.cache_path, self.delimiter, self.header, self.where,
+                self.order_by, self.desc, self.limit, self.conn, self.query, self.cap, self.fetched_at,
+                sorted(self.derived.items())]
+
+    @property
+    def cut(self) -> str:
+        bits = []
+        if self.where.strip():
+            bits.append("WHERE " + " ".join(self.where.split()))
+        if self.order_by:
+            bits.append("ORDER BY " + ", ".join(self.order_by) + (" DESC" if self.desc else ""))
+        if self.limit:
+            bits.append(f"TOP {self.limit:,}")
+        return " · ".join(bits)
+
+
+FILE_KINDS = {".csv": "csv", ".txt": "csv", ".tsv": "csv", ".dat": "csv",
+              ".parquet": "parquet", ".pq": "parquet",
+              ".json": "json", ".jsonl": "json", ".ndjson": "json"}
+
+
+def kind_of(path: str) -> str:
+    return FILE_KINDS.get(Path(path).suffix.lower(), "csv")
+
+
+FOLDER_LIST_MAX = 2000
+
+
+def folder_files(root: str, limit: int = FOLDER_LIST_MAX) -> list[str]:
+    """The data files under a folder, as paths relative to it (with /), sorted - subfolders
+    too, at most ``limit``: a folder of a million files lists its first ones, and a name is typed."""
+    base = Path(root)
+    if not base.is_dir():
+        return []
+    out: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(base):
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
+        for f in sorted(filenames):
+            if Path(f).suffix.lower() in FILE_KINDS:
+                out.append(Path(dirpath, f).relative_to(base).as_posix())
+                if len(out) >= limit:
+                    return out
+    return out
+
+
+def in_folder(root: str, name: str) -> str:
+    """A file named in a folder: the name as given when it is a full path, else under the folder."""
+    p = Path(name.strip())
+    return str(p if p.is_absolute() else Path(root) / p)
+
+
+def read_csv_expr(path: str, delimiter: str, header: bool, all_varchar: bool = True) -> str:
+    return (f"read_csv({lit(path)}, delim={lit(delimiter)}, "
+            f"header={'true' if header else 'false'}, null_padding=true"
+            + (", all_varchar=true" if all_varchar else "") + ")")
+
+
+def raw_expr(path: str, kind: str, delimiter: str = ",", header: bool = True,
+             all_varchar: bool = True) -> str:
+    """A DuckDB table expression for the file as it is, typed columns and all."""
+    if kind == "parquet":
+        return f"read_parquet({lit(path)})"
+    if kind == "json":
+        return f"read_json_auto({lit(path)}, maximum_object_size=67108864)"
+    return read_csv_expr(path, delimiter, header, all_varchar)
+
+
+def text_expr(col: str, typ: str) -> str:
+    """One column as text. A BLOB reads as hex. A column DuckDB types JSON (a JSON file
+    mixing numbers and strings in one field) reads as the bare value - "hello" becomes
+    hello like the CSV field, not the quoted JSON spelling a plain cast keeps."""
+    t = str(typ).upper()
+    if "BLOB" in t:
+        return f"hex({ident(col)}) AS {ident(col)}"
+    if t == "JSON":
+        return f"json_extract_string({ident(col)}, '$') AS {ident(col)}"
+    return f"{ident(col)}::VARCHAR AS {ident(col)}"
+
+
+def read_expr(path: str, kind: str, delimiter: str = ",", header: bool = True) -> str:
+    """The same file with every column as text - the one form the rest of the app reads,
+    so a Parquet DATE, a JSON number and a CSV field all go through the same typing."""
+    if kind == "csv":
+        return read_csv_expr(path, delimiter, header, all_varchar=True)
+    cols = source_schema(path, kind, delimiter, header, file_stamp(path))
+    sel = ", ".join(text_expr(c, t) for c, t in cols.items()) or "*"
+    return f"(SELECT {sel} FROM {raw_expr(path, kind, delimiter, header)})"
+
+
+def file_stamp(path: str) -> str:
+    try:
+        s = Path(path).stat()
+        return f"{s.st_size}:{s.st_mtime_ns}"
+    except OSError:
+        return ""
+
+
+@lru_cache(maxsize=64)
+def source_schema(path: str, kind: str, delimiter: str, header: bool,
+                  stamp: str = "") -> dict[str, str]:
+    """Column names and the types the file itself carries (or DuckDB sniffs for a CSV) -
+    cheap on a big file, DuckDB reads only what it needs to know the shape."""
+    con = scratch()
+    q = f"DESCRIBE SELECT * FROM {raw_expr(path, kind, delimiter, header, all_varchar=False)}"
+    return {r[0]: r[1] for r in con.execute(q).fetchall()}
+
+
+def select_sql(side: Side) -> str:
+    """The rows to read from the file, with the sidebar's filter, order and top-N."""
+    sql = f"SELECT * FROM {read_expr(side.csv_path, side.kind, side.delimiter, side.header)}"
+    if side.where.strip():
+        sql += f" WHERE {side.where.strip()}"
+    if side.order_by:
+        sql += " ORDER BY " + ", ".join(
+            f"{ident(c)} {'DESC' if side.desc else 'ASC'}" for c in side.order_by)
+    if side.limit:
+        sql += f" LIMIT {int(side.limit)}"
+    return sql
+
+
+def base_expr(side: Side) -> str:
+    """The rows as the file gives them: the Parquet snapshot, or the CSV with the cut."""
+    if side.cache_path:
+        return f"read_parquet({lit(side.cache_path)})"
+    return f"({select_sql(side)})"
+
+
+def source_expr(side: Side) -> str:
+    """What every query reads from: the file's rows, and the columns added to them."""
+    if not side.derived:
+        return base_expr(side)
+    extra = ", ".join(f"({e}) AS {ident(n)}" for n, e in side.derived.items())
+    return f"(SELECT *, {extra} FROM {base_expr(side)})"
+
+
+def derived_type(side: Side, expr: str) -> str:
+    """The type `expr` gives on this side's rows - duckdb.Error when it does not read there."""
+    q = f"DESCRIBE SELECT ({expr}) AS v FROM {base_expr(side)}"
+    con = scratch()
+    got = con.execute(q).fetchall()[0][1]
+    con.execute(f"SELECT count(({expr})) FROM (SELECT * FROM {base_expr(side)} LIMIT 1000)").fetchone()
+    return got
+
+
+def add_derived(side: Side, name: str, expr: str) -> None:
+    """`name` = `expr` joins the side's columns, last. duckdb.Error when it does not read."""
+    typ = derived_type(side, expr)
+    side.derived[name] = expr
+    side.schema[name] = typ
+    side.source_columns = [*(side.source_columns or list(side.schema)[:-1]), name]
+
+
+def drop_derived(side: Side, name: str) -> None:
+    side.derived.pop(name, None)
+    side.source_columns = [c for c in (side.source_columns or side.columns) if c != name]
+    side.schema.pop(name, None)
+
+
+def snapshot(side: Side, path: str) -> None:
+    """Read the CSV once with its cut and keep the rows as Parquet."""
+    con = scratch(ordered=True)
+    con.execute(f"COPY ({select_sql(side)}) TO {lit(path)} (FORMAT PARQUET)")
+    side.cache_path = path
+
+
+def row_count(side: Side) -> int:
+    return int(scratch().execute(f"SELECT count(*) FROM {source_expr(side)}").fetchone()[0])
+
+
+def preview_rows(side: Side, n: int = 10) -> pd.DataFrame:
+    """The first n rows as the file has them - cheap, DuckDB stops after n."""
+    df = scratch(ordered=True).execute(f"SELECT * FROM {source_expr(side)} LIMIT {int(n)}").fetchdf()
+    back = {raw: shown for shown, raw in side.source_of.items()}
+    return df.rename(columns=back)
+
+
+def quick_clause(col: str, op: str, value: str) -> str:
+    """One condition from the sidebar's column / condition / value pickers."""
+    c, v = ident(col), value.strip()
+    if op == "is null":
+        return f"{c} IS NULL"
+    if op == "is not null":
+        return f"{c} IS NOT NULL"
+    if op.startswith("in"):
+        items = [x.strip() for x in v.split(",") if x.strip()]
+        return f"{c} IN ({', '.join(lit(x) for x in items) or lit('')})"
+    if op == "contains":
+        return f"{c} ILIKE {lit('%' + v + '%')}"
+    if op == "starts with":
+        return f"{c} ILIKE {lit(v + '%')}"
+    if op in (">", ">=", "<", "<=") and re.fullmatch(r"[-+]?\d+(\.\d+)?", v):
+        return f"try_cast({c} AS DOUBLE) {op} {v}"      # a number: compare as one
+    return f"{c} {op} {lit(v)}"
+
+
+AUTO_NAME = re.compile(r"^column\d+$", re.I)
+
+
+def apply_names(schema: dict[str, str], names: list[str]) -> dict[str, str]:
+    """Rename columns by position, for a file whose header is wrong or short."""
+    types = list(schema.values())
+    out, seen = {}, {}
+    for i, t in enumerate(types):
+        base = names[i].strip() if i < len(names) and names[i].strip() else list(schema)[i]
+        n = seen.get(base, 0) + 1
+        seen[base] = n
+        out[base if n == 1 else f"{base}_{n}"] = t
+    return out
+
+
+def short_header(schema: dict[str, str]) -> int:
+    """How many trailing columns the header row failed to name."""
+    return sum(1 for c in schema if AUTO_NAME.match(str(c)))
+
+
+def looks_headerless(schema: dict[str, str]) -> bool:
+    """Header names that are really a data row: numbers, dates, duplicate stems."""
+    names = list(schema)
+    if not names:
+        return False
+
+    def datalike(n: str) -> bool:
+        n = n.strip()
+        if re.fullmatch(r"[-+]?\d[\d,.]*", n):
+            return True
+        if re.match(r"^\d{4}-\d{2}-\d{2}", n):
+            return True
+        return bool(re.fullmatch(r".*_\d+", n)) and n[0].isdigit()
+    return sum(datalike(n) for n in names) >= max(2, len(names) // 4)
+
+
+def slug(text: str) -> str:
+    """Letters, digits and underscores; runs of anything else become one underscore."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(text)).strip("_")
+
+
+def work_dir() -> Path:
+    """Where fetches, snapshots and run folders go: COMPARE_WORK_DIR or the temp folder."""
+    given = os.environ.get("COMPARE_WORK_DIR", "").strip()
+    p = Path(given).expanduser() if given else Path(tempfile.gettempdir()) / "crosshire-compare"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
+
+
+def out_dir() -> Path | None:
+    """The root every save must land under, when COMPARE_OUT_DIR is set."""
+    given = os.environ.get("COMPARE_OUT_DIR", "").strip()
+    return Path(given).expanduser() if given else None
+
+
+def data_roots() -> list[Path]:
+    """The folders a 'Path on disk' may come from: COMPARE_DATA_DIR split on os.pathsep, or none."""
+    given = os.environ.get("COMPARE_DATA_DIR", "").strip()
+    return [Path(p).expanduser().resolve() for p in given.split(os.pathsep) if p.strip()] if given else []
+
+
+def path_allowed(path: str) -> bool:
+    """A 'Path on disk' is fine unless COMPARE_DATA_DIR is set and it lies outside every root."""
+    roots = data_roots()
+    if not roots:
+        return True
+    try:
+        p = Path(path).resolve(strict=True)
+    except OSError:
+        return False
+    return any(p == r or r in p.parents for r in roots)

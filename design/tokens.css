@@ -1,0 +1,130 @@
+/* Design tokens for the redesign, as the `--fs-*` custom properties tablecmp/theme.py serves on
+   /theme.css. This file is the REFERENCE — the server generates the real one from theme_paper.py.
+   Light ("paper") is the default; `:root[data-fs-mode="dark"]` is the dark look.
+
+   Mapping from the mockups' own variable names (mockups/style.css):
+     --ground → --fs-bg          --panel → --fs-panel       --panel2 → --fs-surface
+     --line   → --fs-line        --line2 → --fs-border      --line-strong → --fs-border2
+     --ink    → --fs-text        --ink2  → --fs-text2       --ink3 → --fs-text3   --mute → --fs-text4
+     --accent → --fs-accent      --accent-fill → --fs-accent-fill   --accent-edge → --fs-accent-edge
+     --accent-bg → --fs-accent-bg
+     --a / --a-bg / --a-edge → --fs-side-a / --fs-side-a-bg / --fs-side-a-edge  (same for b)
+     --pos / --pos-bg / --pos-dot, --neg / --neg-bg, --warn / --warn-dot → --fs-pos… --fs-neg… --fs-warn…
+     --diff-bg / --diff-edge → --fs-diff-bg / --fs-diff-edge
+     #F0ECE3 (chip and segmented track) → --fs-surface2
+*/
+
+:root {
+  /* existing names, new values */
+  --fs-bg: #F6F4EF;
+  --fs-panel: #FFFFFF;
+  --fs-surface: #FAF8F4;
+  --fs-surface2: #F0ECE3;
+  --fs-line: #E4DFD5;
+  --fs-border: #EDE9E0;
+  --fs-border2: #CFC8BA;
+  --fs-text: #1B1915;
+  --fs-text2: #4B463D;
+  --fs-text3: #6E675B;
+  --fs-text4: #9A9385;
+  --fs-accent: #9A5A1A;
+  --fs-accent-h: #7A4712;
+  --fs-accent-dim: rgba(154, 90, 26, 0.12);
+  --fs-accent-subtle: rgba(154, 90, 26, 0.06);
+  --fs-accent-border: rgba(154, 90, 26, 0.28);
+  --fs-accent-line: rgba(154, 90, 26, 0.32);
+  --fs-pos: #1E6B3E;
+  --fs-neg: #B6412E;
+  --fs-warn: #9A6B13;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 18px;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* the report's existing diff classes: left = side A, right = side B, both on the diff tint */
+  --diff-left-bg: #FFF1E0;
+  --diff-left-fg: #1D4F91;
+  --diff-right-bg: #FFF1E0;
+  --diff-right-fg: #8F4A12;
+
+  /* new names */
+  --fs-accent-fill: #F2B277;      /* primary button fill, ink text on it (9:1) */
+  --fs-accent-edge: #DE9450;
+  --fs-accent-bg: #FBEBDC;        /* current-step ring fill, selected row tint */
+  --fs-side-a: #1D4F91;
+  --fs-side-a-bg: #E6EEF8;
+  --fs-side-a-edge: #B9CCE8;
+  --fs-side-b: #8F4A12;
+  --fs-side-b-bg: #FBEBDC;
+  --fs-side-b-edge: #EFCBA2;
+  --fs-pos-bg: #E6F3EA;
+  --fs-pos-dot: #2E8B57;
+  --fs-neg-bg: #FBE9E5;
+  --fs-warn-bg: #FBF2DC;
+  --fs-warn-dot: #D4A24C;
+  --fs-diff-bg: #FFF1E0;
+  --fs-diff-edge: #F3D9B4;
+  --fs-bar-ok: #3F9D6B;           /* match 100 % */
+  --fs-bar-good: #7FB069;         /* match ≥ 95 % */
+  --fs-bar-warn: #E0A24A;         /* match below */
+  --fs-out-full: #3F9D6B;         /* row outcome: fully matched */
+  --fs-out-diff: #E0A24A;         /* differ */
+  --fs-out-a: #3B6FC0;            /* only in A */
+  --fs-out-b: #8E5B3A;            /* only in B */
+}
+
+:root[data-fs-mode="dark"] {
+  --fs-bg: #0E0D0B;
+  --fs-panel: #17150F;
+  --fs-surface: #1F1C14;
+  --fs-surface2: #2A261C;
+  --fs-line: #2A261C;
+  --fs-border: #221F17;
+  --fs-border2: #3A3527;
+  --fs-text: #F4EAD6;
+  --fs-text2: #B8AD94;
+  --fs-text3: #9A8F74;
+  --fs-text4: #5C5440;
+  --fs-accent: #F4B87C;
+  --fs-accent-h: #F6C48D;
+  --fs-accent-dim: rgba(244, 184, 124, 0.12);
+  --fs-accent-subtle: rgba(244, 184, 124, 0.06);
+  --fs-accent-border: rgba(244, 184, 124, 0.25);
+  --fs-accent-line: rgba(244, 184, 124, 0.28);
+  --fs-pos: #7FB069;
+  --fs-neg: #E08A7C;
+  --fs-warn: #D4A24C;
+  --diff-left-bg: rgba(224, 162, 74, 0.16);
+  --diff-left-fg: #8FB4EC;
+  --diff-right-bg: rgba(224, 162, 74, 0.16);
+  --diff-right-fg: #F0B48A;
+
+  --fs-accent-fill: #F4B87C;
+  --fs-accent-edge: #E39A55;
+  --fs-accent-bg: rgba(244, 184, 124, 0.14);
+  --fs-side-a: #8FB4EC;
+  --fs-side-a-bg: rgba(61, 111, 192, 0.18);
+  --fs-side-a-edge: rgba(61, 111, 192, 0.40);
+  --fs-side-b: #F0B48A;
+  --fs-side-b-bg: rgba(201, 116, 58, 0.18);
+  --fs-side-b-edge: rgba(201, 116, 58, 0.40);
+  --fs-pos-bg: rgba(127, 176, 105, 0.16);
+  --fs-pos-dot: #7FB069;
+  --fs-neg-bg: rgba(201, 112, 100, 0.16);
+  --fs-warn-bg: rgba(212, 162, 76, 0.16);
+  --fs-warn-dot: #D4A24C;
+  --fs-diff-bg: rgba(224, 162, 74, 0.16);
+  --fs-diff-edge: rgba(224, 162, 74, 0.35);
+  --fs-bar-ok: #3F9D6B;
+  --fs-bar-good: #7FB069;
+  --fs-bar-warn: #E0A24A;
+  --fs-out-full: #3F9D6B;
+  --fs-out-diff: #E0A24A;
+  --fs-out-a: #5A8DE0;
+  --fs-out-b: #B07A4F;
+}
+
+/* Contrast notes (light): text3 #6E675B on panel 5.0:1, on bg 4.7:1; accent #9A5A1A on panel
+   5.4:1; side A #1D4F91 on its bg 7.6:1; side B #8F4A12 on its bg 6.3:1; ink on accent fill 9.4:1;
+   pos #1E6B3E on pos-bg 6.1:1; neg #B6412E on panel 5.1:1; warn #9A6B13 on panel 4.6:1. */

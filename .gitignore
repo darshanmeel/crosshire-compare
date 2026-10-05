@@ -1,0 +1,48 @@
+# Python: bytecode, caches, virtual environments, build output
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# The app's own outputs and scratch: Parquet snapshots, run folders, the files a comparison writes
+*.parquet
+cmp_*/
+out/
+*__cell_diffs.csv
+*__left_only.csv
+*__right_only.csv
+*__paired.csv
+*__summary.csv
+*__summary.json
+*__report.html
+*__diff.html
+diff_config.yaml
+*__columns.csv
+*__profile.csv
+*__row_count_diffs.csv
+*_compare_*__*/
+*.zip
+
+# Connections and secrets live in the home folder, never here
+connections*.json
+.env
+.env.*
+!.env.example
+
+# DuckDB files, except the small committed sample
+*.duckdb
+*.duckdb.wal
+!examples/sample.duckdb
+
+*.stackdump

@@ -1,0 +1,117 @@
+/* web/src/results/results.css - the results head and the Summary / One-sided tabs (SPEC §08, §10).
+   Colours only through the --fs-* tokens, so the light and the dark look both follow. */
+.results-page, .results-head, .results-body, .summary, .onesided { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.results-head { gap: 16px; }
+.results-head .tabs { margin-top: 4px; }
+.results-head .verdict .meta .pill { height: 22px; }
+.results-head .verdict p { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .results-head .verdict p { font-size: 22px; }
+  .results-head .verdict p code { font-size: 16px; }
+  .results-head .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .results-head .tabs button { flex: none; padding: 0 10px; }
+}
+.summary > .caption { margin: -8px 0 0; }
+
+/* Columns panel */
+.read-as { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.read-as .how { font-family: var(--font-mono); font-size: 11.5px; color: var(--fs-text3); }
+.tbl th.match-col { width: 190px; }
+.tbl td .barcell { min-width: 150px; }
+.not-compared { border-top: 1px solid var(--fs-border); }
+.not-compared .m { font-family: var(--font-mono); font-size: 12px; }
+.panel-note b { font-weight: 600; color: var(--fs-text); }
+
+/* Profile by bucket */
+.buckets { border-top: 0; }
+.buckets .panel-body { gap: 14px; }
+.buckets .seg { max-width: 100%; }
+.buckets .seg button { height: auto; min-height: 30px; white-space: normal; text-align: left; }
+.bucket-line { margin: 0; font-size: 13px; color: var(--fs-text2); }
+.bucket-grids { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px; }
+.bucket-grids > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.bucket-grids .caption { margin: 0; }
+.col-pick { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--fs-line); border-radius: var(--r-sm); min-width: 0; }
+.col-pick-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.col-pick-bar strong { font-size: 13px; }
+.col-pick-bar .grow { flex: 1; }
+.col-pick-bar input[type=search] { width: min(240px, 100%); }
+.col-pick-group { position: relative; margin: 0; padding: 0; border: 0; min-width: 0; }
+.col-pick-group legend { padding: 0; margin-bottom: 4px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fs-text2); }
+.col-pick-group legend .sub { text-transform: none; letter-spacing: 0; color: var(--fs-text3); margin-left: 6px; }
+.col-pick-group > .link-btn { position: absolute; top: -2px; right: 0; }
+.col-pick-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 0 14px; max-height: 200px; overflow: auto; }
+.col-pick-list .check { min-height: 32px; overflow-wrap: anywhere; }
+.col-pick-list .check.on { color: var(--fs-text); font-weight: 500; }
+.cols-values .expander { border: 0; background: transparent; }
+
+/* Why they differ */
+.why .panel-body { gap: 16px; }
+.why-col { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--fs-border); min-width: 0; }
+.why-col:first-child { padding-top: 0; border-top: 0; }
+.why-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; }
+.why-head .m { font-family: var(--font-mono); font-size: 12.5px; color: var(--fs-text); }
+.why-head .m.neg { font-size: 12px; color: var(--fs-neg); }
+.why-head .m.dim { font-size: 12px; color: var(--fs-text2); }
+.why-head .dim { color: var(--fs-text2); }
+.why .kv li { grid-template-columns: minmax(0, 1.6fr) minmax(60px, 1fr) 56px; }
+.why-pair { display: flex; align-items: center; gap: 8px; min-width: 0; font-family: var(--font-mono); font-size: 12px; }
+.why-pair > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.why-pair .cb { font-weight: 500; }
+.why-pair svg { color: var(--fs-text4); flex: none; }
+.why-text { margin: 0; font-size: 13px; color: var(--fs-text2); }
+.why-go { align-self: flex-start; }
+
+/* Columns & values (folded) */
+.cols-values > .expander > summary { padding: 14px 20px; font-size: 15px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.cols-values > .expander > summary .sub { font-size: 12.5px; font-weight: 400; color: var(--fs-text3); }
+.cols-values .expander-body { padding: 0 20px 18px; }
+.cv { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.cv-cards { display: flex; flex-direction: column; border: 1px solid var(--fs-line); border-radius: var(--r-sm); }
+.cv-card + .cv-card { border-top: 1px solid var(--fs-border); }
+.cv-card > summary { padding: 10px 14px; min-height: 36px; font-size: 13px; cursor: pointer; color: var(--fs-text); }
+.cv-card > summary:hover { background: var(--fs-surface); }
+.cv-card-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+.cv-card-body .caption, .cv-block .caption { margin: 0; }
+fieldset.col-pick { margin: 0; }
+.col-pick > legend { padding: 0 6px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--fs-text2); }
+.cv-block { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
+.cv-block h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.cv-block .btn { align-self: flex-start; }
+
+/* One-sided rows */
+.only .panel-head h2 { display: inline-flex; align-items: center; gap: 8px; }
+.only .panel-head h2 .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.only .panel-head .count { height: 20px; }
+.only .panel-head .actions { display: flex; min-width: 0; max-width: 100%; }
+.only .panel-head .actions .btn { max-width: 100%; height: auto; min-height: 32px; white-space: normal; overflow-wrap: anywhere; text-transform: none; letter-spacing: 0; }
+.only .tbl { min-width: 560px; }
+.only .tbl td { white-space: nowrap; }
+.only .tbl td.keycell { font-weight: 500; }
+.only .panel-foot { border-top: 1px solid var(--fs-border); }
+.onesided .callout code { white-space: nowrap; }
+.onesided .callout .pattern { display: block; }
+.onesided .callout .pattern + .pattern { margin-top: 6px; }
+.onesided .callout .link-btn { height: auto; padding: 0 2px; display: inline; }
+@media (max-width: 600px) {
+  .summary .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .summary .tile .v { font-size: 24px; }
+  .why .kv li { grid-template-columns: minmax(0, 1fr) 48px 40px; gap: 8px; }
+}
+.only-pick { padding-bottom: 0; }
+.only-pick .col-pick-list { max-height: 160px; }
+
+/* A column only one side has - not compared - is told apart wherever it is ticked: in the picker,
+   on its profile and in the one-sided tables. */
+.col-pick-group.nc legend, .nc-word { color: var(--fs-warn); }
+.col-pick-group.nc .check { color: var(--fs-warn); }
+.col-pick-group.nc .check.on { background: var(--fs-warn-bg); border-radius: var(--r-sm); }
+.bucket-grids > .nc { border-left: 3px solid var(--fs-warn); padding-left: 10px; }
+.tbl th.nc { background: var(--fs-warn-bg); color: var(--fs-warn); }
+.tbl td.nc { box-shadow: inset 0 0 0 9999px var(--fs-warn-bg); }
+
+/* A column's match: the matched share above, the mismatched share in red below it. */
+.match-bars .bars { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 60px; }
+.match-bars .bar.miss { height: 4px; }
+.match-bars .bar.miss i { background: var(--fs-neg); }
+.match-bars .v { min-width: 72px; }

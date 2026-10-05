@@ -1,0 +1,35 @@
+/* Connections drawer (SPEC §02). The .conn card, .drawer and .icon-btn are global (styles.css). */
+.conns { display: flex; flex-direction: column; gap: 18px; min-height: 100%; }
+.conn-intro { margin: 0; font-size: 13px; color: var(--fs-text2); }
+.conn-intro strong { color: var(--fs-text); font-weight: 600; }
+.conn-hint { font-size: 12px; color: var(--fs-text3); line-height: 1.5; }
+.conn-hint code, .conn-foot code, .conn-intro code { font-size: 11.5px; }
+.conn-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.conn.on { border-color: var(--fs-accent); }
+.conn .top .btn { margin-left: 0; }
+.conn .name { color: var(--fs-text); overflow-wrap: anywhere; }
+.conn .said { font-size: 12.5px; color: var(--fs-text2); }
+.conn .said.neg { color: var(--fs-neg); overflow-wrap: anywhere; }
+.link-btn.inline { height: auto; padding: 0 2px; font-size: 12.5px; }
+
+.conn-add { padding-top: 16px; border-top: 1px solid var(--fs-line); scroll-margin-top: 12px; }
+.conn-form { display: flex; flex-direction: column; gap: 12px; }
+.conn-form h3, .conn-files h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fs-text); }
+.conn-form h3 .m { font-family: var(--font-mono); font-size: 14px; font-weight: 500; }
+.conn-form .in { width: 100%; }
+.conn-form .seg { align-self: flex-start; flex-wrap: wrap; }
+.conn-form .narrow-ish .in { max-width: 10rem; }
+.conn-form .conn-del { color: var(--fs-neg); margin-left: auto; }
+.conn-form .conn-del:hover { color: var(--fs-neg); border-color: var(--fs-neg); }
+
+.conn-files { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid var(--fs-line); }
+.conn-files .conn-hint { margin: 0; }
+.conn-pick { position: relative; }
+.conn-pick input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }
+.conn-pick:focus-within { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+.conn-found { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--fs-line); border-radius: var(--r-sm); background: var(--fs-surface); }
+.conn-found ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.conn-found li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.conn-found .uri { font-family: var(--font-mono); font-size: 11.5px; color: var(--fs-text3); overflow-wrap: anywhere; }
+
+.conn-foot { margin: auto 0 0; font-size: 12px; color: var(--fs-text3); line-height: 1.6; }

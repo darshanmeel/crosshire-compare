@@ -1,0 +1,144 @@
+/* web/src/profiling/profiling.css - the Profile page's own pieces (screens 15 and 16) */
+
+.prof-running { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.pc { color: var(--fs-text3); font-weight: 400; }
+
+/* verdict */
+.prof-verdict p { font-size: 30px; }
+.prof-verdict .meta .pill { white-space: normal; height: auto; min-height: 24px; }
+@media (max-width: 600px) { .prof-verdict p { font-size: 22px; } .prof-verdict p code { font-size: 16px; } }
+
+/* Columns table */
+.prof-stats { min-width: 820px; }
+.prof-stats td.col { font-weight: 500; white-space: nowrap; }
+.prof-stats td.col .cn { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.prof-stats td.col .key-ico { display: inline-flex; }
+.col-open { border: 0; background: none; padding: 0; min-height: 32px; font: inherit; color: var(--fs-text); cursor: pointer; text-align: left; }
+.col-open:hover, .col-open:focus-visible { color: var(--fs-accent); text-decoration: underline; text-underline-offset: 3px; }
+.prof-stats tr.sel td { background: var(--fs-accent-subtle); }
+.prof-stats tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--fs-accent); }
+/* a share as a short bar and its % on one line: nulls, distinct of rows and of non-null, the top value */
+.prof-stats .barcell { gap: 6px; white-space: nowrap; }
+.prof-stats .barcell .bar { flex: 0 0 36px; min-width: 36px; height: 6px; }
+.prof-stats .barcell .v { min-width: 0; color: var(--fs-text2); }
+.prof-stats .pair, .prof-stats .top { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+.prof-stats th, .prof-stats td { padding-left: 8px; padding-right: 8px; }
+/* long values cut to fit the page - the whole value in the tooltip and on the column's page */
+.prof-stats .clip { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prof-stats .top .clip { display: inline-block; max-width: 120px; vertical-align: middle; }
+.prof-stats td.nulls .pair { justify-content: flex-end; }
+.prof-stats td.m { font-variant-numeric: tabular-nums; }
+/* distinct % of rows and, under it when the column has nulls, of non-null - one cell, two bars */
+.prof-stats .two { display: flex; flex-direction: column; gap: 3px; }
+.prof-stats .two .one { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.prof-stats .two .one .pc { font-size: 11px; }
+.prof-stats .two .barcell { min-width: 0; }
+.prof-stats .two .barcell .v { min-width: 56px; text-align: right; }
+
+/* key candidates */
+.prof-keys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.prof-keys li { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--fs-line); border-radius: var(--r-sm); background: var(--fs-surface); }
+.prof-keys .head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.prof-keys .yes { font-size: 13px; font-weight: 500; color: var(--fs-pos); }
+.prof-keys .no { font-size: 13px; font-weight: 500; color: var(--fs-warn); }
+.prof-keys .why { font-size: 12.5px; color: var(--fs-text2); }
+.prof-keynote { margin: 0; font-size: 12.5px; color: var(--fs-text3); }
+.prof-keynote code, .bullets code, .prof-said code { font-family: var(--font-mono); font-size: 11.5px; padding: 1px 6px; border-radius: 4px; background: var(--fs-surface2); color: var(--fs-text); }
+
+/* fold buttons under What stands out */
+.fchip[aria-expanded="true"] { background: var(--fs-text); border-color: var(--fs-text); color: var(--fs-panel); }
+.fchip[aria-expanded="true"] svg { transform: rotate(180deg); }
+.prof-fold .tblwrap { border-bottom: 1px solid var(--fs-border); }
+.prof-fold .caption { margin: 0; }
+
+/* value lists with bars (frequencies, shapes) */
+.kv.prof-kv li { grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) minmax(104px, auto); }
+.prof-kv li > .m { font-family: var(--font-mono); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fs-text); }
+.prof-kv li .v { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prof-freq .panel-head { align-items: center; }
+.prof-freq .sel.type { max-width: 200px; }
+
+/* column detail */
+.prof-colhead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.prof-colhead h2 { margin: 0; font-family: var(--font-mono); font-size: 20px; font-weight: 600; color: var(--fs-text); overflow-wrap: anywhere; }
+.prof-colhead .sub { font-size: 13px; color: var(--fs-text2); }
+.prof-colhead .actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.prof-bins td.m { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prof-bins th.b2, .prof-bins tr td:nth-child(4) { border-left: 1px solid var(--fs-border); }
+.prof-said { margin: 0; font-size: 13px; color: var(--fs-text2); }
+.stat .v { font-variant-numeric: tabular-nums; }
+
+@media (max-width: 600px) {
+  .prof-colhead .actions { margin-left: 0; }
+  .kv.prof-kv li { grid-template-columns: minmax(0, 1fr) 60px auto; }
+}
+
+/* Files: the folder box takes the room left by its button */
+.saverow-wrap { display: flex; flex-direction: column; gap: 8px; }
+.saverow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.saverow .in { flex: 1 1 220px; }
+/* the values after the ten most frequent, when fewer than 20 - one ranking carried on, in the accent */
+.freq-rest { display: block; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--fs-border); }
+
+/* the profile top to bottom: the Columns table across the page, then two panels to a row */
+.prof-stack { display: flex; flex-direction: column; gap: 20px; }
+.prof-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 20px; align-items: start; }
+.prof-keys .figs { font-family: var(--font-mono); font-size: 12px; color: var(--fs-text2); font-variant-numeric: tabular-nums; }
+.prof-keys ul.why { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+.prof-said { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.prof-keys ul.why li { display: list-item; padding: 0; border: 0; background: none; border-radius: 0; font-size: 12.5px; color: var(--fs-text2); }
+.prof-said.prof-keynote { font-size: 12.5px; color: var(--fs-text2); }
+/* the dependency graph: nodes on the surface, arrows in the accent, one-to-one in green, correlations dashed */
+.dep-graph { margin: 0 0 14px; }
+.dep-graph svg { width: 100%; height: auto; max-width: 900px; display: block; }
+.dep-node rect { fill: var(--fs-surface); stroke: var(--fs-border2); }
+.dep-node text { font-family: var(--font-mono); font-size: 12px; fill: var(--fs-text); }
+.dep-edge { fill: none; stroke: var(--fs-accent); stroke-width: 1.6; }
+.dep-edge.both { stroke: var(--fs-pos); }
+.dep-edge.corr { stroke: var(--fs-text3); stroke-dasharray: 5 4; }
+.dep-head { fill: var(--fs-accent); }
+/* what stands out: one finding a row - what it is, then its columns with their figures */
+.prof-found { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.prof-found li { display: grid; grid-template-columns: minmax(150px, 260px) 1fr; gap: 12px; padding: 8px 0; border-top: 1px solid var(--fs-border); }
+.prof-found li:first-child { border-top: 0; padding-top: 0; }
+.prof-found .what { font-size: 13px; font-weight: 600; color: var(--fs-text); }
+.prof-found .cols { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; }
+.prof-found .hit { display: inline-flex; gap: 6px; align-items: baseline; }
+.prof-found code { font-family: var(--font-mono); font-size: 12px; color: var(--fs-text); }
+.prof-found .fig { font-family: var(--font-mono); font-size: 11.5px; color: var(--fs-text2); font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) { .prof-found li { grid-template-columns: 1fr; gap: 4px; } }
+/* the key search: two selects in a row */
+.key-search { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; margin-bottom: 12px; }
+.key-search select { width: auto; min-width: 6rem; }
+/* the dependency matrix: deciding columns down, decided across, shaded by the share */
+.dep-matrix { margin: 0 0 16px; }
+.dep-matrix-scroll { overflow: auto; max-height: 640px; border: 1px solid var(--fs-border); border-radius: var(--r-sm); }
+.dep-matrix table { width: 100%; border-collapse: separate; border-spacing: 0; font-family: var(--font-mono); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.dep-matrix th, .dep-matrix td { border-bottom: 1px solid var(--fs-border); border-right: 1px solid var(--fs-border); }
+.dep-matrix thead th { position: sticky; top: 0; z-index: 1; background: var(--fs-surface); vertical-align: bottom; padding: 6px 2px; font-weight: 500; color: var(--fs-text2); }
+.dep-matrix thead th span { writing-mode: vertical-rl; transform: rotate(180deg); display: inline-block; max-height: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dep-matrix thead th.corner { left: 0; z-index: 2; text-align: left; padding: 6px 10px; }
+.dep-matrix thead th.corner span { writing-mode: horizontal-tb; transform: none; color: var(--fs-text3); }
+.dep-matrix tbody th { position: sticky; left: 0; background: var(--fs-surface); text-align: left; padding: 0 10px; font-weight: 500; color: var(--fs-text); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.dep-matrix td { min-width: 34px; height: 30px; text-align: right; padding: 0 6px; color: var(--fs-text); }
+.dep-matrix td.full { font-weight: 700; }
+.dep-matrix td.self { background: var(--fs-border); }
+.dep-matrix td.faint { color: var(--fs-text3); }
+/* a column's page: what it decides most and what decides it most */
+.dep-hits { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.dep-hits ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.dep-hits li { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 13px; }
+.dep-hits li .barcell .bar { flex: 0 0 120px; min-width: 120px; height: 6px; }
+.dep-hits li .barcell .v { min-width: 64px; color: var(--fs-text2); }
+.dep-hits li.weak code, .dep-hits li.weak .v { color: var(--fs-text3); }
+.dep-hits li.weak .bar i { opacity: .45; }
+.dep-hits code { font-family: var(--font-mono); font-size: 12px; color: var(--fs-text); }
+.dep-hits .fig { font-family: var(--font-mono); font-size: 12px; color: var(--fs-text2); font-variant-numeric: tabular-nums; }
+.key-search-how { flex-basis: 100%; }
+/* a key candidate's figures: distinct of non-null, duplicate rows, null keys - each a bar, its count and % */
+.prof-keys .kfigs { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; }
+.prof-keys .kfig { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fs-text2); white-space: nowrap; }
+.prof-keys .kfig .n { font-family: var(--font-mono); font-size: 12px; color: var(--fs-text); font-variant-numeric: tabular-nums; }
+.prof-keys .kfig .barcell { gap: 6px; }
+.prof-keys .kfig .barcell .bar { flex: 0 0 60px; min-width: 60px; height: 6px; }
+.prof-keys .kfig .barcell .v { min-width: 0; color: var(--fs-text2); }

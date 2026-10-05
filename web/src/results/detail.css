@@ -1,0 +1,76 @@
+/* web/src/results/detail.css - the Differing rows, Report and Downloads tabs (SPEC §09, §11, §12).
+   Colours only through the --fs-* tokens, so the light and the dark look both follow. */
+.rd { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.rd .toolbar { min-width: 0; }
+.rd-pad { padding: 12px 20px; margin: 0; }
+.rd-tight { margin: -8px 0 0; }
+
+/* Differing rows */
+.rd-filters { display: flex; flex-wrap: wrap; gap: 8px; }
+.rd-tbl th svg { color: var(--fs-text3); vertical-align: -2px; }
+.rd-tbl td.rd-key { font-weight: 500; }
+.rd-tbl td { white-space: nowrap; }
+.rd-tbl td .diff { max-width: none; }
+.rd-tbl th .chip { height: 20px; margin-left: 4px; letter-spacing: 0; text-transform: none; font-size: 10.5px; }
+.rd-tbl td.rd-one { color: var(--fs-text2); background: var(--fs-surface); }
+.rd-null { font-style: italic; color: var(--fs-text3); font-family: var(--font-sans); font-size: 12px; }
+.diff .rd-null { color: inherit; opacity: .85; }
+.panel-note .diff { min-height: 26px; }
+.panel-foot .m { font-family: var(--font-mono); }
+.rd-menu { position: relative; }
+.rd-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(320px, calc(100vw - 32px)); max-height: 380px; overflow: auto;
+  display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--fs-panel); border: 1px solid var(--fs-line); border-radius: var(--r-md);
+  box-shadow: 0 8px 28px var(--fs-accent-dim); }
+.rd-opt { display: flex; align-items: center; min-height: 36px; padding: 0 10px; border: 0; border-radius: var(--r-sm); background: transparent;
+  color: var(--fs-text); font-size: 13px; text-align: left; cursor: pointer; }
+.rd-opt:hover { background: var(--fs-surface); }
+.rd-opt[aria-pressed="true"] { background: var(--fs-surface2); font-weight: 600; }
+.rd-pop-list { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; margin-top: 4px; border-top: 1px solid var(--fs-border); }
+.rd-pop-list .check { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; font-size: 13px; cursor: pointer; }
+.rd-pop-list .check .m { font-family: var(--font-mono); font-size: 12.5px; }
+.rd-pop-list .chip { height: 20px; font-size: 10.5px; }
+.rd-near .panel-head .actions .icon-btn { width: 32px; height: 32px; }
+.rd-sim { width: 260px; }
+
+/* Report */
+.rd-explain { font-size: 13px; color: var(--fs-text2); flex: 1 1 360px; min-width: 0; }
+.rd-run-row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-start; }
+.rd-run-row .rd-folder { flex: 1 1 520px; }
+.rd-viewer { display: inline-flex; align-items: center; gap: 8px; height: 36px; }
+.rd-viewer select { width: 120px; }
+.report-frame .chrome .rd-file { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.report-frame iframe.rd-fit { height: calc(100vh - 140px); min-height: 520px; }
+
+/* folder box + button */
+.rd-folder { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.rd-folder-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.rd-folder-row .lbl { flex: none; }
+.rd-folder-row .in.grow { flex: 1 1 240px; min-width: 0; }
+
+/* Downloads */
+.rd-dl-bar { align-items: flex-start; }
+.rd-dl-bar .rd-folder { flex: 1 1 560px; }
+.rd-files li { grid-template-columns: 28px minmax(220px, 1fr) minmax(200px, 1.2fr) max-content; min-height: 44px; }
+.rd-files .r { white-space: nowrap; }
+.rd-files .f { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.rd-files .f svg { flex: none; color: var(--fs-text3); }
+.rd-files .f a { color: var(--fs-text); text-decoration: none; }
+.rd-files .f a:hover { color: var(--fs-accent); text-decoration: underline; }
+.rd-files li.off .f, .rd-files li.off .d { color: var(--fs-text3); }
+.rd-files li .r .btn { font-family: var(--font-mono); }
+.rd-formats { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.rd-formats .check { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; color: var(--fs-text); font-size: 13px; cursor: pointer; }
+.rd-callout { height: 100%; }
+.rd-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1 1 auto; }
+.rd-cmd { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--fs-text); color: var(--fs-panel);
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.rd-cmd code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+@media (max-width: 760px) {
+  .rd-files li { grid-template-columns: 28px 1fr; }
+  .rd-files .r { text-align: left; }
+  .rd .search { max-width: none; }
+  .rd-menu .fchip { max-width: 100%; }
+  .rd-pop { left: 0; right: auto; }
+  .rd .panel-foot .btn { white-space: normal; height: auto; min-height: 32px; padding-top: 6px; padding-bottom: 6px; text-align: left; }
+}

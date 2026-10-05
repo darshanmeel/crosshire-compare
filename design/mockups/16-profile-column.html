@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profile · Column detail (salary) · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html'>Compare</a><a href='14-profile-home.html' class='on'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    
+    <a class='btn' href='13-log.html'>Log<span class='count'>2</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='14-profile-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Source</span><span class='s'>HR · 3,000 rows × 7 columns</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='15-profile-result.html'><span class='n'>2</span><span><span class='t'>Profile</span><span class='s'>ready in 0.3s</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn' type='button'>Save to folder</button><button class='btn primary' type='button'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3v12m-5-5l5 5 5-5M4 21h16'/></svg>profile.csv</button></div></nav>
+<main class="page tight">
+
+  <div class="sec-head">
+    <a class="btn sm" href="15-profile-result.html"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M19 12H5M11 6l-6 6 6 6'/></svg>All columns</a>
+    <h2 style="margin:0;font-size:20px;font-weight:600;font-family:var(--mono)">salary</h2>
+    <span class="chip">number</span>
+    <span class="sub">column 5 of 7 · HR · hr_employees.csv · 3,000 values</span>
+    <span class="grow"></span>
+    <div class="actions"><button class="btn" type="button"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M19 12H5M11 6l-6 6 6 6'/></svg>Previous · department</button><button class="btn" type="button">Next · hire_date<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></button></div>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><span class="eyebrow">Rows</span><span class="v">3,000</span></div>
+    <div class="stat"><span class="eyebrow">Nulls</span><span class="v">0 <span style="color:var(--ink3);font-weight:400">· 0%</span></span></div>
+    <div class="stat"><span class="eyebrow">Distinct</span><span class="v">2,995 <span style="color:var(--ink3);font-weight:400">· 99.83%</span></span></div>
+    <div class="stat"><span class="eyebrow">Min</span><span class="v">2,152.33</span></div>
+    <div class="stat"><span class="eyebrow">Q1</span><span class="v">5,384.16</span></div>
+    <div class="stat"><span class="eyebrow">Median</span><span class="v">8,672.87</span></div>
+    <div class="stat"><span class="eyebrow">Mean</span><span class="v">8,619.01</span></div>
+    <div class="stat"><span class="eyebrow">Q3</span><span class="v">11,826.14</span></div>
+    <div class="stat"><span class="eyebrow">Max</span><span class="v">14,979.57</span></div>
+    <div class="stat"><span class="eyebrow">Std dev</span><span class="v">3,714.93</span></div>
+  </div>
+
+  <div class="split">
+
+    <div class="main" style="display:flex;flex-direction:column;gap:20px">
+      <section class="panel" aria-labelledby="h-dist">
+        <div class="panel-head"><h2 id="h-dist">Distribution</h2><span class="sub">10 equal bins · rows per bin</span></div>
+        <div class="panel-body">
+          <div class="hist" aria-label="Histogram of salary">
+            <i style="height:87.1%" title="2,152–3,435: 284"></i><i style="height:94.8%" title="3,435–4,718: 309"></i><i style="height:89.3%" title="4,718–6,001: 291"></i><i style="height:92.6%" title="6,001–7,283: 302"></i><i style="height:90.2%" title="7,283–8,566: 294"></i><i style="height:93.3%" title="8,566–9,849: 304"></i><i style="height:95.1%" title="9,849–11,131: 310"></i><i style="height:90.5%" title="11,131–12,414: 295"></i><i style="height:87.4%" title="12,414–13,697: 285"></i><i style="height:100%" title="13,697–14,980: 326"></i>
+          </div>
+          <div class="hist-x"><span>2,152</span><span>4,718</span><span>7,283</span><span>9,849</span><span>12,414</span><span>14,980</span></div>
+          <table class="tbl compact" style="min-width:0">
+            <thead><tr><th>Bin</th><th class="num">Rows</th><th class="num">Share</th><th>Bin</th><th class="num">Rows</th><th class="num">Share</th></tr></thead>
+            <tbody>
+              <tr><td class="m">2,152 – 3,435</td><td class="num m">284</td><td class="num m dim">9.5%</td><td class="m">8,566 – 9,849</td><td class="num m">304</td><td class="num m dim">10.1%</td></tr>
+              <tr><td class="m">3,435 – 4,718</td><td class="num m">309</td><td class="num m dim">10.3%</td><td class="m">9,849 – 11,131</td><td class="num m">310</td><td class="num m dim">10.3%</td></tr>
+              <tr><td class="m">4,718 – 6,001</td><td class="num m">291</td><td class="num m dim">9.7%</td><td class="m">11,131 – 12,414</td><td class="num m">295</td><td class="num m dim">9.8%</td></tr>
+              <tr><td class="m">6,001 – 7,283</td><td class="num m">302</td><td class="num m dim">10.1%</td><td class="m">12,414 – 13,697</td><td class="num m">285</td><td class="num m dim">9.5%</td></tr>
+              <tr><td class="m">7,283 – 8,566</td><td class="num m">294</td><td class="num m dim">9.8%</td><td class="m">13,697 – 14,980</td><td class="num m">326</td><td class="num m dim">10.9%</td></tr>
+            </tbody></table>
+          <p style="margin:0;font-size:13px;color:var(--ink2)">Flat across the range — no cluster, no gap. Mean and median within 54 of each other.</p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-out">
+        <div class="panel-head"><h2 id="h-out">Outliers</h2><span class="sub">1.5 × IQR fence</span></div>
+        <div class="panel-body">
+          <div class="callout pos"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg><span><strong>None.</strong> Every value sits inside −4,278.81 … 21,489.11 (Q1 − 1.5 × IQR … Q3 + 1.5 × IQR). Nothing at zero, nothing negative, no 9,999,999 sentinels.</span></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="side">
+      <section class="panel" aria-labelledby="h-shape">
+        <div class="panel-head"><h2 id="h-shape">Shapes</h2><span class="sub">digits → 9, letters → A, as read from the file</span></div>
+        <div class="panel-body">
+          <ul class="kv">
+            <li><span class="m" style="font-family:var(--mono)">9999.99</span><span class="bar"><i class="warn" style="width:100%"></i></span><span class="v">1,640 <span style="color:var(--ink3)">· 54.67%</span></span></li>
+            <li><span class="m" style="font-family:var(--mono)">99999.99</span><span class="bar"><i class="warn" style="width:64%"></i></span><span class="v">1,056 <span style="color:var(--ink3)">· 35.20%</span></span></li>
+            <li><span class="m" style="font-family:var(--mono)">9999.9</span><span class="bar"><i class="warn" style="width:10%"></i></span><span class="v">170 <span style="color:var(--ink3)">· 5.67%</span></span></li>
+            <li><span class="m" style="font-family:var(--mono)">99999.9</span><span class="bar"><i class="warn" style="width:8%"></i></span><span class="v">134 <span style="color:var(--ink3)">· 4.47%</span></span></li>
+          </ul>
+          <div class="callout warn" style="padding:10px 12px"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM5 17l.8 2 2 .8-2 .8L5 22l-.8-2-2-.8 2-.8zM19 15l.6 1.6 1.6.6-1.6.6L19 19.4l-.6-1.6-1.6-.6 1.6-.6z'/></svg><span style="font-size:12.5px"><strong>304 values carry one decimal</strong> (a trailing zero dropped on export). Read as <em>number</em> they compare correctly — <code>8453.0</code> equals Payroll's <code>8,453.00</code>. As <em>text</em> they would not.</span></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-vals">
+        <div class="panel-head"><h2 id="h-vals">Most and least frequent</h2><span class="sub">2,995 distinct · 5 values repeat</span></div>
+        <div class="panel-body">
+          <ul class="kv">
+            <li><span class="m" style="font-family:var(--mono)">2,553.72</span><span class="bar"><i style="width:100%"></i></span><span class="v">2 <span style="color:var(--ink3)">· 0.07%</span></span></li>
+            <li><span class="m" style="font-family:var(--mono)">7,612.24</span><span class="bar"><i style="width:100%"></i></span><span class="v">2 <span style="color:var(--ink3)">· 0.07%</span></span></li>
+            <li><span class="m" style="font-family:var(--mono)">11,837.57</span><span class="bar"><i style="width:100%"></i></span><span class="v">2 <span style="color:var(--ink3)">· 0.07%</span></span></li>
+            <li><span class="m" style="font-family:var(--mono)">11,921.64</span><span class="bar"><i style="width:100%"></i></span><span class="v">2 <span style="color:var(--ink3)">· 0.07%</span></span></li>
+            <li><span class="m" style="font-family:var(--mono)">14,112.53</span><span class="bar"><i style="width:100%"></i></span><span class="v">2 <span style="color:var(--ink3)">· 0.07%</span></span></li>
+            <li><span class="m" style="font-family:var(--mono);color:var(--ink3)">2,990 other values</span><span class="bar"><i style="width:50%"></i></span><span class="v">1 <span style="color:var(--ink3)">· 0.03%</span></span></li>
+          </ul>
+          <p style="margin:0;font-size:12.5px;color:var(--ink3)">Almost unique — a salary is not a key, but together with <code>hire_date</code> it would be. Key discovery stops at the first single column that is unique by itself.</p>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-dep">
+        <div class="panel-head"><h2 id="h-dep">Dependencies</h2><span class="sub">does another column determine this one?</span></div>
+        <div class="panel-body">
+          <ul class="bullets">
+            <li><i class="ok"></i><span><code>emp_id</code> → <code>salary</code> — trivially, emp_id is the key</span></li>
+            <li><i></i><span>No other column determines salary; <code>department</code> → salary holds on 0 of 8 groups</span></li>
+          </ul>
+        </div>
+      </section>
+    </div>
+
+  </div>
+
+</main>
+
+</body>
+</html>

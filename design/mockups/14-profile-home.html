@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Profile · Home (nothing loaded) · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html'>Compare</a><a href='14-profile-home.html' class='on'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    
+    <a class='btn' href='13-log.html'>Log</a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step now' href='14-profile-home.html'><span class='n'>1</span><span><span class='t'>Source</span><span class='s'>nothing loaded yet</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step todo' href='15-profile-result.html'><span class='n'>2</span><span><span class='t'>Profile</span><span class='s'>—</span></span></a></li></ol><div class='grow'></div><div class='actions'><button class='btn primary' type='button' disabled>Profile<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></button></div></nav>
+<main class="page">
+
+  <section class="hero" aria-label="Welcome">
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <span class="eyebrow accent">CrossHire Compare · Profile · CSV, JSON, Parquet or a database table</span>
+      <h1>One table, <em>every column.</em></h1>
+      <p>Read by DuckDB once: which column identifies a row, what stands out, the statistics of every column, its outliers, shapes and dependencies, and its most and least frequent values.</p>
+      <div class="actions">
+        <a class="btn primary" href="15-profile-result.html"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M7 4l12 8-12 8z'/></svg>Try it on hr_employees.csv</a>
+        <a class="btn" href="01-home.html">Compare two tables instead</a>
+      </div>
+    </div>
+    <ol class="how">
+      <li><span class="n">1</span><span><strong>Keys.</strong> Every column is measured; with no single-column key, pairs, threes and fours are tried. <code>pip install desbordante</code> adds exact discovery.</span></li>
+      <li><span class="n">2</span><span><strong>Statistics and shapes.</strong> Nulls, distinct, min, max, top value per column; numbers get a distribution and outliers; text gets its patterns.</span></li>
+      <li><span class="n">3</span><span><strong>What stands out.</strong> Leading spaces, case variants, leading zeros, duplicates — the things that break a compare later.</span></li>
+    </ol>
+  </section>
+
+  <section class="sec" aria-labelledby="h-source">
+    <div class="sec-head"><span class="eyebrow accent">01</span><h2 id="h-source">Source</h2><span class="sub">one table</span></div>
+    <section class="card" aria-label="Table to profile" style="max-width:720px">
+      <div class="card-head">
+        <span class="side-badge k" aria-hidden="true"><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 5h18v14H3zM3 10h18M9 5v14'/></svg></span>
+        <label class="lbl" for="name">Name</label><input class="in name" id="name" type="text" value="Table">
+        <span class="grow"></span>
+        <span class="pill idle"><i></i>Not loaded</span>
+      </div>
+      <div class="seg" role="group" aria-label="Source"><button type="button" class="on">Upload</button><button type="button">Path on disk</button><button type="button">Database</button></div>
+      <label class="drop" for="file">
+        <svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 17V5m-5 5l5-5 5 5M4 21h16'/></svg>
+        <span><strong>Drop a CSV, JSON or Parquet file</strong> here</span>
+        <span class="or">or <u>choose a file</u> · a wide or big table takes minutes — cut it down under <em>Rows to read</em> to try a slice</span>
+        <input class="sr" id="file" type="file">
+      </label>
+      <div class="row spread">
+        <span class="row"><label class="lbl" for="delim" style="letter-spacing:.1em">Delimiter</label><input class="in tiny" id="delim" type="text" value=","></span>
+        <label class="check"><input type="checkbox" checked>First row is a header</label>
+        <span class="grow"></span>
+        <button class="link-btn" type="button">Rows to read: all<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+        <button class="link-btn" type="button">Advanced<svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M6 9l6 6 6-6'/></svg></button>
+      </div>
+      <div class="row"><button class="btn dark" type="button" disabled>Load</button><span style="font-size:12.5px;color:var(--ink3)">then <strong>Profile</strong> — single-column figures first; combinations only when no column is unique by itself</span></div>
+    </section>
+  </section>
+
+</main>
+
+</body>
+</html>

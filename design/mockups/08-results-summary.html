@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Results · Summary · CrossHire Compare redesign</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class='app-header'>
+  <a class='brand' href='01-home.html'>CrossHire <em>Compare</em></a>
+  <nav class='mode' aria-label='Mode'><a href='01-home.html' class='on'>Compare</a><a href='14-profile-home.html'>Profile</a></nav>
+  <div class='grow'></div>
+  <div class='actions'>
+    <a class='btn' href='02-connections.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0V8zM12 18v4'/></svg>Connections<span class='count'>2</span></a>
+    <a class='btn' href='17-run-from-config.html'>Run from config</a>
+    <a class='btn' href='13-log.html'>Log<span class='count'>4</span></a>
+  </div>
+</header>
+<nav class='rail' aria-label='Steps'><ol class='steps'><li><a class='step done' href='01-home.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Sources</span><span class='s'>HR 3,000 · Payroll 2,985</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='04-loaded.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Columns</span><span class='s'>6 pairs · key emp_id</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step done' href='06-rows.html'><span class='n'><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12l5 5L20 7'/></svg></span><span><span class='t'>Rows</span><span class='s'>all rows · no filter</span></span></a></li><li class='line' aria-hidden='true'></li><li><a class='step now' href='08-results-summary.html'><span class='n'>4</span><span><span class='t'>Results</span><span class='s'>compared in 0.4s</span></span></a></li></ol><div class='grow'></div><div class='actions'><a class='btn' href='04-loaded.html'>Edit setup</a><a class='btn primary' href='11-results-report.html'><svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M12 3v12m-5-5l5 5 5-5M4 21h16'/></svg>Download report</a></div></nav>
+<main class="page tight">
+
+  <section class='verdict' aria-label='Result'>
+  <div class='meta'><span class='eyebrow accent'>Result</span><span class='eyebrow'>HR against Payroll · 04 Oct 2026 15:49 · 0.4s</span></div>
+  <p><strong>2,960</strong> rows matched on <code>emp_id</code> · <strong class='neg'>649</strong> rows <span class='pct'>(21.93%)</span> differ in <strong class='neg'>687</strong> cells · <strong>40</strong> only in HR · <strong>25</strong> only in Payroll</p>
+</section>
+<section class='outcome' aria-label='Row outcome'>
+  <div class='head'><span class='eyebrow'>Row outcome</span><span class='sub'>3,025 distinct keys across both files</span></div>
+  <div class='stack' aria-hidden='true'><div class='c-full' style='width:76.4%'></div><div class='c-diff' style='width:21.5%'></div><div class='c-onlya' style='width:1.3%'></div><div class='c-onlyb' style='width:0.8%'></div></div>
+  <ul class='legend'><li><i class='c-full'></i>Fully matched <strong>2,311</strong></li><li><i class='c-diff'></i>Differ <strong>649</strong></li><li><i class='c-onlya'></i>Only in HR <strong>40</strong></li><li><i class='c-onlyb'></i>Only in Payroll <strong>25</strong></li></ul>
+</section>
+  <nav class='tabs' aria-label='Result views'><a href='08-results-summary.html' class='on'>Summary</a><a href='09-results-diffs.html'>Differing rows<span class='count'>649</span></a><a href='10-results-onesided.html'>One-sided rows<span class='count'>65</span></a><a href='11-results-report.html'>Report</a><a href='12-results-downloads.html'>Downloads</a></nav>
+
+  <div class="tiles">
+    <div class="tile"><span class="eyebrow">Rows HR</span><span class="v">3,000</span></div>
+    <div class="tile"><span class="eyebrow">Rows Payroll</span><span class="v">2,985</span></div>
+    <div class="tile"><span class="eyebrow">Matched on key</span><span class="v">2,960</span></div>
+    <div class="tile"><span class="eyebrow">Fully matched</span><span class="v">2,311</span></div>
+    <div class="tile"><span class="eyebrow">Overall match</span><span class="v">78.07%</span></div>
+    <div class="tile"><span class="eyebrow">Columns compared</span><span class="v">5 <small>of 7 · key 1</small></span></div>
+  </div>
+
+  <div class="split">
+
+    <section class="panel main" aria-labelledby="h-cols">
+      <div class="panel-head"><h2 id="h-cols">Columns</h2><span class="sub">match measured on the 2,960 paired rows</span></div>
+      <div class="tblwrap"><table class="tbl">
+        <thead><tr><th style="width:130px"><span class="sw a"></span>HR</th><th style="width:120px"><span class="sw b"></span>Payroll</th><th>Read as</th><th class="num" style="width:90px">Matched</th><th class="num" style="width:110px">Mismatched</th><th style="width:170px">Match %</th></tr></thead>
+        <tbody>
+          <tr><td class="m ca">emp_id</td><td class="m cb">EmployeeId</td><td><span class="chip">text</span></td><td class="num m dim">—</td><td class="num m dim">—</td><td><span class="chip key"><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='7.5' cy='15.5' r='4.5'/><path d='M10.8 12.2L21 2m-3 3l3 3m-6 0l2 2'/></svg>key</span></td></tr>
+          <tr><td class="m ca">hire_date</td><td class="m cb">HireDate</td><td><span class="chip">date</span> <span class="m" style="font-family:var(--mono);font-size:11.5px;color:var(--ink3)">B · %d/%m/%Y</span></td><td class="num m">2,960</td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i class="ok" style="width:100%"></i></span><span class="v">100.00%</span></div></td></tr>
+          <tr><td class="m ca">last_name</td><td class="m cb">FullName</td><td><span class="chip">text</span> <span style="font-family:var(--mono);font-size:11.5px;color:var(--ink3)">B · part 2, split by " "</span></td><td class="num m">2,960</td><td class="num m dim">0</td><td><div class="barcell"><span class="bar"><i class="ok" style="width:100%"></i></span><span class="v">100.00%</span></div></td></tr>
+          <tr><td class="m ca">active</td><td class="m cb">IsActive</td><td><span class="chip">boolean</span></td><td class="num m">2,929</td><td class="num m neg-n">31</td><td><div class="barcell"><span class="bar"><i class="good" style="width:98.95%"></i></span><span class="v">98.95%</span></div></td></tr>
+          <tr><td class="m ca">salary</td><td class="m cb">Salary</td><td><span class="chip">number</span> <span style="font-family:var(--mono);font-size:11.5px;color:var(--ink3)">B · remove thousands sep.</span></td><td class="num m">2,641</td><td class="num m neg-n">319</td><td><div class="barcell"><span class="bar"><i class="warn" style="width:89.22%"></i></span><span class="v">89.22%</span></div></td></tr>
+          <tr><td class="m ca">department</td><td class="m cb">Dept</td><td><span class="chip">text</span></td><td class="num m">2,623</td><td class="num m neg-n">337</td><td><div class="barcell"><span class="bar"><i class="warn" style="width:88.61%"></i></span><span class="v">88.61%</span></div></td></tr>
+        </tbody></table></div>
+      <div class="panel-foot">
+        <span><strong>Not compared</strong> — present on one side only:</span>
+        <span class="m" style="font-family:var(--mono);font-size:12px;color:var(--a)">first_name <span style="color:var(--ink3)">· only in HR</span></span>
+        <span class="m" style="font-family:var(--mono);font-size:12px;color:var(--b)">CostCenter <span style="color:var(--ink3)">· only in Payroll</span></span>
+      </div>
+      <div class="panel-head" style="border-top:1px solid var(--line2)"><h2 style="font-size:14px">By bucket · department</h2><span class="sub">match % of the paired rows in each HR department</span></div>
+      <div class="tblwrap"><table class="tbl compact">
+        <thead><tr><th>Bucket</th><th class="num">Rows paired</th><th class="num">Differ</th><th style="width:220px">Match %</th><th>What differs</th></tr></thead>
+        <tbody>
+          <tr><td class="m">Sales</td><td class="num m">363</td><td class="num m neg-n">160</td><td><div class="barcell"><span class="bar"><i class="warn" style="width:55.92%"></i></span><span class="v">55.92%</span></div></td><td class="dim">Dept → <span class="cb">Sales EMEA</span> ×130 · salary ×40 · active ×4</td></tr>
+          <tr><td class="m">Finance</td><td class="num m">364</td><td class="num m neg-n">136</td><td><div class="barcell"><span class="bar"><i class="warn" style="width:62.64%"></i></span><span class="v">62.64%</span></div></td><td class="dim">Dept → <span class="cb">Finance &amp; Control</span> ×109 · salary ×33 · active ×4</td></tr>
+          <tr><td class="m">Engineering</td><td class="num m">368</td><td class="num m neg-n">127</td><td><div class="barcell"><span class="bar"><i class="warn" style="width:65.49%"></i></span><span class="v">65.49%</span></div></td><td class="dim">Dept → <span class="cb">Eng</span> ×98 · salary ×39 · active ×2</td></tr>
+          <tr><td class="m">People</td><td class="num m">353</td><td class="num m neg-n">47</td><td><div class="barcell"><span class="bar"><i class="good" style="width:86.69%"></i></span><span class="v">86.69%</span></div></td><td class="dim">salary ×44 · active ×4</td></tr>
+          <tr><td class="m">Legal</td><td class="num m">353</td><td class="num m neg-n">46</td><td><div class="barcell"><span class="bar"><i class="good" style="width:86.97%"></i></span><span class="v">86.97%</span></div></td><td class="dim">salary ×43 · active ×4</td></tr>
+          <tr><td class="m">Marketing</td><td class="num m">385</td><td class="num m neg-n">45</td><td><div class="barcell"><span class="bar"><i class="good" style="width:88.31%"></i></span><span class="v">88.31%</span></div></td><td class="dim">salary ×41 · active ×4</td></tr>
+          <tr><td class="m">Support</td><td class="num m">406</td><td class="num m neg-n">47</td><td><div class="barcell"><span class="bar"><i class="good" style="width:88.42%"></i></span><span class="v">88.42%</span></div></td><td class="dim">salary ×43 · active ×4</td></tr>
+          <tr><td class="m">Operations</td><td class="num m">368</td><td class="num m neg-n">41</td><td><div class="barcell"><span class="bar"><i class="good" style="width:88.86%"></i></span><span class="v">88.86%</span></div></td><td class="dim">salary ×36 · active ×5</td></tr>
+        </tbody></table></div>
+    </section>
+
+    <section class="panel side" aria-labelledby="h-why" style="gap:0">
+      <div class="panel-head"><h2 id="h-why">Why they differ</h2><span class="sub">most frequent value pairs per column</span></div>
+      <div class="panel-body" style="gap:16px">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="row" style="align-items:baseline;gap:10px"><span class="m" style="font-family:var(--mono);font-size:12.5px">department</span><span style="font-family:var(--mono);font-size:12px;color:var(--neg)">337 mismatches</span><span style="font-size:12.5px;color:var(--ink2)">— three systematic renames in Payroll</span></div>
+          <ul class="kv">
+            <li><span class="row" style="gap:8px;min-width:0"><span class="ca">Sales</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="cb" style="font-weight:500">Sales EMEA</span></span><span class="bar"><i class="warn" style="width:100%"></i></span><span class="v">130</span></li>
+            <li><span class="row" style="gap:8px;min-width:0"><span class="ca">Finance</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="cb" style="font-weight:500">Finance &amp; Control</span></span><span class="bar"><i class="warn" style="width:84%"></i></span><span class="v">109</span></li>
+            <li><span class="row" style="gap:8px;min-width:0"><span class="ca">Engineering</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="cb" style="font-weight:500">Eng</span></span><span class="bar"><i class="warn" style="width:75%"></i></span><span class="v">98</span></li>
+          </ul>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;padding-top:12px;border-top:1px solid var(--line2)">
+          <div class="row" style="align-items:baseline;gap:10px"><span style="font-family:var(--mono);font-size:12.5px">salary</span><span style="font-family:var(--mono);font-size:12px;color:var(--neg)">319 mismatches</span></div>
+          <p style="margin:0;font-size:13px;color:var(--ink2)">Amounts differ after thousands separators are removed on the Payroll side — real differences, not formatting.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;padding-top:12px;border-top:1px solid var(--line2)">
+          <div class="row" style="align-items:baseline;gap:10px"><span style="font-family:var(--mono);font-size:12.5px">active</span><span style="font-family:var(--mono);font-size:12px;color:var(--neg)">31 mismatches</span></div>
+          <ul class="kv">
+            <li><span class="row" style="gap:8px"><span class="ca">true</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="cb" style="font-weight:500">N</span></span><span class="bar"><i class="warn" style="width:100%"></i></span><span class="v">27</span></li>
+            <li><span class="row" style="gap:8px"><span class="ca">false</span><svg class='icon sm' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg><span class="cb" style="font-weight:500">Y</span></span><span class="bar"><i class="warn" style="width:15%"></i></span><span class="v">4</span></li>
+          </ul>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;padding-top:12px;border-top:1px solid var(--line2)">
+          <div class="row" style="align-items:baseline;gap:10px"><span style="font-family:var(--mono);font-size:12.5px">one-sided rows</span><span style="font-family:var(--mono);font-size:12px;color:var(--ink2)">40 · 25</span></div>
+          <p style="margin:0;font-size:13px;color:var(--ink2)">All 25 Payroll-only rows read <code>New Starter</code>, hired <code>01/09/2026</code>, cost center <code>CC-130</code> — one batch load that HR has not caught up with.</p>
+        </div>
+        <a class="btn" href="09-results-diffs.html" style="align-self:flex-start">See the 649 rows<svg class='icon' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M5 12h14M13 6l6 6-6 6'/></svg></a>
+      </div>
+    </section>
+
+  </div>
+
+</main>
+
+</body>
+</html>

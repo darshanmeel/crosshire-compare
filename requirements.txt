@@ -1,0 +1,13 @@
+duckdb>=1.2
+pandas
+pyarrow
+pyyaml                          # connections files in YAML
+fastapi                         # the React page's server
+uvicorn                         #   and what runs it
+python-multipart                #   uploads
+snowflake-connector-python      # Snowflake
+databricks-sql-connector        # Databricks
+pymssql                         # SQL Server - FreeTDS is inside the wheel, no ODBC driver needed
+oracledb                        # Oracle - thin mode, no Oracle client needed
+psycopg[binary]                 # Postgres
+# desbordante                   # optional: exact key discovery (HyUCC / PyroUCC); without it a DuckDB greedy search runs
