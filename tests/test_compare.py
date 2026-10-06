@@ -338,3 +338,23 @@ def test_the_engine_report_says_which_side_is_left_and_which_is_right(tmp_path, 
     html = (run["folder"] / "A_Trades_compare_B_Trades__diff.html").read_text(encoding="utf-8")
     assert "Left = <b>A · SAMPLE</b>" in html and "Right = <b>B · SAMPLE</b>" in html
     run["con"].close()
+
+
+def test_the_same_rows_are_the_matched_ones_with_no_difference(tmp_path, monkeypatch):
+    """'same' is the paired rows that agree on every compared column - 'matched' less 'differ', so
+    a reader can see what the rows that line up have in common."""
+    from tablecmp.compare import bucket_profile, bucket_rows
+    from tests.test_outputs import _run
+    run, _, _ = _run(tmp_path, monkeypatch)
+    res, con = run["result"], run["con"]
+    keys, cols = res.keys, list(res.columns_compared)
+    held = {}
+    for b in ("matched", "same", "differ"):
+        bucket_rows(run, keys, b, list(keys))
+        held[b] = {r[0] for r in con.execute(f"SELECT {keys[0]} FROM bucket_rows").fetchall()}
+    assert len(held["same"]) == res.matched_rows - res.diff_rows > 0
+    assert held["same"] | held["differ"] == held["matched"] and not held["same"] & held["differ"]
+    other = next(c for c in cols if c not in keys)
+    prof = bucket_profile(run, keys, cols, "same", only=[other])[other]
+    assert list(prof.columns) == ["Value", "Rows A", "Rows B"]
+    assert list(prof["Rows A"]) == list(prof["Rows B"])               # equal rows: both sides count alike

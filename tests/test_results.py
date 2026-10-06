@@ -104,6 +104,11 @@ def test_which_cards_and_buckets_a_run_opens_with(tmp_path, monkeypatch):
     assert shown[:len(differing)] == differing and set(shown + rest) == {"department", "active"}
     buckets = dict(rs.bucket_list(res, ["emp_id"], "hr", "payroll"))
     assert buckets["matched"] == f"Keys matched ({res.matched_rows:,})"
+    assert buckets["same"] == f"Matched and same ({res.matched_rows - res.diff_rows:,})"
+    assert list(buckets) == ["matched", "same", "differ", "left", "right"]
+    res.diff_rows, gone = 0, res.diff_rows                          # nothing differs: no second "Keys matched"
+    assert "same" not in dict(rs.bucket_list(res, ["emp_id"], "hr", "payroll"))
+    res.diff_rows = gone
     assert buckets["left"] == f"Only in hr ({res.only_left:,})"
     assert rs.first_bucket(buckets, "left") == "left"
     assert rs.first_bucket(buckets, "gone") == ("differ" if "differ" in buckets else "matched")

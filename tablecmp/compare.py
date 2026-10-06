@@ -723,6 +723,19 @@ def value_pairs(run: dict, n: int = 5) -> dict[str, pd.DataFrame]:
     return {col: sub.drop(columns=["col"]).reset_index(drop=True) for col, sub in df.groupby("col", sort=False)}
 
 
+def paired_where(run: dict, keys: list[str], bucket: str) -> str | None:
+    """The filter on the paired rows (cmp_l l JOIN cmp_r r) that picks a bucket: none for
+    'matched', the rows with a cell difference for 'differ', the rows with none for 'same'.
+    None when 'differ' has no cell differences to read."""
+    if bucket == "matched":
+        return ""
+    if not cells_table(run):
+        return "" if bucket == "same" else None      # nothing differs: every paired row is the same
+    occ = cd_occ(run)
+    have = f"{row_key(keys, 'l.', '__occ' if occ else None)} IN (SELECT {row_key(keys, '', occ)} FROM cd)"
+    return f" WHERE {'NOT ' if bucket == 'same' else ''}{have}"
+
+
 def bucket_columns(run: dict, bucket: str) -> dict[str, str]:
     """The one-sided columns a bucket's rows carry, each with its side ("A" or "B"): the
     left-only rows have A's own, the right-only rows B's, the paired rows both."""
@@ -734,7 +747,8 @@ def bucket_columns(run: dict, bucket: str) -> dict[str, str]:
 def bucket_profile(run: dict, keys: list[str], cols: list[str], bucket: str,
                    n: int = 10, only: list[str] | None = None) -> dict[str, pd.DataFrame]:
     """Top values per column for one bucket of rows: 'matched' (paired on the key),
-    'differ' (paired but not equal), 'left' (only in A) or 'right' (only in B). Key columns
+    'same' (paired and equal), 'differ' (paired but not equal), 'left' (only in A) or 'right'
+    (only in B). Key columns
     first, then the compared ones, then the columns only one file has (bucket_columns) -
     counted on their own side. For paired buckets each compared value is counted on both
     sides, since a non-key column can differ. `only` names the columns to profile - nothing
@@ -802,16 +816,11 @@ def _paired_profile(run: dict, keys: list[str], bucket: str, todo: list[str],
         return f"l.{ident(c)} AS {ident('a_' + c)}, r.{ident(c)} AS {ident('b_' + c)}"
     picks = ", ".join([f"l.{ident(k)} AS {ident(k)}" for k in keys]
                       + [pick(c) for c in todo if c not in keys])
-    if bucket == "matched":                       # every row that paired on the key
-        con.execute(f"CREATE OR REPLACE TABLE differ AS SELECT {picks} "
-                    f"FROM cmp_l l JOIN cmp_r r ON {join_on(keys)}")
-    else:                                         # paired on the key, but not equal
-        if not cells_table(run):
-            return
-        occ = cd_occ(run)
-        con.execute(f"CREATE OR REPLACE TABLE differ AS SELECT {picks} "
-                    f"FROM cmp_l l JOIN cmp_r r ON {join_on(keys)} "
-                    f"WHERE {row_key(keys, 'l.', '__occ' if occ else None)} IN (SELECT {row_key(keys, '', occ)} FROM cd)")
+    where = paired_where(run, keys, bucket)
+    if where is None:
+        return
+    con.execute(f"CREATE OR REPLACE TABLE differ AS SELECT {picks} "
+                f"FROM cmp_l l JOIN cmp_r r ON {join_on(keys)}{where}")
     total = con.execute("SELECT count(*) FROM differ").fetchone()[0]
     for c in todo:
         if c in keys or c in own:
@@ -844,7 +853,8 @@ def bucket_rows(run: dict, keys: list[str], bucket: str, cols: list[str]) -> dic
         have = {r[0] for r in con.execute("DESCRIBE bucket_rows").fetchall()}
         side = "A" if bucket == "left" else "B"
         return {c: [(side, c)] for c in cols if c in have}
-    if not keys or (bucket != "matched" and not cells_table(run)):
+    where_rows = paired_where(run, keys, bucket) if keys else None
+    if where_rows is None:
         return {}
     pair_views(run, keys)
     own = bucket_columns(run, bucket)
@@ -862,10 +872,7 @@ def bucket_rows(run: dict, keys: list[str], bucket: str, cols: list[str]) -> dic
             where[c] = [("A", "a_" + c), ("B", "b_" + c)]
     if not picks:
         return {}
-    sql = f"SELECT {', '.join(picks)} FROM cmp_l l JOIN cmp_r r ON {join_on(keys)}"
-    if bucket != "matched":                       # paired on the key, but not equal
-        occ = cd_occ(run)
-        sql += f" WHERE {row_key(keys, 'l.', '__occ' if occ else None)} IN (SELECT {row_key(keys, '', occ)} FROM cd)"
+    sql = f"SELECT {', '.join(picks)} FROM cmp_l l JOIN cmp_r r ON {join_on(keys)}{where_rows}"
     con.execute(f"CREATE OR REPLACE TABLE bucket_rows AS {sql}")
     return where
 

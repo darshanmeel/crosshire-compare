@@ -1,5 +1,5 @@
 // web/src/keys/BucketCard.tsx - "Profile by bucket" (SPEC §06): a tick and a column. The buckets are
-// the run's own groups of rows (keys matched, matched but different, only in either side); the
+// the run's own groups of rows (keys matched, matched and same, matched but different, only in either side); the
 // Summary's Profile by bucket lists the top values of the key columns in each, and the column picked
 // here is counted in every bucket too - the results' kept picks `bucket_cols_<bucket>` it reads.
 import { useId } from "react";
@@ -7,7 +7,7 @@ import { useSetup } from "../setup/api";
 import { usePick } from "../results/pickStore";
 import "./keys.css";
 
-export const BUCKET_IDS = ["matched", "differ", "left", "right"] as const;
+export const BUCKET_IDS = ["matched", "same", "differ", "left", "right"] as const;
 const PICK = "rows_bucket_col";
 const NO_COLS: string[] = [];        // a stable empty pick
 

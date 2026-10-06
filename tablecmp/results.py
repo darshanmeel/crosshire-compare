@@ -227,6 +227,8 @@ def bucket_list(res, keys: list[str], NA: str, NB: str) -> list[tuple[str, str]]
     out = []
     if res.matched_rows and keys:
         out.append(("matched", f"Keys matched ({res.matched_rows:,})"))
+    if res.matched_rows > res.diff_rows and res.diff_rows and keys:     # with no differences it is "Keys matched" again
+        out.append(("same", f"Matched and same ({res.matched_rows - res.diff_rows:,})"))
     if res.diff_rows and keys:
         out.append(("differ", f"Matched but different ({res.diff_rows:,})"))
     if res.only_left:

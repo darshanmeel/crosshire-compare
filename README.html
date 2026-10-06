@@ -387,6 +387,7 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <li><b>Filter values</b> - matched exactly, read as the column's type; a bad date or number is refused in a sentence.</li>
       <li><b>Profile by bucket</b> - count a column in every bucket; the Summary then shows which rows match worst.</li>
       <li><b>Column profile</b> - <em>Simple</em> (the top values, as before) or <em>Extended</em>: a row of findings per column and side - nulls, distinct, the top value, range or length, the common shape, the first and last three characters, and values spelled more than one way - counted on the bucket's rows only.</li>
+      <li><b>Matched and same</b> - the bucket of rows whose key paired and whose every compared value agrees, beside <em>Matched but different</em>: profile both to see what the rows that line up share.</li>
       <li><b>Profile both files</b> - null %, distinct, min and max per column, side by side, plus each side's top and bottom 10 values.</li>
       <li><b>Run settings</b> - <em>Re-run on every change</em>, <em>Profile both sides first</em> (with Auto), rows to display per section. Downloads hold every row.</li>
       <li><b>Compare HR against Payroll</b> - runs it, with a caption of columns, key and filters.</li>
