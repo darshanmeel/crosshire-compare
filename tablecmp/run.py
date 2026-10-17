@@ -56,7 +56,20 @@ def read_pairs(path: str) -> list[dict]:
     return [r for r in rows if r.get("left") or r.get("right")]
 
 
+def console_safe() -> None:
+    """A console that cannot print a character (Windows cp1252 and the → of a result line)
+    prints a ? for it instead of stopping the run - files are written in UTF-8 either way."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            "→✗…".encode(stream.encoding or "ascii")
+        except UnicodeEncodeError:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, LookupError, ValueError):
+            pass                                 # not a text console: leave it be
+
+
 def main(argv: list[str] | None = None) -> int:
+    console_safe()
     ap = argparse.ArgumentParser(prog="python -m tablecmp.run", description=__doc__.split("\n\n")[0])
     ap.add_argument("config", help="the __config.json saved after a run")
     ap.add_argument("--left", help="another file for side A - a bare name is read in A's folder connection")
