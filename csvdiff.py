@@ -1433,7 +1433,20 @@ def cli_overrides(args) -> dict:
     return over
 
 
+def console_safe() -> None:
+    """A console that cannot print a character (Windows cp1252 and a file named with a →)
+    prints a ? for it instead of stopping the run - the reports are UTF-8 either way."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            "→✗…".encode(stream.encoding or "ascii")
+        except UnicodeEncodeError:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, LookupError, ValueError):
+            pass                                 # not a text console: leave it be
+
+
 def main(argv: list[str] | None = None) -> int:
+    console_safe()
     p = argparse.ArgumentParser(
         prog="csvdiff", description="Compare CSV files row by row with DuckDB.")
     sub = p.add_subparsers(dest="cmd", required=True)
