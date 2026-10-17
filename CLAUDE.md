@@ -25,7 +25,7 @@ cd web && npm run dev                                   # hot reload on http://l
 # check — run all three before calling any screen done
 cd web && npm test && cd ..                             # vitest (web/src/**/*.test.tsx)
 cd web && npm run build && cd ..                        # tsc --noEmit + vite build → tablecmp/web_dist + source hash
-python -m pytest tests -q                               # 537 tests; tests/test_web_build.py fails if web_dist is older than web/src
+python -m pytest tests -q                               # 617 tests (1 skipped); tests/test_web_build.py fails if web_dist is older than web/src
 
 # when an API shape changes (rare in this job)
 cd web && npm run gen:api                               # regenerates src/api/schema.d.ts from the FastAPI OpenAPI
