@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from tablecmp import connections as cx
 from tablecmp.web.app import create_app
+from tablecmp.web.sides import side
 from tablecmp.web.workspace import COOKIE
 
 W = {"X-Compare": "1"}
@@ -286,3 +287,27 @@ def test_a_config_drops_the_old_pairs_looks_like_sample(c, tmp_path):
     _, path = _conf(tmp_path)
     wait(c, c.post("/api/sources/config", json={"path": str(path)}, headers=W).json())
     assert "stale" not in (ws.data.get("looks_like") or {}).get("A", {})
+
+
+def test_an_added_column_pairs_rolls_back_and_goes(both):
+    pair = lambda v: [r for r in v["rows"] if r["A column"] == "yr" and r["B column"] == "yr"]
+    r = both.post("/api/setup/derived", json={"name": "yr", "a": "year(TRY_CAST(hire_date AS DATE))",
+                                              "b": "right(HireDate, 4)"}, headers=W)
+    assert r.status_code == 200, r.text
+    assert len(pair(r.json())) == 1
+    A, B = side(ws_of(both), "A"), side(ws_of(both), "B")
+    assert "yr" in A.derived and "yr" in B.derived
+
+    r = both.post("/api/setup/derived", json={"name": "bad", "a": "upper(last_name)", "b": "no_such_col + 1"},
+                  headers=W)
+    assert r.status_code == 400 and r.json()["detail"].startswith("PR: ")
+    assert "bad" not in A.derived and "bad" not in A.schema and "bad" not in B.derived   # A rolled back too
+    assert not [x for x in both.get("/api/setup").json()["rows"] if "bad" in (x["A column"], x["B column"])]
+
+    r = both.post("/api/setup/derived", json={"name": "yr", "a": "1"}, headers=W)
+    assert r.status_code == 400 and "already has a column called yr" in r.json()["detail"]
+
+    r = both.delete("/api/setup/derived/yr", headers=W)
+    assert r.status_code == 200 and not pair(r.json())
+    assert "yr" not in A.derived and "yr" not in B.derived
+    assert both.delete("/api/setup/derived/yr", headers=W).status_code == 404

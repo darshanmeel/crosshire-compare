@@ -53,8 +53,8 @@ def test_a_second_job_of_the_same_kind_and_page_is_refused_while_one_runs():
         with pytest.raises(HTTPException) as x:
             jobs.start(ws, "Profile", "Profiling…", lambda ctx: None, page="Compare")
         assert x.value.status_code == 409 and "running already" in x.value.detail
-        jobs.start(ws, "Profile", "Profiling…", lambda ctx: None, page="Profiling", wait=True)
-        jobs.start(ws, "Key search", "Looking…", lambda ctx: None, page="Compare", wait=True)
+        jobs.start(ws, "Profile", "Profiling…", lambda ctx: None, page="Profiling")
+        jobs.start(ws, "Key search", "Looking…", lambda ctx: None, page="Compare")
     finally:
         go.set()
 

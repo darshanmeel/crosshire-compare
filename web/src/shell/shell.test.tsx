@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { vi } from "vitest";
 import App from "../App";
 import { marks } from "../ui/marks";
+import { Welcome } from "./Welcome";
+import type { Meta } from "../api/client";
 
 const META = { app_name: "CrossHire Compare", tagline: "Tables, side by side", theme: "aurora", kinds: {}, form: {}, filepick: false };
 const LOG = { entries: [{ id: "1", at: "10:00:00", kind: "Compare", label: "Compared in 1.2s", state: "done", seconds: 1.2, lines: ["Reading A…"], page: "Compare" }], last: {} };
@@ -70,4 +72,19 @@ test("marks turns the Streamlit markup into spans", () => {
   expect(screen.getByText("ok").closest(".pos")).not.toBeNull();
   expect(screen.getByText("x").tagName).toBe("CODE");
   expect(screen.getByText("bad")).toHaveClass("neg");
+});
+
+test("Try the HR vs Payroll example loads both sample files by path", async () => {
+  const fetch = vi.fn(async () => new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }));
+  vi.stubGlobal("fetch", fetch);
+  const meta = { ...META, examples: { A: "/ex/hr_employees.csv", B: "/ex/payroll_employees.csv" } } as unknown as Meta;
+  render(<QueryClientProvider client={new QueryClient()}><Welcome page="Compare" meta={meta} setPage={() => {}} /></QueryClientProvider>);
+  await userEvent.click(screen.getByRole("button", { name: "Try the HR vs Payroll example" }));
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  const sent = fetch.mock.calls.map(([url, init]: unknown[]) => [url, JSON.parse((init as RequestInit).body as string)]);
+  expect(sent).toEqual([
+    ["/api/sources/A/load", expect.objectContaining({ how: "path", path: "/ex/hr_employees.csv", name: "HR" })],
+    ["/api/sources/B/load", expect.objectContaining({ how: "path", path: "/ex/payroll_employees.csv", name: "Payroll" })],
+  ]);
+  expect(fetch.mock.calls.every(([, init]: unknown[]) => (init as RequestInit).method === "POST")).toBe(true);
 });
