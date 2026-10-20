@@ -232,10 +232,17 @@ export function Drawer({ title, label, onClose, children }: { title: ReactNode; 
   const close = useRef(onClose);
   close.current = onClose;            // a caller's inline arrow must not refocus the drawer each render
   const docked = useDocked();
+  const dockedNow = useRef(docked);
+  dockedNow.current = docked;
   useEffect(() => {
     const back = document.activeElement as HTMLElement | null;
     ref.current?.focus();
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") close.current(); };
+    // docked, the page stays usable: an Esc meant for a menu or a box on the page leaves the drawer open
+    const key = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const at = document.activeElement;
+      if (!dockedNow.current || !at || at === document.body || ref.current?.contains(at)) close.current();
+    };
     addEventListener("keydown", key);
     return () => { removeEventListener("keydown", key); back?.focus?.(); };
   }, []);

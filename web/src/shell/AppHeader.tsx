@@ -31,7 +31,7 @@ export function AppHeader({ meta, page, setPage }: { meta?: Meta; page: Page; se
       </div>
       <span className="grow" />
       <div className="actions">
-        <Button icon="plug" count={conns} aria-pressed={v.drawer === "connections"} onClick={() => setView({ drawer: "connections" })}>Connections</Button>
+        <Button icon="plug" count={conns} aria-pressed={v.drawer === "connections"} onClick={() => setView({ drawer: v.drawer === "connections" ? null : "connections" })}>Connections</Button>
         {page === "Compare" && (
           <Button aria-pressed={v.view === "config"} onClick={() => setView({ view: v.view === "config" ? "setup" : "config" })}>Run from config</Button>
         )}

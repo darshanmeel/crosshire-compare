@@ -223,3 +223,18 @@ test("from 1100 px the drawer docks: no scrim, not modal, and the page beside it
   expect(container.querySelector(".drawer-scrim")).toBeNull();
   expect((container.querySelector("main") as HTMLElement).inert).toBeFalsy();     // made inert only below 1100 px
 });
+
+test("docked, an Esc from the page beside it leaves the drawer open; an Esc inside closes it", async () => {
+  vi.stubGlobal("fetch", server([]));
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: true, media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+  const onClose = vi.fn();
+  render(<QueryClientProvider client={new QueryClient()}>
+    <div className="app"><main className="page"><button type="button">behind</button></main><ConnectionsDrawer meta={META} onClose={onClose} /></div>
+  </QueryClientProvider>);
+  screen.getByRole("button", { name: "behind" }).focus();
+  await userEvent.keyboard("{Escape}");
+  expect(onClose).not.toHaveBeenCalled();
+  screen.getByRole("dialog", { name: "Connections" }).focus();
+  await userEvent.keyboard("{Escape}");
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
