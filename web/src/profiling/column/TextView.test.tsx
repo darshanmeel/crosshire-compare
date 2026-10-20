@@ -5,6 +5,7 @@ import { json, mount } from "../../sources/testkit";
 import type { Row } from "../frame";
 import { profile, T } from "../testkit";
 import { TextView, textForm, type SimilarBody } from "./TextView";
+import { Dependencies } from "../ColumnDetail";
 
 const VALUES = [["Support", 406], ["Marketing", 385], ["People", 378], ["Operations", 368], ["Legal", 353], ["Engineering", 270],
   ["Finance", 255], ["Sales", 233], ["Sales EMEA", 130], ["Finance & Control", 109], ["Eng", 98]].map(([value, n]) => ({ value: String(value), n: Number(n) }));
@@ -110,4 +111,12 @@ test("the header form beside read as", () => {
   expect(textForm(st, { column: "Dept", distinct: 11, folded: 11, padded: 0 })).toBe("exact · 2,985 rows");
   expect(textForm(st, { column: "Dept", distinct: 11, folded: 9, padded: 0 })).toBe("2 case variants · 2,985 rows");
   expect(textForm(st)).toBe("2,985 rows");
+});
+
+test("Dependencies with only a near-key past 30%: the strongest links stay folded and say near-keys aside", () => {
+  const p = { ...P, matrix: T(["Column", "Dept", "CostCenter"], [["EmployeeId", 100, 20], ["CostCenter", 12, null], ["Dept", null, 15]]) };
+  mount(<Dependencies p={p} column="Dept" />);
+  const fold = screen.getByRole("button", { name: /^Strongest links/ });
+  expect(fold).toHaveAttribute("aria-expanded", "false");
+  expect(fold).toHaveTextContent("Strongest links · 3, near-keys aside, all under 30%");
 });

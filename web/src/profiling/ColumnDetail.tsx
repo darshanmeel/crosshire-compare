@@ -348,12 +348,14 @@ export function Dependencies({ p, column }: { p: Profile; column: string }) {
   const links = decidedBy.length + decides.length;
   const realLink = decidedBy.some((h) => h.v >= SHOWN && !near(h.col)) || decides.some((h) => h.v >= SHOWN);
   const open = fold ?? realLink;
+  const under = !realLink && links > 0
+    ? decidedBy.some((h) => h.v >= SHOWN) ? `, near-keys aside, all under ${SHOWN}%` : `, all under ${SHOWN}%` : "";
   return (
     <Panel title="Dependencies" sub="does another column determine this one?"><div className="panel-body">
       <ul className="bullets">{items.map((it, i) => <li key={i}><i className={it.ok ? "ok" : undefined} /><span>{it.body}</span></li>)}</ul>
       {p.matrix.rows.length > 0 && <div>
         <LinkButton iconAfter="chevron" className={open ? "fold-btn open" : "fold-btn"} aria-expanded={open} aria-controls={foldId}
-          onClick={() => setFold(!open)}>Strongest links · {num(links)}{!realLink && links > 0 ? `, all under ${SHOWN}%` : ""}</LinkButton>
+          onClick={() => setFold(!open)}>Strongest links · {num(links)}{under}</LinkButton>
       </div>}
       {p.matrix.rows.length > 0 && open && <div id={foldId} className="dep-fold">
         <p className="caption">How far one column decides another beyond chance - 0 unrelated, 100% every value with one value - the {TOP} strongest each way. A near-key (an id) decides nearly everything by being near-unique, so it is faint and never the verdict.</p>
