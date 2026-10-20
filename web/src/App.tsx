@@ -32,7 +32,7 @@ export function useMeta() {
 function useAnchor() {
   const { view, anchor } = useView();
   useEffect(() => {
-    if (view !== "setup" || !anchor) return;
+    if ((view !== "setup" && view !== "rows") || !anchor) return;
     requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ behavior: "smooth", block: "start" }));
     setView({ anchor: null });
   }, [view, anchor]);

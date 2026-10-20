@@ -44,7 +44,7 @@ test("Downloads lists every file with what it is, the config among them, each a 
   expect(list.getByText("Every differing cell - key, column, HR value, Payroll value")).toBeInTheDocument();
   expect(list.getByText("Rows with no partner in Payroll, as read")).toBeInTheDocument();
   expect(list.getByText("1.5 MB")).toBeInTheDocument();
-  expect(list.getByText("re-runnable · 2 KB")).toBeInTheDocument();
+  expect(list.getByText("re-runnable").parentElement).toHaveTextContent("re-runnable · 2 KB");   // the fact, then the size, muted
   const names = list.getAllByRole("checkbox").map((c) => c.getAttribute("aria-label"));
   expect(names.indexOf("Select X__report.html")).toBe(0);                     // the report first
   expect(list.getByRole("checkbox", { name: "Select X__profile.csv" })).toBeDisabled();
@@ -89,24 +89,33 @@ test("the paired rows on request, and Everything as one zip writes the zip and h
   expect(clicks).toEqual(["/api/results/r1/file/X__r1.zip"]);
 });
 
-test("Tables as Parquet is kept as a setting and offers the copies for this run", async () => {
+test("each file leads with its rows, from the Summary and the verdict, and the size follows", async () => {
+  const counts = [3000, 2985, 2960, 40, 25, 649].map((value) => ({ label: "", value }));
+  const run: RunView = { ...RUN, verdict: { ...RUN.verdict, segments: [{ text: "687", bold: true }, { text: " cells", bold: false }] } };
+  vi.stubGlobal("fetch", serve([], () => FILES, {
+    "/api/results/r1/summary": () => ({ counts, ledger: { columns: ["Column"], rows: [["a"], ["b"], ["c"]] } }),
+  }));
+  mount(<DownloadsTab run={run} limit={1000} />);
+  const list = within(await screen.findByRole("region", { name: "Files in this run" }));
+  expect((await list.findByText("687 rows")).parentElement).toHaveTextContent("687 rows · 1.5 MB");
+  expect(list.getByText("40 rows")).toBeInTheDocument();
+  expect(list.getAllByText("opens anywhere")[0].parentElement).toHaveTextContent("opens anywhere · 500 KB");
+});
+
+test("Tables as says the setting and links to Run settings; the Parquet copies for this run stay here", async () => {
   const calls: Call[] = [];
-  let fmt: FilesView["out_fmt"] = "csv";
-  vi.stubGlobal("fetch", serve(calls, () => ({ ...FILES, out_fmt: fmt }), {
-    "/api/compare/settings": (init) => {
-      fmt = JSON.parse(init!.body as string).out_fmt;
-      return { display_rows: 1000, auto_rerun: false, out_fmt: fmt, auto_profile: false };
-    },
-    "/api/results/r1/parquet": () => ({ ...FILES, out_fmt: fmt, parquet: true,
+  vi.stubGlobal("fetch", serve(calls, () => ({ ...FILES, out_fmt: "parquet" }), {
+    "/api/results/r1/parquet": () => ({ ...FILES, out_fmt: "parquet", parquet: true,
                                         files: [...FILES.files, { name: "X__cell_diffs.parquet", label: "cell_diffs (Parquet)", bytes: 400_000 }] }),
   }));
   mount(<DownloadsTab run={RUN} limit={1000} />);
-  const group = await screen.findByRole("radiogroup", { name: "Tables as" });
-  await userEvent.click(within(group).getByRole("radio", { name: "Parquet" }));
+  expect(await screen.findByText(/Tables as Parquet for the next run - set in/)).toBeInTheDocument();
+  expect(screen.queryByRole("radiogroup", { name: "Tables as" })).toBeNull();
   await userEvent.click(await screen.findByRole("button", { name: "Write Parquet copies for this run" }));
   expect(await screen.findByRole("link", { name: "X__cell_diffs.parquet" })).toBeInTheDocument();
   expect(screen.getByText("Same as cell_diffs.csv, for DuckDB, pandas or a warehouse")).toBeInTheDocument();
-  expect(JSON.parse(calls.find(([u]) => u === "/api/compare/settings")![1]!.body as string)).toEqual({ out_fmt: "parquet" });
+  await userEvent.click(screen.getByRole("button", { name: "Run settings" }));
+  expect(getView()).toMatchObject({ view: "rows", anchor: "rows-run" });
 });
 
 test("a save goes to the run's folder, keeps what was typed, and a new run starts at its own", async () => {
@@ -126,6 +135,8 @@ test("a save goes to the run's folder, keeps what was typed, and a new run start
   cleanup();
   mount(<DownloadsTab run={RUN} limit={1000} />);
   expect(await screen.findByLabelText("Run folder")).toHaveValue("D:\\kept");
+  expect(screen.queryByLabelText("Config to")).toBeNull();                      // the config's save is one click away
+  await userEvent.click(screen.getByRole("button", { name: "Save config to a folder" }));
   await userEvent.click(screen.getByRole("button", { name: "Save config to folder" }));
   expect(JSON.parse(calls.filter(([u]) => u === "/api/results/r1/save").at(-1)![1]!.body as string)).toEqual({ what: "config", folder: "D:\\out\\X__r1" });
   cleanup();
@@ -152,6 +163,10 @@ test("the Report tab shows the report in a viewer, with its downloads, its save 
   expect(viewer).toHaveAttribute("src", "/api/results/r1/report?limit=500");
   expect(viewer).toHaveAttribute("sandbox", "");
   expect(screen.getByRole("link", { name: "Download report" })).toHaveAttribute("href", "/api/results/r1/report?limit=500&download=1");
+  expect(screen.getByRole("link", { name: "Download report" })).not.toHaveClass("primary");   // the header holds the one primary
+  expect(screen.getByRole("link", { name: "Open in new tab" })).toHaveAttribute("href", "/api/results/r1/report?limit=500");
+  expect(screen.getByRole("link", { name: "Open in new tab" })).toHaveAttribute("target", "_blank");
+  expect(screen.getByRole("option", { name: "Fit to window" })).toHaveValue("fit");
   expect(await screen.findByRole("link", { name: "Download engine report" })).toHaveAttribute("href", "/api/results/r1/file/X__diff.html");
   expect(screen.getByRole("region", { name: "Report preview" })).toHaveTextContent("X__report.html");
   await userEvent.selectOptions(screen.getByLabelText("Viewer height"), "1200");

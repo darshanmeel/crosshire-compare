@@ -1,24 +1,38 @@
 // web/src/results/DownloadsTab.tsx - Results · Downloads (SPEC §12): every file of the run in one list
 // with what it is, ticked for a download of several, the whole run as one zip, the paired rows and the
-// Parquet copies on request, Tables as, saves to a folder, and how to run it again without the page.
+// Parquet copies on request, saves to a folder, and how to run it again without the page. Tables as
+// is a run setting (Run settings under Rows); this tab says what it is and links there.
 import { useState, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
-import { useSaveSettings } from "../compare/useCompare";
 import { goToSection, setView } from "../shell/view";
 import { Icon } from "../ui/icons";
-import { Button, num } from "../ui/kit";
+import { Button, LinkButton, num, plural } from "../ui/kit";
 import { download, fileUrl, filesKey, size, useRunFiles, type FilesView } from "./detailApi";
 import { Failed } from "./Failed";
 import { FolderSave } from "./FolderSave";
+import { countsOf } from "./types";
+import { useSummary } from "./useSummary";
 import "./detail.css";
 
-const FORMATS = [["csv", "CSV"], ["parquet", "Parquet"], ["both", "both"]] as const;
+const FORMATS = { csv: "CSV", parquet: "Parquet", both: "CSV and Parquet" } as const;
 const ZIP_HELP = "Every file of this run in one archive - the paired rows written first when they are not on disk yet - next to the run folder";
-const FORMAT_HELP = "Parquet: typed counts, a fraction of the size, straight into DuckDB, pandas or a warehouse. Applies to the next run; COMPARE_TABLE_FORMATS sets the default.";
+
+/** Run settings, under Rows, with its fold open - where Tables as is set for the next run. */
+export const goToRunSettings = () => setView({ view: "rows", anchor: "rows-run" });
 
 type Row = { name: string; what: ReactNode; fact?: string; bytes?: number; off?: boolean; action?: ReactNode; pick?: boolean };
+type Rows = Partial<Record<string, number>>;
+
+/** How many rows each table of the run holds, by its suffix - from the Summary and the verdict. */
+function rowsOf(run: RunView, s: ReturnType<typeof useSummary>["data"]): Rows {
+  const i = run.verdict.segments.findIndex((g, j, all) => g.bold && all[j + 1]?.text === " cells");
+  const cells = i < 0 ? undefined : Number(run.verdict.segments[i].text.replace(/,/g, ""));
+  const c = s ? countsOf(s) : null;
+  return { "cell_diffs.csv": Number.isFinite(cells) ? cells : undefined, "left_only.csv": c?.onlyA, "right_only.csv": c?.onlyB,
+           "paired.csv": c?.matched, "columns.csv": s?.ledger.rows.length, "summary.csv": 1 };
+}
 
 /** What each file of a run is, by its suffix - in the order the list shows them. */
 function describe(suffix: string, NA: string, NB: string): { what: ReactNode; fact?: string; order: number; pick?: boolean } {
@@ -45,7 +59,8 @@ function describe(suffix: string, NA: string, NB: string): { what: ReactNode; fa
 export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
   const qc = useQueryClient();
   const f = useRunFiles(run.id, limit);
-  const settings = useSaveSettings();
+  const summary = useSummary(run.id).data;
+  const [saving, setSaving] = useState(false);
   const put = (d: FilesView) => qc.setQueryData(filesKey(run.id, limit), d);
   const act = useMutation({
     mutationFn: (what: "paired" | "zip" | "parquet") => api.send<FilesView>("POST", `/api/results/${run.id}/${what}`),
@@ -61,13 +76,15 @@ export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
   const suffix = (name: string) => (name.startsWith(`${pair}__`) ? name.slice(pair.length + 2) : name);
 
   const listed = [...d.files, ...(d.config ? [{ name: d.config.name, label: "Config", bytes: d.config.bytes }] : [])];
+  const counts = rowsOf(run, summary);
   const rows: (Row & { order: number })[] = listed.map((x) => {
     const k = describe(suffix(x.name), NA, NB);
-    return { name: x.name, what: k.what || x.label, fact: k.fact, bytes: x.bytes, order: k.order, pick: k.pick };
+    const n = counts[suffix(x.name).replace(/\.parquet$/, ".csv")];
+    return { name: x.name, what: k.what || x.label, fact: n != null ? plural(n, "row") : k.fact, bytes: x.bytes, order: k.order, pick: k.pick };
   });
   if (!d.paired) {
     rows.push({ name: `${pair}__paired.csv`, order: 7, off: true, what: <>Every matched row, {NA} beside {NB} - written when asked for; <em>slower than the comparison was</em> on a wide pair</>,
-                action: <Button size="sm" disabled={!!busy} onClick={() => act.mutate("paired")}>{busy === "paired" ? "Writing the paired rows…" : "Write the paired rows"}</Button> });
+                action: <Button size="sm" className="rd-write" disabled={!!busy} onClick={() => act.mutate("paired")}>{busy === "paired" ? "Writing the paired rows…" : "Write the paired rows"}</Button> });
   }
   if (!listed.some((x) => suffix(x.name) === "profile.csv")) {
     rows.push({ name: `${pair}__profile.csv`, order: 10, off: true, fact: "not in this run",
@@ -112,25 +129,18 @@ export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
                 <Icon name="file" size="sm" />
                 {r.off ? <span>{r.name}</span> : <a href={fileUrl(run.id, r.name)} download>{r.name}</a>}
               </span>
-              <span className="d">{r.what}</span>
-              <span className="r">{r.action ?? [r.fact, r.bytes != null ? size(r.bytes) : ""].filter(Boolean).join(" · ")}</span>
+              <span className="d">{r.what}{r.action}</span>
+              <span className="r">
+                {r.fact && <span className="fact">{r.fact}</span>}
+                {r.fact && r.bytes != null && " · "}
+                {r.bytes != null && <span>{size(r.bytes)}</span>}
+              </span>
             </li>
           ))}
         </ul>
         <div className="panel-foot">
-          <div className="rd-formats" role="radiogroup" aria-label="Tables as" title={FORMAT_HELP}>
-            <span className="lbl">Tables as</span>
-            {FORMATS.map(([v, text]) => (
-              <label key={v} className="check">
-                <input type="radio" name={`out_fmt_${run.id}`} checked={d.out_fmt === v}
-                       onChange={() => settings.mutate({ out_fmt: v }, {
-                         onSuccess: () => qc.invalidateQueries({ queryKey: ["results", run.id, "files"] }),
-                       })} />
-                {text}
-              </label>
-            ))}
-          </div>
-          <span className="caption">applies to the next run</span>
+          <span className="caption">Tables as {FORMATS[d.out_fmt]} for the next run - set in{" "}
+            <LinkButton className="rd-inline" onClick={goToRunSettings}>Run settings</LinkButton></span>
           <span className="grow" />
           {d.out_fmt !== "csv" && !d.parquet && (
             <Button size="sm" disabled={!!busy} onClick={() => act.mutate("parquet")}>
@@ -145,13 +155,19 @@ export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
           <div className="rd-col">
             <strong>Run it again without the UI</strong>
             <span>The config file reproduces this comparison headless - in CI, on a schedule, or for a batch of pairs with <code>--pairs pairs.csv</code>.</span>
-            <pre className="rd-cmd"><code>{command}</code></pre>
+            <pre className="rd-cmd" tabIndex={0} aria-label="Command to run it again"><code>{command}</code></pre>
             {d.config && (
               <>
                 <span className="row">
                   <a className="btn sm" href={fileUrl(run.id, d.config.name)} download><Icon name="download" />Download config</a>
+                  <LinkButton iconAfter="chevron" className={saving ? "rd-open" : undefined} aria-expanded={saving}
+                              aria-controls={`save-config-${run.id}`} onClick={() => setSaving(!saving)}>Save config to a folder</LinkButton>
                 </span>
-                <FolderSave runId={run.id} what="config" field="Config to" label="Save config to folder" folder={d.save_folder} />
+                {saving && (
+                  <div id={`save-config-${run.id}`}>
+                    <FolderSave runId={run.id} what="config" field="Config to" label="Save config to folder" folder={d.save_folder} />
+                  </div>
+                )}
               </>
             )}
           </div>

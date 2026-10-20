@@ -1,6 +1,7 @@
 // web/src/results/ReportTab.tsx - Results · Report (SPEC §11): the run's standalone report in a viewer
 // - the file Download report gives, built for the rows shown - with the engine's own report beside
-// it, a save to a folder on this machine and the viewer's height. The viewer runs no script (the
+// it, the report in a tab of its own, a save to a folder on this machine and the viewer's height.
+// The header holds the page's one primary Download report, so this one is secondary. The viewer runs no script (the
 // report has none), and the server says so too.
 import { useState } from "react";
 import type { RunView } from "../compare/types";
@@ -20,14 +21,14 @@ export function ReportTab({ run, limit }: { run: RunView; limit: number }) {
   const d = f.data;
   return (
     <div className="rd">
-      <div className="toolbar">
+      <div className="toolbar rd-report-bar">
         <span className="rd-explain">One standalone HTML file - setup, counts, every column, the differing rows marked, the one-sided rows. Opens anywhere; attach it to a ticket.</span>
-        <span className="grow" />
         {d?.engine && (
           <a className="btn" href={fileUrl(run.id, d.engine.name)} download aria-label="Download engine report"
              title="The engine's own HTML, as it produces it">Engine report</a>
         )}
-        <a className="btn primary" href={`${src}&download=1`} download><Icon name="download" />Download report</a>
+        <a className="btn" href={src} target="_blank" rel="noopener"><Icon name="external" />Open in new tab</a>
+        <a className="btn" href={`${src}&download=1`} download><Icon name="download" />Download report</a>
       </div>
       {d?.engine_gone && <p className="caption rd-tight">The engine's report file is no longer on disk - run Compare again.</p>}
       {f.error && <Failed error={f.error} />}
@@ -35,7 +36,7 @@ export function ReportTab({ run, limit }: { run: RunView; limit: number }) {
         {d && <FolderSave runId={run.id} what="report" field="Run folder" label="Save report to folder" folder={d.save_folder} />}
         <label className="rd-viewer"><span className="lbl">Viewer</span>
           <select className="in" aria-label="Viewer height" value={height} onChange={(e) => setHeight(e.target.value as Height)}>
-            {HEIGHTS.map((h) => <option key={h} value={h}>{h === "fit" ? "Fit" : `${h} px`}</option>)}
+            {HEIGHTS.map((h) => <option key={h} value={h}>{h === "fit" ? "Fit to window" : `${h} px`}</option>)}
           </select>
         </label>
       </div>

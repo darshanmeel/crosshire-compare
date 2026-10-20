@@ -10,7 +10,7 @@ import { useCompareNow } from "../compare/useCompare";
 import { useSetup, type ProfileView } from "../setup/api";
 import type { EngineView } from "../shell/EngineLimits";
 import { useLog } from "../shell/LogPanel";
-import { goToSection } from "../shell/view";
+import { getView, goToSection } from "../shell/view";
 import { useSources } from "../sources/useSources";
 import { Icon } from "../ui/icons";
 import { Button, num, Section } from "../ui/kit";
@@ -40,7 +40,7 @@ function More({ children }: { children: ReactNode }) {
   const set = useCompareNow().data?.settings;
   const eng = useQuery({ queryKey: ["engine"], queryFn: () => api.get<EngineView>("/api/engine") }).data;
   const profiling = !!useLog().data?.entries?.some((e) => e.state === "running" && e.kind === "Profile" && e.page === "Compare");
-  const [open, setOpen] = useState<boolean | null>(null);
+  const [open, setOpen] = useState<boolean | null>(() => (getView().anchor === "rows-run" ? true : null));   // Downloads' Run settings link
   const shown = open ?? (profiling || !!p);
   const onOff = (on: boolean | undefined) => (on ? "on" : "off");
   const said = [
@@ -48,6 +48,7 @@ function More({ children }: { children: ReactNode }) {
     set && `re-run on every change ${onOff(set.auto_rerun)}`,
     set && `profile first ${onOff(set.auto_profile)}`,
     set && `${num(set.display_rows)} rows per section`,
+    set && `tables as ${set.out_fmt === "both" ? "CSV and Parquet" : set.out_fmt === "csv" ? "CSV" : "Parquet"}`,
     eng?.memory && `DuckDB ${eng.memory} · spill ${eng.disk}`,
   ].filter(Boolean).join(" · ");
   return (

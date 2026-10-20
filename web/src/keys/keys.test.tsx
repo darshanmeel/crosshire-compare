@@ -273,6 +273,27 @@ test("Run settings: Re-run on every change, Profile both sides first and Rows to
   await waitFor(() => expect(sent(calls, "/api/compare/settings", "PUT")).toEqual([{ auto_rerun: true }, { auto_profile: true }, { display_rows: 2000 }]));
 });
 
+test("Run settings: Tables as is kept as a compare setting for the next run", async () => {
+  const calls = stub({ "/api/compare": () => compareState(), "PUT /api/compare/settings": () => compareState().settings });
+  mount(<RunSettingsCard />);
+  const group = await screen.findByRole("radiogroup", { name: "Tables as" });
+  expect(within(group).getByRole("radio", { name: "CSV" })).toBeChecked();
+  await userEvent.click(within(group).getByRole("radio", { name: "Parquet" }));
+  await waitFor(() => expect(sent(calls, "/api/compare/settings", "PUT")).toEqual([{ out_fmt: "parquet" }]));
+});
+
+test("the rows page: Downloads' Run settings link opens More on Run settings", async () => {
+  stub({ "/api/setup": () => KEYED, "/api/setup/keys": () => ({ ...KEYS, keys: ["emp_id"], mode: "key" }), "/api/setup/filters": () => FILTERS,
+         "/api/sources": () => SOURCES(), "/api/compare": () => compareState(), "/api/setup/profile": () => null });
+  const { goToRunSettings } = await import("../results/DownloadsTab");
+  goToRunSettings();
+  expect(getView()).toMatchObject({ view: "rows", anchor: "rows-run" });
+  mount(<RowsEditor />);
+  const line = await screen.findByText(/not profiled · .* · tables as CSV/);
+  expect(line.closest("details")).toHaveAttribute("open");
+  expect(await screen.findByRole("radiogroup", { name: "Tables as" })).toBeInTheDocument();
+});
+
 // ---- the setup's Rows card and the rows page ------------------------------------------------
 test("the Rows card: hidden until a pair is set up, then the key, no filter, bucket off, and Edit rows", async () => {
   let ready = false;
