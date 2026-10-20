@@ -20,7 +20,7 @@ export function UploadBox({ tag, staged, types, onBusy }:
     : "any size — it is copied to the temp folder first";
   return (
     <div className="upload">
-      <Dropzone accept={types.map((t) => "." + t).join(",")} label="CSV or JSON file" onFile={(f) => up.mutate(f)}
+      <Dropzone accept={types.map((t) => "." + t).join(",")} label="CSV, JSON or Parquet file" onFile={(f) => up.mutate(f)}
         title={<><strong>Drop a CSV, JSON or Parquet file</strong> here</>} hint={hint} />
       {up.isPending ? <p className="caption" role="status">Uploading {up.variables?.name}…</p>
         : staged && <p className="caption"><b className="staged">{staged}</b> is uploaded — press Load to read it</p>}

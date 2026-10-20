@@ -34,7 +34,7 @@ test("the header shows the brand, the page switch, Connections and the Log count
   const pages = screen.getByRole("radiogroup", { name: "Page" });
   expect(within(pages).getByRole("radio", { name: "Compare" })).toBeChecked();
   expect(await screen.findByRole("button", { name: /^Log\s*1$/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Connections/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Connections" })).toBeInTheDocument();   // none saved: no "0" badge
 });
 
 test("the rail's Auto keeps its old name and waits for both sides", async () => {
@@ -53,11 +53,14 @@ test("the switch moves to Profiling and the hash follows", async () => {
   expect(await screen.findByRole("button", { name: "Profile" })).toBeDisabled();
 });
 
-test("Light or dark flips the page's mode and keeps it", async () => {
+test("the Dark toggle flips the page's mode and keeps it", async () => {
   vi.stubGlobal("fetch", mockFetch());
   document.documentElement.setAttribute("data-fs-mode", "light");
   mount();
-  await userEvent.click(await screen.findByRole("button", { name: "Light or dark" }));
+  const dark = await screen.findByRole("button", { name: "Dark" });
+  expect(dark).toHaveAttribute("aria-pressed", "false");
+  await userEvent.click(dark);
+  expect(dark).toHaveAttribute("aria-pressed", "true");
   expect(document.documentElement.getAttribute("data-fs-mode")).toBe("dark");
   expect(localStorage.getItem("fs-mode")).toBe("dark");
 });

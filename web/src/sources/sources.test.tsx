@@ -17,7 +17,7 @@ test("an upload sends the file itself, with the write header", async () => {
   }));
   mount(<SideCard tag="A" meta={META} />);
   const file = new File(["emp_id\nE1\n"], "hr.csv", { type: "text/csv" });
-  await userEvent.upload(await screen.findByLabelText("CSV or JSON file"), file);
+  await userEvent.upload(await screen.findByLabelText("CSV, JSON or Parquet file"), file);
   await waitFor(() => expect(calls.some(([u]) => u === "/api/sources/A/upload?filename=hr.csv")).toBe(true));
   const [, init] = calls.find(([u]) => u.startsWith("/api/sources/A/upload"))!;
   expect(init!.method).toBe("POST");

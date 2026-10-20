@@ -6,13 +6,21 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import { getForm, resetForms, setForm } from "./formStore";
-import { resetLoadTimes } from "./loadTime";
+import { resetLoadTimes, secs } from "./loadTime";
 import { SideCard } from "./SideCard";
 import { SideLine } from "./SideLine";
 import { ProfileSource, SourcesSection } from "./SourcesSection";
 import { body, json, META, mount, view, type Call } from "./testkit";
 
 beforeEach(() => { resetForms(); resetLoadTimes(); });
+
+test("secs rounds before it splits off the minutes", () => {
+  expect(secs(0.31)).toBe("0.3s");
+  expect(secs(59.9)).toBe("59.9s");
+  expect(secs(59.97)).toBe("1m 00s");
+  expect(secs(119.6)).toBe("2m 00s");
+  expect(secs(125.2)).toBe("2m 05s");
+});
 
 const SCHEMA = { label: "hr.csv", kind: "csv", columns: [{ name: "emp_id", type: "VARCHAR" }, { name: "department", type: "VARCHAR" }], error: "" };
 const HR = view("A", { loaded: true, name: "HR", label: "hr_employees.csv", rows: 3000, columns: ["emp_id", "first_name"], snapshot: true });
@@ -27,7 +35,7 @@ test("an empty card: region, Name, Not loaded, the source radios, and Load only 
   const choice = within(A).getByRole("radiogroup", { name: "Source for A" });
   expect(within(choice).getAllByRole("radio").map((r) => r.closest("label")!.textContent)).toEqual(["Upload", "Path on disk", "Database"]);
   expect(within(A).getByRole("radio", { name: "Upload" })).toBeChecked();
-  expect(within(A).getByLabelText("CSV or JSON file")).toBeInTheDocument();          // the dropzone's file input
+  expect(within(A).getByLabelText("CSV, JSON or Parquet file")).toBeInTheDocument();          // the dropzone's file input
   expect(within(A).getByRole("button", { name: "Load A" })).toBeDisabled();
   await userEvent.click(within(A).getByLabelText("Path on disk"));                   // a label a test can check
   expect(getForm("A").how).toBe("path");

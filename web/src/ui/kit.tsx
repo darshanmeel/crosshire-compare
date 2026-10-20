@@ -163,7 +163,7 @@ export function Dropzone({ accept, onFile, title, hint, label }: { accept?: stri
       onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) onFile(f); }}>
       <Icon name="upload" />
       <div>{title}</div>
-      <div className="or">or <label className="pick">choose a file<input type="file" accept={accept} aria-label={label} onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); }} /></label>{hint && <> · {hint}</>}</div>
+      <div className="or">or <label className="pick">choose a file<input type="file" accept={accept} aria-label={label} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onFile(f); }} /></label>{hint && <> · {hint}</>}</div>
     </div>
   );
 }

@@ -11,8 +11,8 @@ import { setView, toggleLog, useView } from "./view";
  *  find it), and Connections, Run from config, Log and Light / Dark on the right. */
 export function AppHeader({ meta, page, setPage }: { meta?: Meta; page: Page; setPage: (p: Page) => void }) {
   const v = useView();
-  const conns = useConnections().data?.length ?? 0;
-  const logs = useLog().data?.entries.length ?? 0;
+  const conns = useConnections().data?.length || undefined;   // no "0" badge
+  const logs = useLog().data?.entries.length || undefined;
   const words = (meta?.app_name ?? "").split(" ");
   const flip = (p: Page) => { setPage(p); setView({ view: "setup", column: null, anchor: null }); };
   return (

@@ -117,6 +117,21 @@ test("search narrows the loaded rows by key or value", async () => {
   expect(screen.getByText(/Nothing in the 2 loaded rows matches/)).toBeInTheDocument();
 });
 
+test("search finds a number as it is shown, with its thousands separator, and as it is stored", async () => {
+  const rows = [...pair("E10402", ["Moreau", "Sales", 10240.93, "2023-10-02", "Anna"], ["Moreau", "Sales", 10250, "2023-10-02", "CC-110"]),
+                ...pair("E10466", ["Ibrahim", "Legal", 8453, "2025-03-17", "Omar"], ["Ibrahim", "Legal", 8500, "2025-03-17", "CC-220"])];
+  vi.stubGlobal("fetch", vi.fn(async () => json(page({ frame: { columns: COLS, rows } }))));
+  mount(<DiffRowsTab run={RUN} limit={1000} />);
+  const box = await screen.findByRole("searchbox", { name: "Find a key or value" });
+  await screen.findByText("E10402");
+  await userEvent.type(box, "10,240.93");
+  expect(screen.queryByText("E10466")).toBeNull();
+  expect(screen.getByText("E10402")).toBeInTheDocument();
+  await userEvent.clear(box);
+  await userEvent.type(box, "10240.93");
+  expect(screen.getByRole("status")).toHaveTextContent("1 of the 2 loaded rows match");
+});
+
 test("the Show menu hides matching columns, or any column", async () => {
   vi.stubGlobal("fetch", serve([]));
   mount(<DiffRowsTab run={RUN} limit={1000} />);

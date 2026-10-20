@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
-import { Seg } from "../ui/kit";
+import { num, Seg } from "../ui/kit";
 import { ColumnPick, notCompared } from "./ColumnPick";
 import { marks } from "../ui/marks";
 import { Failed } from "./Failed";
@@ -82,9 +82,7 @@ function inOrder<T extends { column: string }>(profiles: T[], now: string[]) {
   return [...profiles].sort((a, b) => at(a.column) - at(b.column));
 }
 
-const nf = new Intl.NumberFormat();
 const pc = (v: number) => `${v.toFixed(2)}%`;
-const num = (v: number) => nf.format(v);
 
 /** One side's facts as pills: nulls, distinct, the top value, the range or the length, the
  *  commonest shape, start and end, and the values spelled two ways. */

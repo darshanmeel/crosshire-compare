@@ -9,5 +9,5 @@ export function ModeToggle() {
     try { localStorage.setItem("fs-mode", next); } catch { /* storage blocked: this visit only */ }
     setMode(next);
   };
-  return <button type="button" className="btn" onClick={flip} aria-label="Light or dark" title={`Switch to the ${mode === "dark" ? "light" : "dark"} look`}>{mode === "dark" ? "Light" : "Dark"}</button>;
+  return <button type="button" className="btn" onClick={flip} aria-pressed={mode === "dark"} title={`Switch to the ${mode === "dark" ? "light" : "dark"} look`}>Dark</button>;
 }

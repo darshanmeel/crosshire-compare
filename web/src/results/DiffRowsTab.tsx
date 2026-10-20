@@ -20,7 +20,8 @@ function Value({ v }: { v: unknown }) {
   return <>{typeof v === "number" ? num(v) : String(v)}</>;
 }
 
-const text = (v: unknown) => (v == null ? "" : String(v)).toLowerCase();
+/** What the search looks in: a number both raw and as shown (10240.93 and 10,240.93). */
+const text = (v: unknown) => (v == null ? "" : typeof v === "number" ? `${v} ${num(v)}` : String(v)).toLowerCase();
 
 /** The Show menu: every column a checkbox, with the two quick picks above them. */
 function ShowMenu({ all, differing, hidden, setHidden, show, setShow }: {

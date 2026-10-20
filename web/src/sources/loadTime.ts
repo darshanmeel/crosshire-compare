@@ -23,4 +23,5 @@ export function loadTime(tag: Tag, v?: SideView): number | null {
 
 export function resetLoadTimes() { times.clear(); }
 
-export const secs = (s: number) => (s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m ${String(Math.round(s % 60)).padStart(2, "0")}s`);
+/** 0.3s, 59.9s, then 1m 00s: rounded first, so 59.97 is not "60.0s" and 119.6 is not "1m 60s". */
+export const secs = (s: number) => { const r = Math.round(s); return s < 59.95 ? `${s.toFixed(1)}s` : `${Math.floor(r / 60)}m ${String(r % 60).padStart(2, "0")}s`; };
