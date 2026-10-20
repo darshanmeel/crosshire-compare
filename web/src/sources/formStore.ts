@@ -7,6 +7,7 @@ import { blankForm, type SideForm, type Tag } from "./types";
 const blank = (): Record<Tag, SideForm> => ({ A: blankForm("A"), B: blankForm("B"), P: blankForm("P") });
 let forms = blank();
 let configSeen = 0;
+let touched: Record<Tag, boolean> = { A: false, B: false, P: false };
 const subs = new Set<() => void>();
 const emit = () => subs.forEach((f) => f());
 
@@ -14,10 +15,16 @@ export function getForm(tag: Tag): SideForm { return forms[tag]; }
 
 export function setForm(tag: Tag, patch: Partial<SideForm>) {
   forms = { ...forms, [tag]: { ...forms[tag], ...patch } };
+  touched = { ...touched, [tag]: true };
   emit();
 }
 
-export function resetForms() { forms = blank(); configSeen = 0; emit(); }
+export function resetForms() { forms = blank(); configSeen = 0; touched = { A: false, B: false, P: false }; emit(); }
+
+/** A side the server already holds (a page reload) fills a form nothing has set yet - once. */
+export function seedForm(tag: Tag, patch: Partial<SideForm>) {
+  if (!touched[tag]) setForm(tag, patch);
+}
 
 /** True once per loaded config (its counter n): the time to put its boxes into the forms. */
 export function takeConfig(n: number): boolean {

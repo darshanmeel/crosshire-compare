@@ -172,3 +172,38 @@ test("SideLine alone names a side that is not loaded yet", async () => {
 function mountAndKeep(ui: ReactElement) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
 }
+
+test("a side the server already holds fills an untouched form: its name, its source, and no delimiter for Parquet", async () => {
+  const PQ = view("A", { loaded: true, name: "HR", label: "hr_employees.parquet", kind: "parquet", rows: 3000, columns: ["emp_id"] });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+    url === "/api/sources/folders" ? json([]) : json(body({ sides: { A: PQ, B: view("B"), P: view("P") } }))));
+  mount(<SideCard tag="A" meta={META} />);
+  const A = screen.getByRole("region", { name: "File A" });
+  await waitFor(() => expect(within(A).getByLabelText("Name")).toHaveValue("HR"));
+  expect(within(A).getByRole("radio", { name: "Path on disk" })).toBeChecked();
+  expect(within(A).queryByLabelText("Delimiter")).toBeNull();
+});
+
+test("a form already set is not seeded over", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+    url === "/api/sources/A/schema" ? json(SCHEMA) : url === "/api/sources/folders" ? json([]) : json(body({ sides: { A: HR, B: view("B"), P: view("P") } }))));
+  setForm("A", { how: "path", path: "D:/x/hr.csv", name: "Mine" });
+  mount(<SideCard tag="A" meta={META} />);
+  expect(await screen.findByText("Loaded")).toBeInTheDocument();
+  expect(getForm("A").name).toBe("Mine");
+});
+
+test("typing a path asks for its schema once, 300 ms after the last keystroke", async () => {
+  const calls: Call[] = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push([url, init]);
+    return url === "/api/sources/A/schema" ? json(SCHEMA) : url === "/api/sources/folders" ? json([]) : json(body());
+  }));
+  setForm("A", { how: "path" });
+  mount(<SideCard tag="A" meta={META} />);
+  await userEvent.type(screen.getByLabelText("Path to CSV or JSON"), "D:/x/hr.csv");
+  expect(await screen.findByText("2 columns: emp_id, department")).toBeInTheDocument();
+  const asked = calls.filter(([u]) => u === "/api/sources/A/schema");
+  expect(asked).toHaveLength(1);
+  expect(JSON.parse(String(asked[0][1]!.body)).path).toBe("D:/x/hr.csv");
+});

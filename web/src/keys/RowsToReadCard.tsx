@@ -8,7 +8,7 @@ import { api, ApiError } from "../api/client";
 import { refreshSetup, useSetup } from "../setup/api";
 import { getForm, setForm, useSideForm } from "../sources/formStore";
 import { useSources } from "../sources/useSources";
-import { pickOf, type SideView, type Tag } from "../sources/types";
+import { loadBody, type SideView, type Tag } from "../sources/types";
 import { Button, LinkButton, num, Pill, SideBadge } from "../ui/kit";
 import { marks } from "../ui/marks";
 import "./keys.css";
@@ -53,9 +53,7 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
   const apply = useMutation({
     mutationFn: () => {
       const g = getForm(tag);                      // as it is now - the order typed was just committed
-      return api.send<{ side: SideView; warnings: string[] }>("POST", `/api/sources/${tag}/load`, {
-        ...pickOf(g), name: g.name, where: g.where, order_by: g.order_by, desc: g.desc, limit: g.limit,
-        column_names: g.column_names, snapshot: g.snapshot });
+      return api.send<{ side: SideView; warnings: string[] }>("POST", `/api/sources/${tag}/load`, { ...loadBody(g), name: g.name });
     },
     onSuccess: (r) => {
       setSaid({ warnings: r.warnings, error: "", done: true });

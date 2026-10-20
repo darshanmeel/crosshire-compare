@@ -39,3 +39,9 @@ export const pickOf = (f: SideForm) => ({
   how: f.how, path: f.path, folder: f.folder, file: f.file, delimiter: f.delimiter, header: f.header,
   db: f.how === "database" ? dbOf(f) : null,
 });
+
+/** What a Load sends, past the name: the pick and the cut. Callers add `name`. */
+export const loadBody = (f: SideForm) => ({
+  ...pickOf(f), where: f.where, order_by: f.order_by, desc: f.desc, limit: f.limit,
+  column_names: f.column_names, snapshot: f.snapshot,
+});

@@ -3,13 +3,13 @@
 // upload, path or database box; delimiter, header, Rows to read and Advanced; Load; and once loaded a
 // foot that says what was read with its first 10 rows a click away. The region is "File A" / "File B"
 // / "File" - the e2e runs find the side by it.
-import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, type Meta } from "../api/client";
 import { Button, LinkButton, Pill, SideBadge, type Tone } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { DatabaseBox } from "./DatabaseBox";
-import { useSideForm } from "./formStore";
+import { seedForm, useSideForm } from "./formStore";
 import { LoadedLine } from "./LoadedLine";
 import { changedSinceLoad, loadTime, noteLoadTime, secs } from "./loadTime";
 import { PathBox } from "./PathBox";
@@ -18,7 +18,7 @@ import { RowsToRead, rowsSummary } from "./RowsToRead";
 import { SourceChoice } from "./SourceChoice";
 import { UploadBox } from "./UploadBox";
 import { useSources } from "./useSources";
-import { pickOf, type Schema, type SideForm, type SideView, type Tag } from "./types";
+import { loadBody, pickOf, type Schema, type SideForm, type SideView, type Tag } from "./types";
 import "./sources.css";
 
 function picked(f: SideForm, view?: SideView): boolean {
@@ -48,20 +48,27 @@ export function SideCard({ tag, meta, compact = false }: { tag: Tag; meta: Meta;
   const [other] = useSideForm(otherTag);
   const { data: src } = useSources();
   const view = src?.sides?.[tag];
-  const pick = pickOf(f);
+  useEffect(() => {                                       // a side the server holds names the form and picks its source
+    if (view?.loaded) seedForm(tag, { name: view.name, how: view.is_database ? "database" : view.staged ? "upload" : "path",
+                                      ...(view.is_database ? { connection: view.conn } : {}) });
+  }, [tag, view?.loaded]);
+  const pickNow = JSON.stringify(pickOf(f));
+  const [keyPick, setKeyPick] = useState(pickNow);        // the schema is asked 300 ms after the last keystroke
+  useEffect(() => { const t = setTimeout(() => setKeyPick(pickNow), 300); return () => clearTimeout(t); }, [pickNow]);
   const ready = picked(f, view);
   const schema = useQuery({
-    queryKey: ["schema", tag, pick, view?.staged, view?.fetched?.at],
-    queryFn: () => api.send<Schema>("POST", `/api/sources/${tag}/schema`, pick),
-    enabled: ready,
+    queryKey: ["schema", tag, keyPick, view?.staged, view?.fetched?.at],
+    queryFn: () => api.send<Schema>("POST", `/api/sources/${tag}/schema`, JSON.parse(keyPick)),
+    enabled: ready && keyPick === pickNow,                // not for a pick already typed over
+    placeholderData: keepPreviousData,
   });
   const cols = ready ? (schema.data?.columns?.map((c) => c.name) ?? []) : [];
-  const isCsv = (ready ? (schema.data?.kind ?? "csv") : "csv") === "csv";
+  const isCsv = ((ready ? schema.data?.kind : undefined) ?? view?.kind ?? "csv") === "csv";
   const [said, setSaid] = useState<{ warnings: string[]; error: string }>({ warnings: [], error: "" });
   const [open, setOpen] = useState<Open>(null);
   const [preview, setPreview] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const asked = { ...pick, where: f.where, order_by: f.order_by, desc: f.desc, limit: f.limit, column_names: f.column_names, snapshot: f.snapshot };
+  const asked = loadBody(f);
   const askedNow = JSON.stringify(asked);
   const load = useMutation({
     mutationFn: async () => {

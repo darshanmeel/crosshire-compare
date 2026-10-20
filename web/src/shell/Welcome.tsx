@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, type Meta } from "../api/client";
 import { getForm, setForm } from "../sources/formStore";
-import { pickOf, type Tag } from "../sources/types";
+import { loadBody, type Tag } from "../sources/types";
 import { Button } from "../ui/kit";
 import type { Page } from "./usePage";
 import { setView } from "./view";
@@ -38,8 +38,7 @@ function useTryExample(meta?: Meta) {
       for (const [tag, name, file] of tags) {
         setForm(tag, { how: "path", folder: "", path: meta!.examples![file], name });
         const f = getForm(tag);
-        await api.send("POST", `/api/sources/${tag}/load`, { ...pickOf(f), name: f.name, where: f.where, order_by: f.order_by,
-          desc: f.desc, limit: f.limit, column_names: f.column_names, snapshot: f.snapshot });
+        await api.send("POST", `/api/sources/${tag}/load`, { ...loadBody(f), name: f.name });
         qc.invalidateQueries({ queryKey: ["sources"] });
         qc.invalidateQueries({ queryKey: ["preview", tag] });
       }
