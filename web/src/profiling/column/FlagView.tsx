@@ -205,19 +205,19 @@ export function FlagView({ p, column, made, st }: ColumnViewProps) {
 
   const least = [...seen].filter((s) => s.reads != null).sort((a, b) => a.n - b.n)[0];
   return (<>
-    <Findings items={items} />
+    <Findings warningsOnly items={items} />
     <StatGrid stats={stats} />
     <div className="prof-grid prof-col-grid">
       <div className="prof-stack">{values}{ratePanel}</div>
       <div className="prof-stack">
-        <NotShown items={[
-          { label: "Distribution", why: "two values - the bars under Values are the distribution" },
-          { label: "Parts · Shapes", why: onePair ? "one letter or word per value, nothing to break down" : "each spelling is listed under Values" },
-          { label: "Outliers", why: "looked for in number, date and timestamp columns" },
-          ...(least ? [{ label: "Least frequent", why: `${least.value}, ${times(least.n)}` }] : []),
-        ]} />
         <Dependencies p={p} column={column} />
       </div>
     </div>
+    <NotShown items={[
+      { label: "Distribution", why: "two values - the bars under Values are the distribution" },
+      { label: "Parts · Shapes", why: onePair ? "one letter or word per value, nothing to break down" : "each spelling is listed under Values" },
+      { label: "Outliers", why: "looked for in number, date and timestamp columns" },
+      ...(least ? [{ label: "Least frequent", why: `${least.value}, ${times(least.n)}` }] : []),
+    ]} />
   </>);
 }

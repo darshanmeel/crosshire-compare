@@ -1,15 +1,20 @@
 // The row of findings under a column's header (and the profile's headline): one pill per thing
 // worth knowing - a bold name, then a short mono detail - green when it is good news, amber when it
-// needs a look, red when it is wrong, grey when it is only a fact.
+// needs a look, red when it is wrong, grey when it is only a fact. A column's page keeps only the
+// amber and red ones, or one green "Clean" pill.
 import type { ReactNode } from "react";
 
 export type Finding = { tone?: "pos" | "warn" | "neg" | "info"; label: ReactNode; detail?: ReactNode };
 
-export function Findings({ items, label = "Findings" }: { items: Finding[]; label?: string }) {
+/** `warningsOnly` (a column's page): only what needs a look leads the page - the warnings and
+ *  problems, else one "clean" pill - since the facts and good news are said once, in their tile or panel. */
+export function Findings({ items, label = "Findings", warningsOnly }: { items: Finding[]; label?: string; warningsOnly?: boolean }) {
   if (!items.length) return null;
+  const bad = items.filter((f) => f.tone === "warn" || f.tone === "neg");
+  const shown: Finding[] = !warningsOnly ? items : bad.length ? bad : [{ tone: "pos", label: "Clean", detail: "nothing needs a look" }];
   return (
     <ul className="findings" aria-label={label}>
-      {items.map((f, i) => (
+      {shown.map((f, i) => (
         <li key={i} className={`finding ${f.tone ?? "info"}`}>
           <i aria-hidden="true" /><strong>{f.label}</strong>{f.detail != null && f.detail !== "" && <span className="d">{f.detail}</span>}
         </li>

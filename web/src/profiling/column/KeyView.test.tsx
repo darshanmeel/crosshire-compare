@@ -53,15 +53,16 @@ test("a clean key: findings, cards, the banner, the key check, the sequence, wha
   stub(CLEAN, { ready: true, names: ["Left", "Right"], rows: [row("emp_id", "EmployeeNo", true), row("dept", "dept", false)], keys: ["emp_id"] });
   show();
   const found = await screen.findByRole("list", { name: "Findings" });
-  expect(within(found).getByText("Unique")).toBeInTheDocument();
-  expect(within(found).getByText("3,000 of 3,000 · the key")).toBeInTheDocument();
-  expect(within(found).getByText("Contiguous")).toBeInTheDocument();
-  expect(within(found).getByText("One shape · fixed width 6")).toBeInTheDocument();
-  expect(within(found).getByText("No nulls · no case or whitespace variants")).toBeInTheDocument();
+  // a clean key: one clean pill, its facts in the tiles, the sequence and the key check
+  expect(within(found).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["Cleannothing needs a look"]);
   expect(screen.getByText("100% - unique")).toBeInTheDocument();
   expect(screen.getByText("fixed · every value")).toBeInTheDocument();
-  expect(screen.getByText("The key.")).toBeInTheDocument();
+  expect(screen.getByText("The key.").closest(".panel")).toHaveTextContent("Sequence · Parts");
   expect(screen.getByText(/every number is used, ascending in file order/)).toBeInTheDocument();
+  // every check passes: one line, the list one click away
+  expect(screen.getByText("Safe to match on.")).toBeInTheDocument();
+  expect(screen.queryByRole("list", { name: "Key check" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "The 6 checks" }));
   const check = screen.getByRole("list", { name: "Key check" });
   expect(within(check).getByText("3,000 distinct of 3,000")).toBeInTheDocument();
   expect(within(check).getByText("none at risk")).toBeInTheDocument();
@@ -73,6 +74,7 @@ test("a clean key: findings, cards, the banner, the key check, the sequence, wha
   expect(within(seq).getByText("1 letter · 5 digits")).toBeInTheDocument();
   expect(within(seq).getByText("every number from the lowest to the highest is used")).toBeInTheDocument();
   expect(within(seq).getByText("E13001")).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "why" }));
   const off = screen.getByRole("list", { name: "Not shown for this column" });
   expect(within(off).getByText("every value once - nothing to rank")).toBeInTheDocument();
   expect(within(off).queryByText("Parts")).toBeNull();
@@ -91,8 +93,7 @@ test("a key with a hole: the gap, the ids past it, and the run that says they ar
   const found = await screen.findByRole("list", { name: "Findings" });
   expect(within(found).getByText("Sequence gap")).toBeInTheDocument();
   expect(within(found).getByText("E12961 - E13000 · 40 ids missing")).toBeInTheDocument();
-  expect(within(found).getByText("25 ids past the gap")).toBeInTheDocument();
-  expect(within(found).getByText("E13001 - E13025 · all New Starter")).toBeInTheDocument();
+  expect(within(found).queryByText("25 ids past the gap")).toBeNull();     // said in the banner and the legend
   expect(screen.getByText("The key - with a hole in it.")).toBeInTheDocument();
   expect(screen.getByText("40 ids from E12961 - E13000")).toBeInTheDocument();
   expect(await screen.findByText(/Against Left, those are exactly the 40 Left-only ids and the 25 Right-only ids/)).toBeInTheDocument();

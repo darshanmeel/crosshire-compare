@@ -41,6 +41,12 @@ test("spans read as years, months and days for dates and as hours for one day of
   expect(spanText({ kind: "timestamp", span_seconds: 3 * 86400 + 3600 * 4 + 600, first: "", last: "" })).toBe("3 d 04 h 10 m");
 });
 
+/** Opens a check list folded because every check passed. */
+function openChecks() {
+  const more = screen.getByRole("button", { name: /^The \d+ checks$/ });
+  if (more.getAttribute("aria-expanded") === "false") fireEvent.click(more);
+}
+
 test("a date column: findings, cards, rows per year with its table, calendar checks, parts, repeats", async () => {
   const calls: string[] = [];
   stub(calls, (u) => (u.includes("bin=month") ? MONTHLY : DATE));
@@ -49,9 +55,8 @@ test("a date column: findings, cards, rows per year with its table, calendar che
   expect(calls[0]).toBe("/api/profiling/when?column=joined&as=date");
   expect(screen.getByText("3,191 days")).toBeInTheDocument();
   const found = screen.getByRole("list", { name: "Findings" });
-  expect(within(found).getByText("Weekend 28.40%")).toBeInTheDocument();
-  expect(within(found).getByText("852 dates")).toBeInTheDocument();
-  expect(within(found).getByText("No future dates · no placeholders · no nulls")).toBeInTheDocument();
+  expect(found).not.toHaveTextContent("Weekend");                            // said by the Weekend tile
+  expect(within(document.querySelector<HTMLElement>(".stat-grid")!).getByText("Weekend").parentElement).toHaveTextContent("852 · 28.40%");
   expect(within(found).queryByText("Batch date")).toBeNull();                 // 6 against 5 is no batch
   expect(screen.getByText("×6 · a Saturday")).toBeInTheDocument();
   expect(screen.getByRole("img", { name: /^Rows per year: 2018 321, 2019 338/ })).toBeInTheDocument();
@@ -66,6 +71,7 @@ test("a date column: findings, cards, rows per year with its table, calendar che
   expect(screen.getByRole("heading", { name: "Parts · weekday, month and quarter" })).toBeInTheDocument();
   expect(within(screen.getByRole("list", { name: "Quarter" })).getByText("Q4 · Oct - Dec")).toBeInTheDocument();
   expect(screen.getByText("2026 stops in Sep, so the months after it hold one year fewer.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "why" }));
   expect(within(screen.getByRole("list", { name: "Not shown for this column" })).getByText("Parts · hour")).toBeInTheDocument();
   const week = screen.getByRole("list", { name: "Weekday" });
   expect(within(week).getByText("Sat")).toHaveClass("when-we");
@@ -94,6 +100,7 @@ test("text read as a timestamp: precision, one calendar day, the session, repeat
   expect(screen.getByText("Read as a timestamp.")).toBeInTheDocument();
   expect(screen.getByText("%Y%m%d %H:%M:%S.%f")).toBeInTheDocument();
   expect(screen.getByText(/Every stamp falls on 2026-10-01 between 05:30 and 17:30/)).toBeInTheDocument();
+  openChecks();
   const outl = screen.getByRole("list", { name: "Outlier findings" });
   expect(within(outl).getByText("2026-10-01 is a Thursday")).toBeInTheDocument();
   expect(within(outl).getByText("no midnight values - every row carries a time")).toBeInTheDocument();
@@ -149,19 +156,19 @@ test("text stamps: the findings row, shape to format, the session fence and the 
   stub([], () => WRITTEN);
   mount(<WhenView p={P} column="Stamp" made="m1" st={st("Stamp")} as="timestamp" />);
   const found = await screen.findByRole("list", { name: "Findings" });
-  expect(within(found).getByText("Format inferred from the shape")).toBeInTheDocument();
-  expect(within(found).getByText(/8 digits · space · hh:mm:ss · point · 6 digits · Z → %Y%m%d %H:%M:%S.%fZ/)).toBeInTheDocument();
+  // only what needs a look: the format, the uniqueness, the day and the clean session are said in their panels
+  expect(within(found).queryByText("Format inferred from the shape")).toBeNull();
   expect(within(found).getByText("Missing 0.40%")).toBeInTheDocument();
   expect(within(found).getByText("4 rows")).toBeInTheDocument();
   expect(within(found).getByText("Mixed precision")).toBeInTheDocument();
   expect(within(found).getByText("9.34% whole milliseconds")).toBeInTheDocument();
-  expect(within(found).getByText("Near-unique")).toBeInTheDocument();
-  expect(within(found).getByText("2026-10-01 · 05:30 - 17:30")).toBeInTheDocument();
-  expect(within(found).getByText("No out-of-session stamps")).toBeInTheDocument();
+  expect(within(found).getAllByRole("listitem")).toHaveLength(2);
   const reps = screen.getByRole("list", { name: "Precision and repeats" });
   expect(within(reps).getByText("99999999 99:99:99.999999A")).toBeInTheDocument();
   expect(within(reps).getByText("6 · every value")).toBeInTheDocument();
   expect(within(reps).getByText(/one shape covers all 996 filled rows/)).toBeInTheDocument();
+  expect(screen.getByText("None.")).toBeInTheDocument();                     // every outlier check passes: one line
+  openChecks();
   expect(within(screen.getByRole("list", { name: "Outlier findings" })).getByText("0 · 0")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Parts · week and day" })).toBeInTheDocument();
   const hours = screen.getByRole("list", { name: "Hour of day" });
@@ -181,9 +188,11 @@ test("a batch date is named, marked in the chart and said against the next most 
   const found = await screen.findByRole("list", { name: "Findings" });
   expect(within(found).getByText("Batch date")).toBeInTheDocument();
   expect(within(found).getByText("2026-09-01 ×26 · the next most repeated ×6")).toBeInTheDocument();
-  expect(within(found).getByText(/99\/99\/9999 → %d\/%m\/%Y · day first: 1,708 values carry a day above 12 in the first slot/)).toBeInTheDocument();
   expect(within(found).getByText("latest read 28/12/2024 · really 2026-09-28")).toBeInTheDocument();
-  expect(within(found).getByText("No placeholders · no nulls")).toBeInTheDocument();
+  // the format and its slots are said once, in the calendar checks
+  const checks = screen.getByRole("list", { name: "Calendar checks" });
+  expect(within(checks).getByText("99/99/9999")).toBeInTheDocument();
+  expect(within(checks).getByText(/day first: 1,708 values carry a day above 12 in the first slot/)).toBeInTheDocument();
   expect(within(found).getByText("In the future")).toBeInTheDocument();
   expect(screen.getByText(/2026 to Sep holds the 26-row batch on 2026-09-01/)).toBeInTheDocument();
   expect(screen.getByText("26 on 2026-09-01 against 6 on the next most repeated date")).toBeInTheDocument();

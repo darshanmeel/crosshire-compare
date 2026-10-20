@@ -67,29 +67,31 @@ const has = (v: unknown) => v != null && v !== "";
 const kept = (g: SimGroup, pick?: string) => (pick && g.members.some((m) => m.value === pick) ? pick : g.keep);
 
 /** One line on a text column: what it is and what to do with it. */
-function TextVerdict({ st, cast, as, category, spell, sim }:
-  { st: Row; cast?: CastRow; as: string; category: boolean; spell?: SpellingBody; sim?: SimilarBody }) {
+function TextVerdict({ st, cast, as, category, spell, sim, where }:
+  { st: Row; cast?: CastRow; as: string; category: boolean; spell?: SpellingBody; sim?: SimilarBody; where: "top" | "panel" }) {
+  // a warning leads the page; a calm verdict sits in the panel it explains
+  const out = (warn: boolean, node: ReactNode) => (warn === (where === "top") ? node : null);
   const distinct = Number(st.Distinct), filled = Number(st.Rows) - Number(st.Nulls);
   const nulls = Number(st["Null %"] ?? 0) > 0 ? `${pct(st["Null %"])} null` : "no nulls";
   const empty = Number(st["Null %"] ?? 0) >= 50 ? <> Mostly empty - {pct(st["Null %"])} null.</> : null;
   const hit = as === "number" ? cast?.number : undefined;
   if (cast && hit) {
     const { type, form } = castType("number", hit);
-    return <Callout tone="pos" icon="check"><strong>Text read as a number.</strong> {pct(share(hit.any, cast.filled))} of the filled values read as <code>{type}</code>{form && <> {form}</>} - its digits are counted below.{empty}</Callout>;
+    return out(false, <Callout tone="pos" icon="check"><strong>Text read as a number.</strong> {pct(share(hit.any, cast.filled))} of the filled values read as <code>{type}</code>{form && <> {form}</>} - its digits are counted below.{empty}</Callout>);
   }
   if (category) {
     if (!spell) return null;          // said once the spelling is counted, so a clean verdict never flips to variants
     const variants = spell.distinct - spell.folded;
     const groups = sim?.groups.length ?? 0;
     if (variants > 0)
-      return <Callout tone="warn"><strong>A category with spelling variants.</strong> {num(distinct)} values, {num(spell.folded)} once case and outer spaces are ignored - tidy them with a step before comparing.{empty}</Callout>;
+      return out(true, <Callout tone="warn"><strong>A category with spelling variants.</strong> {num(distinct)} values, {num(spell.folded)} once case and outer spaces are ignored - tidy them with a step before comparing.{empty}</Callout>);
     if (groups && sim)
-      return <Callout tone="warn"><strong>A category with near-duplicates.</strong> {num(distinct)} values, {num(merged(sim))} once the {num(groups)} group{groups === 1 ? "" : "s"} under <em>Similar values</em> are merged.{empty}</Callout>;
-    return <Callout tone="pos" icon="check"><strong>A clean category.</strong> {num(distinct)} value{distinct > 1 ? "s" : ""}, {nulls}, no case or whitespace variants. In Compare this is a good <em>Profile by bucket</em> column.{empty}</Callout>;
+      return out(true, <Callout tone="warn"><strong>A category with near-duplicates.</strong> {num(distinct)} values, {num(merged(sim))} once the {num(groups)} group{groups === 1 ? "" : "s"} under <em>Similar values</em> are merged.{empty}</Callout>);
+    return out(false, <Callout tone="pos" icon="check"><strong>A clean category.</strong> {num(distinct)} value{distinct > 1 ? "s" : ""}, {nulls}, no case or whitespace variants. In Compare this is a good <em>Profile by bucket</em> column.{empty}</Callout>);
   }
   if (Number(st["Distinct % of filled"] ?? 0) >= 95)
-    return <Callout icon="key"><strong>Nearly every value different.</strong> {num(distinct)} distinct of {num(filled)} filled - an id or free text, a key candidate rather than a category.{empty}</Callout>;
-  return empty ? <Callout tone="warn"><strong>Sparse.</strong>{empty}</Callout> : null;
+    return out(false, <Callout icon="key"><strong>Nearly every value different.</strong> {num(distinct)} distinct of {num(filled)} filled - an id or free text, a key candidate rather than a category.{empty}</Callout>);
+  return empty ? out(true, <Callout tone="warn"><strong>Sparse.</strong>{empty}</Callout>) : null;
 }
 
 /** Distinct values once every group is merged into one. */
@@ -189,10 +191,10 @@ function SimilarPanel({ column, sim, method, setMethod, picks, pick }:
 }
 
 /** Every value most to least frequent, each group's other spellings indented under the kept one. */
-function ValuesPanel({ column, sim, method, picks, shapes, made, category }:
-  { column: string; sim?: SimilarBody; method: Method; picks: Record<string, string>; shapes: Row[]; made: string; category: boolean }) {
+function ValuesPanel({ column, sim, method, picks, shapes, made, category, lead }:
+  { column: string; sim?: SimilarBody; method: Method; picks: Record<string, string>; shapes: Row[]; made: string; category: boolean; lead?: ReactNode }) {
   const freq = useFreq(sim && sim.more > 0 ? column : null, made).data;
-  if (!sim) return <Panel title="Values"><div className="panel-body"><p className="caption">Reading…</p></div></Panel>;
+  if (!sim) return <Panel title="Values"><div className="panel-body">{lead}<p className="caption">Reading…</p></div></Panel>;
   const vals = sim.values ?? [];
   const under = new Map<string, SimMember[]>();       // kept value → the spellings merged into it
   const folded = new Set<string>();
@@ -224,6 +226,7 @@ function ValuesPanel({ column, sim, method, picks, shapes, made, category }:
   return (
     <Panel title="Values" sub={sim.groups.length ? `${sub} · grouped members shown indented` : sub}>
       <div className="panel-body">
+        {lead}
         <ul className="kv prof-kv text-values" aria-label={`Values of ${column}`}>{rows}</ul>
         {sim.groups.length > 0 && !sim.more && totals.length > 0 &&
           <p className="caption">After merging, the {num(totals.length)} values run {num(Math.min(...totals))} - {num(Math.max(...totals))} rows each.</p>}
@@ -277,12 +280,14 @@ export function TextView({ p, column, made, st, as, cast }: ColumnViewProps) {
       sub: variants ? "values that differ only in case or outer spaces" : spell.padded ? `${num(spell.padded)} with outer spaces` : "one spelling per value" }] : []),
   ];
   const deps = <Dependencies p={p} column={column} />;
-  const verdict = isText ? <TextVerdict st={st} cast={cast} as={as} category={category} spell={spell} sim={plain ? sim : undefined} /> : null;
+  const said = { st, cast, as, category, spell, sim: plain ? sim : undefined };
+  const verdict = isText ? <TextVerdict {...said} where="top" /> : null;
+  const calm = isText ? <TextVerdict {...said} where="panel" /> : null;
   if (!plain) return (<>
     {/* text read as a number (or a kind with no page of its own): its parts across the page */}
-    <Findings items={textFindings({ p, column, st, spell, category })} />
+    <Findings warningsOnly items={textFindings({ p, column, st, spell, category })} />
     <StatGrid stats={stats} />
-    {verdict}
+    {verdict}{calm}
     {isText && <CouldBe column={column} made={made} />}
     <Parts column={column} kind={kind} made={made} as={as} />
     <div className="prof-grid prof-col-grid">
@@ -293,25 +298,25 @@ export function TextView({ p, column, made, st, as, cast }: ColumnViewProps) {
   </>);
   const allShown = !!sim && !sim.more;
   return (<>
-    <Findings items={textFindings({ p, column, st, spell, sim, category })} />
+    <Findings warningsOnly items={textFindings({ p, column, st, spell, sim, category })} />
     <StatGrid stats={stats} />
     {verdict}
     <CouldBe column={column} made={made} />
     <div className="prof-grid prof-col-grid">
       <div className="prof-stack">
         <SimilarPanel column={column} sim={sim} method={shown} setMethod={(m) => setMethod({ column, m })} picks={at} pick={pick} />
-        <ValuesPanel column={column} sim={sim} method={shown} picks={at} shapes={shapes} made={made} category={category} />
+        <ValuesPanel column={column} sim={sim} method={shown} picks={at} shapes={shapes} made={made} category={category} lead={calm} />
         {!category && <Parts column={column} kind={kind} made={made} as={as} />}
         {!category && <Shapes rows={shapes} kind={kind} />}
       </div>
       <div className="prof-stack">
         {deps}
-        <NotShown items={[
-          ...(category ? [{ label: "Parts", why: `first and last characters only help with free text - with ${num(distinct)} values they repeat the list` }] : []),
-          { label: "Outliers", why: "looked for in number, date and timestamp columns" },
-          ...(allShown ? [{ label: "Least frequent", why: "the list of values is complete" }] : []),
-        ]} />
       </div>
     </div>
+    <NotShown items={[
+      ...(category ? [{ label: "Parts", why: `first and last characters only help with free text - with ${num(distinct)} values they repeat the list` }] : []),
+      { label: "Outliers", why: "looked for in number, date and timestamp columns" },
+      ...(allShown ? [{ label: "Least frequent", why: "the list of values is complete" }] : []),
+    ]} />
   </>);
 }

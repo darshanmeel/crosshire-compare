@@ -1,8 +1,8 @@
 // web/src/profiling/ColumnDetail.tsx - one column of the profile (screen 16): back to all columns,
 // previous / next, its statistics, outliers, shapes, most and least frequent values and what
 // determines it - all from the profile held.
-import { Bar, Button, Chip, num, Panel, Seg } from "../ui/kit";
-import { useState, type ReactNode } from "react";
+import { Bar, Button, Callout, Chip, LinkButton, num, Panel, Seg } from "../ui/kit";
+import { Fragment, useId, useState, type ReactNode } from "react";
 import { setView } from "../shell/view";
 import { castsOf, castType } from "./casts";
 import { openColumn } from "./ColumnsTable";
@@ -40,6 +40,23 @@ export function Points({ name, items, plain }: { name: string; items: Point[]; p
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A check list: when every check passes, one green line and the list behind "The n checks";
+ *  any warning opens the list by itself. `more` sits in the fold after the list. */
+export function Checks({ name, items, ok, more }: { name: string; items: Point[]; ok: ReactNode; more?: ReactNode }) {
+  const warn = items.some((it) => it.tone === "warn");
+  const [open, setOpen] = useState<boolean | null>(null);
+  const shown = open ?? warn;
+  const id = useId();
+  return (
+    <div className="checks">
+      {!warn && <Callout tone="pos" icon="check">{ok}</Callout>}
+      <div><LinkButton iconAfter="chevron" className={shown ? "fold-btn open" : "fold-btn"} aria-expanded={shown} aria-controls={id}
+        onClick={() => setOpen(!shown)}>The {items.length} checks</LinkButton></div>
+      {shown && <div id={id}><Points name={name} items={items} />{more}</div>}
+    </div>
   );
 }
 
@@ -128,18 +145,18 @@ function outlierBody(o: Row | undefined, kind: string, filled: number, st: Row, 
       : { label: "Zero · negative", value: "none", tone: "ok" });
   }
   const pcts = ["P1", "P5", "P25", "Median", "P75", "P95", "P99"].filter((k) => o[k] !== "" && o[k] != null);
+  const z = Number(o.Zeros ?? 0), neg = Number(o.Negatives ?? 0);
+  const ok = <><strong>None.</strong> Every value sits inside {fmt(o["Low fence"], isNum)} … {fmt(o["High fence"], isNum)} (Q1 - 1.5 × IQR … Q3 + 1.5 × IQR).
+    {isNum && (z || neg ? <> {num(z)} at zero, {num(neg)} negative.</> : " Nothing at zero, nothing negative.")}</>;
   return (
-    <>
-      <Points name="Outlier findings" items={items} />
-      {pcts.length > 0 && (
+    <Checks name="Outlier findings" items={items} ok={ok} more={pcts.length > 0 && (
         <div className="tblwrap">
           <table className="tbl compact" aria-label="Percentiles">
             <thead><tr>{pcts.map((k) => <th key={k} className="num">{k}</th>)}</tr></thead>
             <tbody><tr>{pcts.map((k) => <td key={k} className="num m">{fmt(o[k], isNum)}</td>)}</tr></tbody>
           </table>
         </div>
-      )}
-    </>
+      )} />
   );
 }
 
@@ -244,13 +261,18 @@ export function Frequent({ column, made, st, title = "Most and least frequent", 
   );
 }
 
-/** The sections left out for this column, and why - so nothing goes missing without a word. */
+/** The sections left out for this column, one foot line, with the reasons one click away. */
 export function NotShown({ items }: { items: { label: string; why: string }[] }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
   if (!items.length) return null;
   return (
-    <Panel title="Not shown for this column" sub="sections that only help with other kinds of data"><div className="panel-body">
-      <Points name="Not shown for this column" plain items={items.map((it) => ({ label: it.label, value: it.why }))} />
-    </div></Panel>
+    <div className="prof-notshown">
+      <p className="caption">Not shown: {items.map((it) => it.label).join(", ")}
+        <LinkButton iconAfter="chevron" className={open ? "fold-btn open" : "fold-btn"} aria-expanded={open} aria-controls={id}
+          onClick={() => setOpen(!open)}>why</LinkButton></p>
+      {open && <div id={id}><Points name="Not shown for this column" plain items={items.map((it) => ({ label: it.label, value: it.why }))} /></div>}
+    </div>
   );
 }
 
@@ -271,6 +293,8 @@ function FreqLists({ column, isNum, top, rest, all }: { column: string; isNum: b
 }
 
 export function Dependencies({ p, column }: { p: Profile; column: string }) {
+  const [fold, setFold] = useState<boolean | null>(null);
+  const foldId = useId();
   const keys = keyColumns(p);
   const deps = rowsOf(p.deps).filter((r) => r.Determines === column || r.Determined === column);
   const corr = rowsOf(p.corr).filter((r) => r["Column A"] === column || r["Column B"] === column);
@@ -320,14 +344,22 @@ export function Dependencies({ p, column }: { p: Profile; column: string }) {
     </div>
     );
   };
+  // the ranked lists sit behind one line, open by themselves only when a real link is among them
+  const links = decidedBy.length + decides.length;
+  const realLink = decidedBy.some((h) => h.v >= SHOWN && !near(h.col)) || decides.some((h) => h.v >= SHOWN);
+  const open = fold ?? realLink;
   return (
     <Panel title="Dependencies" sub="does another column determine this one?"><div className="panel-body">
       <ul className="bullets">{items.map((it, i) => <li key={i}><i className={it.ok ? "ok" : undefined} /><span>{it.body}</span></li>)}</ul>
-      {p.matrix.rows.length > 0 && <>
+      {p.matrix.rows.length > 0 && <div>
+        <LinkButton iconAfter="chevron" className={open ? "fold-btn open" : "fold-btn"} aria-expanded={open} aria-controls={foldId}
+          onClick={() => setFold(!open)}>Strongest links · {num(links)}{!realLink && links > 0 ? `, all under ${SHOWN}%` : ""}</LinkButton>
+      </div>}
+      {p.matrix.rows.length > 0 && open && <div id={foldId} className="dep-fold">
         <p className="caption">How far one column decides another beyond chance - 0 unrelated, 100% every value with one value - the {TOP} strongest each way. A near-key (an id) decides nearly everything by being near-unique, so it is faint and never the verdict.</p>
         {hits(`Decides ${column} most`, decidedBy, false, all.decidedBy.length - decidedBy.length)}
         {hits(`${column} decides most`, decides, true, all.decides.length - decides.length)}
-      </>}
+      </div>}
     </div></Panel>
   );
 }
@@ -376,29 +408,34 @@ export function ColumnDetail({ p, column, made, name, label }: { p: Profile; col
     : kind === "number" ? <NumberView {...view} />
     : kind === "boolean" ? <FlagView {...view} />
     : <TextView {...view} />;
+  const sem = semantic(column, as, Number(st.Distinct), Number(st.Rows), isKey, shapes[0] ? String(shapes[0].Pattern) : "");
   return (
     <>
-      <div className="sec-head prof-colhead">
-        <Button size="sm" icon="arrowl" onClick={() => setView({ column: null })}>All columns</Button>
-        <h2 className="m">{column}</h2>
-        {isKey && <Chip tone="key">key</Chip>}
-        {opts.length > 1
-          ? <label className="prof-readas"><span>read as</span>
-              <select className="sel" value={as} onChange={(e) => setPick({ column, as: e.target.value })}>
-                {opts.map((k) => <option key={k} value={k}>{k}{k === kind ? " - as profiled" : ""}</option>)}
-              </select>
-              {form && <code className="readas-form">{form}</code>}
-            </label>
-          : <span className="prof-readas"><span>read as</span><Chip>{kind}</Chip>{form && <code className="readas-form">{form}</code>}</span>}
-        <span className="prof-sem" title="what the column most likely holds - a guess from its name, type and values">
-          {semantic(column, as, Number(st.Distinct), Number(st.Rows), isKey, shapes[0] ? String(shapes[0].Pattern) : "")}</span>
-        <span className="sub">column {i + 1} of {all.length} · {name}{label ? ` · ${label}` : ""}</span>
-        <div className="actions">
-          <Button icon="arrowl" disabled={!prev} onClick={() => prev && openColumn(prev)}>Previous{prev && ` · ${prev}`}</Button>
-          <Button iconAfter="arrow" disabled={!next} onClick={() => next && openColumn(next)}>Next{next && ` · ${next}`}</Button>
+      <div className="prof-colhead">
+        <div className="sec-head prof-colrow">
+          <Button size="sm" icon="arrowl" onClick={() => setView({ column: null })}>All columns</Button>
+          <h2 className="m">{column}</h2>
+          {opts.length > 1
+            ? <label className="prof-readas"><span>read as</span>
+                <select className="sel" value={as} onChange={(e) => setPick({ column, as: e.target.value })}>
+                  {opts.map((k) => <option key={k} value={k}>{k}{k === kind ? " - as profiled" : ""}</option>)}
+                </select>
+              </label>
+            : <span className="prof-readas"><span>read as</span><Chip>{kind}</Chip></span>}
+          {isKey && <Chip tone="key">key</Chip>}
+          <div className="actions">
+            <Button icon="arrowl" disabled={!prev} onClick={() => prev && openColumn(prev)}>Previous{prev && ` · ${prev}`}</Button>
+            <Button iconAfter="arrow" disabled={!next} onClick={() => next && openColumn(next)}>Next{next && ` · ${next}`}</Button>
+          </div>
         </div>
+        <p className="prof-colsub">
+          {form && <><code className="readas-form">{form}</code><span aria-hidden="true"> · </span></>}
+          <span className="prof-sem" title="what the column most likely holds - a guess from its name, type and values">{sem}</span>
+          <span aria-hidden="true"> · </span>
+          <span className="sub">column {i + 1} of {all.length} · {name}{label ? ` · ${label}` : ""}</span>
+        </p>
       </div>
-      {body}
+      <Fragment key={column}>{body}</Fragment>
     </>
   );
 }

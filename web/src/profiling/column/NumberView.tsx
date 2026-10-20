@@ -3,9 +3,9 @@
 // outliers, its form taken apart (digits, places, round lots - GET /api/profiling/numform and
 // /api/profiling/parts), most and least frequent, dependencies.
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { api } from "../../api/client";
-import { Bar, Callout, num, Panel, Seg, StatGrid } from "../../ui/kit";
+import { Bar, Callout, LinkButton, num, Panel, plural, Seg, StatGrid } from "../../ui/kit";
 import { CouldBe, Dependencies, NotShown, Outliers, Points, READS_AS, share, toNum, type Point } from "../ColumnDetail";
 import { FreqBars, splitFreq } from "../FreqSection";
 import { fmt, pct, rowsOf, type Row } from "../frame";
@@ -25,6 +25,7 @@ export type NumForm = {
 const SKEW = 5;          // mean at least this many times the median: heavily skewed
 const ONE_BIN = 0.9;     // share of rows in one equal-width bin from which the bins say nothing
 const LONG = 5;          // % of values past the fence from which they are a long tail, not strays
+const NEAR_UNIQUE = 95;  // distinct % of filled from which a column is almost unique
 const EXTREME = 10;      // the highest this many times the P99: an extreme value
 type Mode = "equal" | "log" | "pct";
 const MODES: { value: Mode; label: string }[] = [
@@ -113,7 +114,7 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
   if (z) findings.push({ tone: "info", label: "Zeros", detail: `${num(z)} · ${pct(share(z, filled))}` });
   if (neg) findings.push({ tone: "info", label: "Negatives", detail: `${num(neg)} · ${pct(share(neg, filled))}` });
 
-  const top = form?.top[0];
+  // ten tiles: the top value is in Most frequent, zeros and negatives in Outliers - unless there is no fence to say them
   const stats = [
     { label: "Rows", value: num(st.Rows as number) },
     { label: "Nulls", value: <>{num(st.Nulls as number)} <span className="pc">· {pct(st["Null %"])}</span></> },
@@ -126,9 +127,7 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
     ...(o && has(o.P75) ? [{ label: "Q3", value: fmt(o.P75) }] : []),
     { label: "Max", value: fmt(st.Max) },
     ...(o && has(o["Std dev"]) ? [{ label: "Std dev", value: fmt(o["Std dev"]) }] : []),
-    ...(has(st["Top value"]) ? [{ label: "Top value", value: fmt(st["Top value"]),
-      sub: top && String(top.value) === String(toNum(st["Top value"])) ? `${num(top.n)} · ${pct(st["Top %"])}` : pct(st["Top %"]) }] : []),
-    ...(o || form ? [{ label: "Zero · negative",
+    ...(!fenced && (o || form) ? [{ label: "Zero · negative",
       value: z || neg ? <>{num(z)} · {num(neg)}</> : <span className="ok-t">none</span>,
       sub: z || neg ? `${pct(share(z, filled))} · ${pct(share(neg, filled))}` : undefined }] : []),
   ].filter((s) => s.value !== "");
@@ -141,10 +140,10 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
       {oneBin ? `Equal-width bins put ${pct(share(fullest, binTotal))} of rows in one bar, so the` : "The"} distribution below uses <strong>log bins</strong>.
       {longTail ? ` The ${pct(outPct)} past the fence are a long tail, not a few strays - see Outliers.` : ""}
     </Callout>
-  ) : bins.length > 1 && binTotal > 0 && fullest <= (2 * binTotal) / bins.length ? (
-    <Callout tone="pos" icon="check">
-      <strong>Spread evenly.</strong> No equal-width bin holds more than {pct(share(fullest, binTotal))} of rows; the mean is {fmt(st.Mean)}{o && has(o.Median) ? `, the median ${fmt(o.Median)}` : ""}.
-    </Callout>
+  ) : null;
+  // the calm verdict sits under the chart it describes
+  const even = !skewed && bins.length > 1 && binTotal > 0 && fullest <= (2 * binTotal) / bins.length ? (
+    <p className="caption num-even"><strong>Spread evenly.</strong> No equal-width bin holds more than {pct(share(fullest, binTotal))} of rows; the mean is {fmt(st.Mean)}{o && has(o.Median) ? `, the median ${fmt(o.Median)}` : ""}.</p>
   ) : null;
 
   // the bins of the mode picked, and one line on why
@@ -209,13 +208,14 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
             </div>
           </>}
         {caption && <p className="caption">{caption}</p>}
+        {even}
       </div>
     </Panel>
   );
 
   return (
     <>
-      <Findings items={findings} label={`Findings for ${column}`} />
+      <Findings warningsOnly items={findings} label={`Findings for ${column}`} />
       <StatGrid stats={stats} />
       {banner}
       <div className="prof-grid prof-col-grid">
@@ -226,11 +226,11 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
         <div className="prof-stack">
           <FormParts column={column} made={made} form={form} lotEnd={lotEnd} />
           <CouldBe column={column} made={made} />
-          <NumFrequent column={column} made={made} st={st} />
+          <NumFrequent column={column} made={made} st={st} filled={filled} />
           <Dependencies p={p} column={column} />
-          <NotShown items={[{ label: "Shapes", why: "a number's shape is its digits before and after the point - see Form · parts" }]} />
         </div>
       </div>
+      <NotShown items={[{ label: "Shapes", why: "a number's shape is its digits before and after the point - see Form · parts" }]} />
     </>
   );
 }
@@ -270,6 +270,16 @@ function FormParts({ column, made, form, lotEnd }: { column: string; made: strin
   const lots: Point[] = form.round_lots.length ? [{ label: "Round lots", tone: "warn",
     value: form.round_lots.map((v) => fmt(v)).join(" · "),
     note: `${form.round_lots.length} of the ${form.top.length} most frequent values end in ${lotEnd}` }] : [];
+  // what the places mean: values written with fewer places compare equal as numbers, not as text
+  const none = after?.rows.find((r) => r.label === "0")?.n ?? 0;
+  const insight = min < max ? (
+    <Callout icon="sparkle">
+      {none > 0
+        ? <><strong>{plural(none, "value")} {none === 1 ? "carries" : "carry"} no places after the point</strong>, the others up to {max} (a trailing zero dropped on export?).</>
+        : <><strong>Places run {min} to {max}</strong> - some values are written with fewer places than others.</>}
+      {" "}Read as a <em>number</em> they compare correctly - <code>7</code> equals <code>7.{"0".repeat(max)}</code>. As <em>text</em> they would not.
+    </Callout>
+  ) : null;
   return (
     <Panel {...head}><div className="panel-body">
       <h4 className="eyebrow">Digits before the point</h4>
@@ -281,13 +291,21 @@ function FormParts({ column, made, form, lotEnd }: { column: string; made: strin
         <PartBars g={both} label="Before · after" />
       </>}
       {lots.length > 0 && <Points name="Round lots" items={lots} />}
+      {insight}
     </div></Panel>
   );
 }
 
 /** The ten most frequent with bars; the least frequent as bars, or as one inline list when each is seen once. */
-function NumFrequent({ column, made, st }: { column: string; made: string; st: Row }) {
+function NumFrequent({ column, made, st, filled }: { column: string; made: string; st: Row; filled: number }) {
   const q = useFreq(column, made);
+  const [all, setAll] = useState(false);
+  const foldId = useId();
+  const distinct = Number(st.Distinct ?? 0);
+  const repeats = q.data ? rowsOf(q.data.top).filter((r) => Number(r.Count) > 1) : [];
+  // nearly every value different, and every repeat among the most frequent: the repeats, the rest in one row
+  const near = !!q.data && Number(st["Distinct % of filled"] ?? 0) >= NEAR_UNIQUE && distinct > repeats.length
+    && repeats.length < rowsOf(q.data.top).length;
   const body = (() => {
     if (q.error) return <div className="note error">{(q.error as Error).message}</div>;
     if (!q.data) return <p className="caption">Reading…</p>;
@@ -310,5 +328,31 @@ function NumFrequent({ column, made, st }: { column: string; made: string; st: R
       </>}
     </>;
   })();
-  return <Panel title="Most and least frequent" sub={`${num(st.Distinct as number)} distinct`}><div className="panel-body">{body}</div></Panel>;
+  if (!near) return <Panel title="Most and least frequent" sub={`${num(distinct)} distinct`}><div className="panel-body">{body}</div></Panel>;
+  const scale = Math.max(1, ...repeats.map((r) => Number(r.Count)));
+  const others = distinct - repeats.length;
+  return (
+    <Panel title="Most and least frequent" sub={`${num(distinct)} distinct · ${repeats.length ? plural(repeats.length, "value repeats", "values repeat") : "no value repeats"}`}>
+      <div className="panel-body">
+        <ul className="kv prof-kv" aria-label={`Repeated values of ${column}`}>
+          {repeats.map((r, i) => (
+            <li key={i}>
+              <span className="m" title={String(r.Value)}>{fmt(r.Value)}</span>
+              <Bar pct={(100 * Number(r.Count)) / scale} tone="warn" />
+              <span className="v">{num(r.Count as number)} <span className="pc">· {pct(r["%"])}</span></span>
+            </li>
+          ))}
+          <li className="dim">
+            <span className="m">{plural(others, "other value")}</span>
+            <Bar pct={100 / scale} tone="accent" />
+            <span className="v" aria-label={`each once, ${pct(share(1, filled))} of the filled values`}>1 <span className="pc">· {pct(share(1, filled))}</span></span>
+          </li>
+        </ul>
+        <p className="caption">Almost unique - not a key by itself.</p>
+        <div><LinkButton iconAfter="chevron" className={all ? "fold-btn open" : "fold-btn"} aria-expanded={all} aria-controls={foldId}
+          onClick={() => setAll(!all)}>The most and least frequent</LinkButton></div>
+        {all && <div id={foldId}>{body}</div>}
+      </div>
+    </Panel>
+  );
 }

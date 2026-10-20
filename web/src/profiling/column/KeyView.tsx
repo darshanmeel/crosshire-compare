@@ -8,7 +8,7 @@ import { api } from "../../api/client";
 import { useSetup } from "../../setup/api";
 import { setView } from "../../shell/view";
 import { Button, Callout, num, Panel, plural, StatGrid } from "../../ui/kit";
-import { NotShown, Points, readShape, share, type Point } from "../ColumnDetail";
+import { Checks, NotShown, Points, readShape, share, type Point } from "../ColumnDetail";
 import { pct } from "../frame";
 import { Findings, type Finding } from "./Findings";
 import type { ColumnViewProps } from "./types";
@@ -233,8 +233,9 @@ export function KeyView({ column, made, st }: ColumnViewProps) {
     if (other && oneGap && sameAs(other, oneGap)) told.push(`the ${num(other.n)} ${names[other.side === "A" ? 0 : 1]}-only ids`);
     if (mine && past && sameAs(mine, past)) told.push(`the ${num(mine.n)} ${names[mine.side === "A" ? 0 : 1]}-only ids`);
   }
+  const calm = unique && !g.count;      // a clean key's verdict sits in the panel it explains, a warning leads the page
   const banner = (
-    <Callout tone={unique && !g.count ? "pos" : "warn"} icon="key">
+    <Callout tone={calm ? "pos" : "warn"} icon="key">
       <strong>{head}</strong>{problems.length > 0 && <> {problems.join(", ")} - rows with those cannot be matched one to one.</>}
       {n ? <> {d.prefix && d.prefix.n === d.filled ? <>Prefix <M>{d.prefix.text}</M> and a number</> : "A number part"} from{" "}
         <M>{String(n.min)}</M> to <M>{String(n.max)}</M>{" - "}
@@ -298,28 +299,29 @@ export function KeyView({ column, made, st }: ColumnViewProps) {
 
   return (
     <div className="key-view">
-      <Findings items={findings} />
+      <Findings warningsOnly items={findings} />
       <StatGrid stats={stats} />
-      {banner}
+      {!calm && banner}
       <div className="prof-grid prof-col-grid">
         <div className="prof-stack">
           <Panel title="Sequence · Parts" sub="the prefix and the number part, in order - where it runs and where it breaks"><div className="panel-body">
+            {calm && banner}
             {spans.length > 0 && <SequenceBar spans={spans} past={past} />}
             <Points name="Shape and sequence" items={seq} />
           </div></Panel>
           <Panel title="Key check" sub="what makes a column safe to match rows on"><div className="panel-body">
-            <Points name="Key check" items={check} />
+            <Checks name="Key check" items={check} ok={<><strong>Safe to match on.</strong> Unique by itself, no nulls or blanks, no case or whitespace variants{n && !n.leading_zeros ? ", no leading zeros at risk" : ""}.</>} />
           </div></Panel>
         </div>
         <div className="prof-stack">
           <InCompare column={column} cmp={cmp} gap={oneGap} past={past} />
-          <NotShown items={[
-            { label: "Frequencies", why: "every value once - nothing to rank" },
-            { label: "Distribution · Outliers", why: "an identifier is not a quantity; the sequence above takes their place" },
-            { label: "Dependencies", why: "a key decides every other column, trivially, and no column decides a key" },
-          ]} />
         </div>
       </div>
+      <NotShown items={[
+        { label: "Frequencies", why: "every value once - nothing to rank" },
+        { label: "Distribution · Outliers", why: "an identifier is not a quantity; the sequence above takes their place" },
+        { label: "Dependencies", why: "a key decides every other column, trivially, and no column decides a key" },
+      ]} />
     </div>
   );
 }

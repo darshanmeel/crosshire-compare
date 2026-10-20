@@ -198,7 +198,7 @@ test("a column name opens its detail: stats, histogram, outliers, frequencies, d
   // a category of 8 values: a verdict, its shapes folded into its values, parts and outliers said to be left out
   expect(await screen.findByText("A clean category.")).toBeInTheDocument();
   expect(screen.getByRole("list", { name: "Shape findings" })).toHaveTextContent("7 letters");
-  expect(screen.getByRole("list", { name: "Not shown for this column" })).toHaveTextContent(/Parts.*Outliers/);
+  expect(screen.getByText(/^Not shown:/)).toHaveTextContent(/Parts.*Outliers/);
   expect(await screen.findByText("clean")).toBeInTheDocument();                 // case · spaces
   // read as text, but its values would read as numbers: how many, and the type they would take
   const could = await screen.findByRole("list", { name: "Could be read as" });
@@ -208,7 +208,7 @@ test("a column name opens its detail: stats, histogram, outliers, frequencies, d
   expect(screen.getByRole("combobox", { name: /read as/ })).toHaveValue("text");
   // the key (emp_id) has its own page (KeyView, tested there): the key check from /keycheck
   await userEvent.click(screen.getByRole("button", { name: "Previous · emp_id" }));
-  expect(await screen.findByRole("list", { name: "Key check" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Key check" })).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "All columns" }));
   expect(await screen.findByRole("table", { name: "Columns" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "emp_id - open its detail" })).toBeInTheDocument();   // the last one opened stays marked

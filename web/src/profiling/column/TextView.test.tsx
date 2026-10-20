@@ -50,12 +50,12 @@ test("renamed spellings: findings, merged distinct, groups by another column, th
   const findings = await screen.findByRole("list", { name: "Findings" });
   expect(await within(findings).findByText("Near-duplicates")).toBeInTheDocument();
   expect(findings).toHaveTextContent("3 groups · 11 values that are really 8");
-  expect(findings).toHaveTextContent("Decided by CostCenter");
-  expect(findings).toHaveTextContent("U 90.22%");
-  expect(findings).toHaveTextContent("Balanced");
-  expect(findings).toHaveTextContent("No nulls");
-  expect(await within(findings).findByText("Clean case and whitespace")).toBeInTheDocument();
-  expect(findings).toHaveTextContent("Not high-cardinality");
+  // only what needs a look: the good news and the facts are said once, in their tile or panel
+  expect(within(findings).getAllByRole("listitem")).toHaveLength(1);
+  expect(findings).not.toHaveTextContent("Decided by CostCenter");
+  // a real link: Dependencies opens its strongest links by itself
+  expect(screen.getByRole("button", { name: /^Strongest links/ })).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("list", { name: "Decides Dept most" })).toHaveTextContent("CostCenter");
   const grid = document.querySelector<HTMLElement>(".stat-grid")!;
   expect(within(grid).getByText("Distinct").parentElement).toHaveTextContent("11 → 8after merging duplicates");
   expect(within(grid).getByText("Top value").parentElement).toHaveTextContent("406 · 13.60%");
@@ -84,6 +84,7 @@ test("renamed spellings: findings, merged distinct, groups by another column, th
   expect(calls.some((u) => u.includes("method=prefix"))).toBe(true);
   expect(await screen.findByRole("button", { name: "Shared prefix" })).toHaveAttribute("aria-pressed", "true");
   // a category: parts said to be left out, least frequent too as every value is listed
+  await userEvent.click(screen.getByRole("button", { name: "why" }));
   const not = screen.getByRole("list", { name: "Not shown for this column" });
   expect(not).toHaveTextContent(/Parts.*Outliers.*Least frequent/);
   expect(screen.queryByRole("heading", { name: "Parts" })).toBeNull();
@@ -97,12 +98,12 @@ test("free text: no groups, a parts panel, the least frequent, high-cardinality"
   mount(<TextView p={P} column="FullName" made="20261004-120000" st={s} as="text" />);
   expect(await screen.findByText("No values look alike this way.")).toBeInTheDocument();
   const findings = screen.getByRole("list", { name: "Findings" });
-  expect(findings).toHaveTextContent("High-cardinality361 distinct · 12.09% of filled");
+  expect(findings).not.toHaveTextContent("High-cardinality");                // said by the Distinct tile
   expect(findings).not.toHaveTextContent("Near-duplicates");
   expect(await screen.findByRole("heading", { name: "Parts" })).toBeInTheDocument();
   expect(screen.getByRole("list", { name: "First 3 characters" })).toHaveTextContent("Oma");
   expect(await screen.findByRole("list", { name: "Least frequent values of FullName" })).toHaveTextContent("Ana Li");
-  expect(screen.getByRole("list", { name: "Not shown for this column" })).not.toHaveTextContent("Parts");
+  expect(screen.getByText(/^Not shown:/)).not.toHaveTextContent("Parts");
 });
 
 test("the header form beside read as", () => {

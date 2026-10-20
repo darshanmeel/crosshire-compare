@@ -47,9 +47,8 @@ test("a clean Y / N flag: findings first, the cards, the values and the pairs, t
   show();
   const findings = await screen.findByRole("list", { name: "Findings" });
   const pills = within(findings).getAllByRole("listitem").map((li) => li.textContent);
-  expect(pills[0]).toBe("Read as boolean fromY / N - one spelling pair, every row");
-  expect(pills).toContain("Imbalanced 84 / 16one in 6 values is false");
-  expect(pills).toContain("No nulls · no blanks");
+  // nothing needs a look: one clean pill; the pair, the balance and the nulls are said in their tiles
+  expect(pills).toEqual(["Cleannothing needs a look"]);
   expect(findings.compareDocumentPosition(screen.getByText("Balance"))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   expect(screen.getByText("True · Y")).toBeInTheDocument();
   expect(screen.getByText("False · N")).toBeInTheDocument();
@@ -67,6 +66,8 @@ test("a clean Y / N flag: findings first, the cards, the values and the pairs, t
   expect(within(rates).getAllByRole("listitem")[0]).toHaveTextContent("CC-110");
   expect(within(rates).getAllByRole("listitem")[0].querySelector(".bar i")).toHaveStyle({ width: "87.09%" });
   expect(screen.getByText(/82\.34% - 87\.09% across all 2 groups - flat/)).toBeInTheDocument();
+  expect(screen.getByText(/^Not shown: Distribution, Parts · Shapes, Outliers, Least frequent/)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "why" }));
   const notShown = screen.getByRole("list", { name: "Not shown for this column" });
   expect(notShown).toHaveTextContent("N, 467 times");
   expect(notShown).toHaveTextContent("one letter or word per value");

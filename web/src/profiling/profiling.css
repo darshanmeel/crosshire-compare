@@ -58,16 +58,26 @@
 .prof-freq .sel.type { max-width: 200px; }
 
 /* column detail */
-.prof-colhead { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+/* the column head: one line (back, name, read as, key, previous / next), the rest in a grey sub-line */
+.prof-colhead { display: flex; flex-direction: column; gap: 6px; }
+.prof-colrow { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0; }
 .prof-colhead h2 { margin: 0; font-family: var(--font-mono); font-size: 20px; font-weight: 600; color: var(--fs-text); overflow-wrap: anywhere; }
-.prof-colhead .sub { font-size: 13px; color: var(--fs-text2); }
-.prof-colhead .actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.prof-colrow .actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.prof-colsub { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 13px; color: var(--fs-text2); }
+.prof-colsub .sub { font-size: 13px; color: var(--fs-text2); }
+/* a check list's fold, Dependencies' strongest links and the Not shown line */
+.checks { display: flex; flex-direction: column; gap: 8px; }
+.fold-btn { padding: 0 6px; margin-left: -6px; }
+.fold-btn svg { transition: transform .15s; }
+.fold-btn.open svg { transform: rotate(180deg); }
+.dep-fold { display: flex; flex-direction: column; gap: 12px; }
+.prof-notshown .caption { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .prof-bins td.m { white-space: nowrap; }
 .prof-bins th.b2, .prof-bins tr td:nth-child(4) { border-left: 1px solid var(--fs-border); }
 .prof-said { margin: 0; font-size: 13px; color: var(--fs-text2); }
 
 @media (max-width: 600px) {
-  .prof-colhead .actions { margin-left: 0; }
+  .prof-colrow .actions { margin-left: 0; flex-basis: 100%; }
   .kv.prof-kv li { grid-template-columns: minmax(0, 1fr) 60px auto; }
 }
 

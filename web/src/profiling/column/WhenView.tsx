@@ -6,7 +6,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { api } from "../../api/client";
 import { Callout, num, Panel, plural, Seg, StatGrid, type SegOption } from "../../ui/kit";
-import { Dependencies, NotShown, Points, share, type Point } from "../ColumnDetail";
+import { Checks, Dependencies, NotShown, Points, share, type Point } from "../ColumnDetail";
 import { pct } from "../frame";
 import { Findings, type Finding } from "./Findings";
 import type { ColumnViewProps } from "./types";
@@ -318,14 +318,8 @@ function Timestamp({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: Whe
   const hours = some(w.hours);
   const hourRange = hours.length ? (w.hours ?? []).slice(Number(hours[0].label), Number(hours[hours.length - 1].label) + 1) : [];
   return (<>
-    <Findings items={findings} />
+    <Findings warningsOnly items={findings} />
     <StatGrid stats={stats} />
-    <Callout tone="pos" icon="check">
-      <strong>Read as a timestamp.</strong>{shape && w.form
-        ? <> <code>{shape.example}</code> → <code>{formText(w)}</code>.</>
-        : w.form && <> Written as <code>{formText(w)}</code>.</>} {range}
-      {left > 0 && <> {num(left)} filled value{left > 1 ? "s do" : " does"} not read and {left > 1 ? "are" : "is"} left out.</>}
-    </Callout>
     <div className="prof-grid prof-col-grid">
       <div className="prof-stack">
         <Chart w={w} bin={bin} setBin={setBin} options={opts}>
@@ -337,6 +331,12 @@ function Timestamp({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: Whe
           ]} />
         </Chart>
         <Panel title="Precision and repeats" sub="how fine the stamps are, and which ones repeat"><div className="panel-body">
+          <Callout tone="pos" icon="check">
+            <strong>Read as a timestamp.</strong>{shape && w.form
+              ? <> <code>{shape.example}</code> → <code>{formText(w)}</code>.</>
+              : w.form && <> Written as <code>{formText(w)}</code>.</>} {range}
+            {left > 0 && <> {num(left)} filled value{left > 1 ? "s do" : " does"} not read and {left > 1 ? "are" : "is"} left out.</>}
+          </Callout>
           <Points name="Precision and repeats" items={reps} />
           <span className="eyebrow">Most repeated stamps</span>
           {w.repeated.length
@@ -347,7 +347,8 @@ function Timestamp({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: Whe
       </div>
       <div className="prof-stack">
         <Panel title="Outliers" sub="stamps that do not belong to the session"><div className="panel-body">
-          <Points name="Outlier findings" items={outl} />
+          <Checks name="Outlier findings" items={outl}
+            ok={<><strong>None.</strong> Every stamp carries a time{s ? `, between ${s.from} and ${s.to}` : ""}; nothing in the future, no placeholders.</>} />
         </div></Panel>
         <Panel title="Parts · week and day" sub="the stamps taken apart by weekday and hour"><div className="panel-body when-cal">
           <span className="eyebrow">Weekday</span>
@@ -374,7 +375,7 @@ function DateView({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: When
   const clean = [!w.future && "no future dates", !ph && "no placeholders", !nulls && "no nulls"].filter(Boolean) as string[];
   const findings: Finding[] = [
     ...[formatFinding(w)].filter((f): f is Finding => !!f),
-    ...(tl && tl.read && w.last && tl.read !== w.last ? [{ tone: "info" as const, label: "As text it was wrong",
+    ...(tl && tl.read && w.last && tl.read !== w.last ? [{ tone: "warn" as const, label: "As text it was wrong",
       detail: `latest read ${tl.text} · really ${w.last}` }] : []),
     ...trouble(w, nulls, st["Null %"], left),
     { tone: "info", label: `Weekend ${pct(we)}`, detail: plural(w.weekend, "date") },
@@ -405,7 +406,7 @@ function DateView({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: When
       tone: fomShare > 6.6 ? "warn" : "ok",
       note: `about 1 in 30 (3.33%) if dates fall evenly${batch && batch.value.endsWith("-01") ? ` - ${num(batch.n)} of them are the ${batch.value} batch` : ""}` },
     { label: "Format", tone: left || (w.written?.shape_count ?? 1) > 1 ? "warn" : "ok",
-      value: w.form ? <><code>{formText(w)}</code> · {left ? `${num(left)} do not read` : "every value"}</> : "a date column",
+      value: w.form ? <>{w.written?.shapes[0] && <><code>{w.written.shapes[0].shape}</code> → </>}<code>{formText(w)}</code> · {left ? `${num(left)} do not read` : "every value"}</> : "a date column",
       note: w.form ? [w.written && w.written.shape_count > 1 ? `${plural(w.written.shape_count, "shape")}` : w.written ? "one shape" : "",
                       slots, left ? "the values that do not read are left out here" : ""].filter(Boolean).join("; ")
                    : "stored as a date - no text to read" },
@@ -416,7 +417,7 @@ function DateView({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: When
   const lm = w.last ? Number(w.last.slice(5, 7)) : 12;
   const years = some(w.years);
   return (<>
-    <Findings items={findings} />
+    <Findings warningsOnly items={findings} />
     <StatGrid stats={stats} />
     <div className="prof-grid prof-col-grid">
       <div className="prof-stack">
@@ -437,7 +438,8 @@ function DateView({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: When
       </div>
       <div className="prof-stack">
         <Panel title="Calendar checks" sub="the dates that usually mean trouble"><div className="panel-body">
-          <Points name="Calendar checks" items={checks} />
+          <Checks name="Calendar checks" items={checks}
+            ok={<><strong>None.</strong> No future dates, none before 1900, no placeholders, no weekends, firsts of a month at their usual share and one format.</>} />
         </div></Panel>
         <Panel title="Most repeated dates" sub={`${num(w.distinct)} distinct · ${num(w.shared)} rows share a date`}><div className="panel-body">
           {w.repeated.length
