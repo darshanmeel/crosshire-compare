@@ -1,14 +1,15 @@
 // web/src/results/WhyTheyDiffer.tsx - the Summary's side panel: per differing column the most
 // frequent (A value -> B value) pairs, or - when every pair is different - how alike the values
-// are (near-match); then the one-sided rows, with their pattern when the data has one.
+// are (near-match); then the one-sided rows, with their pattern when the data has one and a link to
+// them; and one button on to the rows that differ.
 import { useQueries } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { setView } from "../shell/view";
-import { Bar, Button, num } from "../ui/kit";
+import { Bar, Button, grouped, LinkButton, num } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import { useNearMatch } from "./detailApi";
-import { useOneSided } from "./OneSidedTab";
+import { useOneSided, useOwnNames } from "./OneSidedTab";
 import { ledgerRows, countsOf, type Frame, type Pairs, type Summary } from "./types";
 
 const MAX_COLUMNS = 6;
@@ -38,7 +39,8 @@ export function WhyTheyDiffer({ run, s }: { run: RunView; s: Summary }) {
   const near = useNearMatch(run.id, allDistinct);
   const c = countsOf(s);
   const a = useOneSided(run.id, "A", 6, c.onlyA > 1), b = useOneSided(run.id, "B", 6, c.onlyB > 1);
-  const pattern = [{ name: NA, d: a.data }, { name: NB, d: b.data }].filter((x) => x.d && x.d.total > 1 && x.d.constant.length);
+  const ownB = useOwnNames(run, "B");
+  const pattern = [{ name: NA, d: a.data, label: (k: string) => k }, { name: NB, d: b.data, label: ownB }].filter((x) => x.d && x.d.total > 1 && x.d.constant.length);
   const nothing = !cols.length && !c.onlyA && !c.onlyB;
   return (
     <section className="panel why" aria-labelledby="h-why">
@@ -62,7 +64,7 @@ export function WhyTheyDiffer({ run, s }: { run: RunView; s: Summary }) {
                 <ul className="kv" aria-label={`Value pairs for ${col}`}>
                   {d.pairs.filter((p) => p.n > 1).map((p, j) => (
                     <li key={j}>
-                      <span className="why-pair"><span className="ca">{p.a}</span><Icon name="arrow" size="sm" /><span className="cb">{p.b}</span></span>
+                      <span className="why-pair"><span className="ca">{grouped(p.a)}</span><Icon name="arrow" size="sm" /><span className="cb">{grouped(p.b)}</span></span>
                       <Bar pct={(100 * p.n) / top} tone="warn" />
                       <span className="v">{num(p.n)}</span>
                     </li>
@@ -77,16 +79,18 @@ export function WhyTheyDiffer({ run, s }: { run: RunView; s: Summary }) {
         {(c.onlyA > 0 || c.onlyB > 0) && (
           <div className="why-col">
             <div className="why-head"><span className="m">one-sided rows</span><span className="m dim">{num(c.onlyA)} · {num(c.onlyB)}</span></div>
-            {pattern.map((x) => (
-              <p key={x.name} className="why-text">
-                All {num(x.d!.total)} rows only in {x.name} read{" "}
-                {x.d!.constant.slice(0, 4).map((k, j, all) => (
-                  <span key={k.column}>{k.column} <code>{k.value}</code>{j < all.length - 1 ? ", " : ""}</span>
-                ))}
-                {x.d!.constant.length > 4 ? " …" : ""} - one batch, not separate records.
-              </p>
-            ))}
-            <Button size="sm" className="why-go" iconAfter="arrow" onClick={() => setView({ tab: "onesided" })}>See the one-sided rows</Button>
+            <p className="why-text">
+              {pattern.map((x) => (
+                <span key={x.name}>
+                  All {num(x.d!.total)} rows only in {x.name} read{" "}
+                  {x.d!.constant.slice(0, 4).map((k, j, all) => (
+                    <span key={k.column}>{x.label(k.column)} <code>{grouped(k.value)}</code>{j < all.length - 1 ? ", " : ""}</span>
+                  ))}
+                  {x.d!.constant.length > 4 ? " …" : ""} - one batch, not separate records.{" "}
+                </span>
+              ))}
+              <LinkButton className="why-link" iconAfter="arrow" onClick={() => setView({ tab: "onesided" })}>See the one-sided rows</LinkButton>
+            </p>
           </div>
         )}
         {run.diff_rows > 0 && (

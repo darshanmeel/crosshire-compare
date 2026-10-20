@@ -188,8 +188,12 @@ test("the Summary: tiles, the Columns panel with its one-sided foot, and Profile
   const foot = screen.getByText("Not compared").closest(".panel-foot") as HTMLElement;
   expect(foot).toHaveTextContent("first_name · only in HR");
   expect(foot).toHaveTextContent("CostCenter · only in Right");
-  expect(screen.getByText("emp_id", { selector: ".panel-note b" })).toBeInTheDocument();
-  const bucket = screen.getByRole("group", { name: "Bucket" });
+  // the key line is said once, in the caption under the tiles
+  expect(screen.getByText("emp_id", { selector: ".summary > .caption b" }).parentElement).toHaveTextContent(
+    "Rows are matched on emp_id - 2,960 rows matched · Match figures are measured on the 2,960 rows that paired.");
+  expect(screen.queryByRole("group", { name: "Bucket" })).toBeNull();          // Profile by bucket is a closed fold
+  await userEvent.click(screen.getByText("Profile by bucket"));
+  const bucket = await screen.findByRole("group", { name: "Bucket" });
   expect(within(bucket).getByRole("button", { name: "Matched but different (649)" })).toHaveAttribute("aria-pressed", "true");
   expect(await screen.findByText("Every column across these rows")).toBeInTheDocument();
   await userEvent.click(within(bucket).getByRole("button", { name: "Keys matched (2,960)" }));
@@ -252,19 +256,25 @@ test("One-sided rows: two panels, their files, show all, the pattern and the key
   const b = screen.getByRole("region", { name: "Only in Right" });
   expect(await within(a).findByText("40", { selector: ".count" })).toBeInTheDocument();
   expect(within(a).getByText("no Right row with that emp_id")).toBeInTheDocument();
-  expect(within(a).getByRole("link", { name: "HR_compare_Right__left_only.csv" }))
-    .toHaveAttribute("href", "/api/results/r1/file/HR_compare_Right__left_only.csv");
+  const file = within(a).getByRole("link", { name: "HR_compare_Right__left_only.csv" });   // the full name as its name
+  expect(file).toHaveAttribute("href", "/api/results/r1/file/HR_compare_Right__left_only.csv");
+  expect(file).toHaveTextContent(/^left_only\.csv$/);
   expect(within(a).getAllByRole("row")).toHaveLength(7);
   expect(a.querySelector(".panel-foot")).toHaveTextContent("Showing 6 of 40");
-  expect(within(a).getAllByText("11822.28")[0]).toHaveClass("num");
+  expect(within(a).getAllByText("11,822.28")[0]).toHaveClass("num");
   expect(within(a).getAllByText("E12961")[0]).toHaveClass("keycell");
   const cols = () => within(a).getAllByRole("columnheader").map((h) => h.textContent);
-  expect(cols()).toEqual(["emp_id", "first_name", "department", "salary"]);   // the key and three; last_name ticked off
+  expect(cols()).toEqual(["emp_id", "first_name", "last_name", "department", "salary"]);   // every column to begin with
+  expect(within(a).queryByRole("group", { name: "Columns to show" })).toBeNull();          // the picker waits in the head
+  await userEvent.click(within(a).getByRole("button", { name: "Columns (5 of 5)" }));
   const show = within(a).getByRole("group", { name: "Columns to show" });
+  await userEvent.click(within(show).getByRole("checkbox", { name: "last_name" }));
+  expect(cols()).toEqual(["emp_id", "first_name", "department", "salary"]);
   await userEvent.click(within(show).getByRole("checkbox", { name: "last_name" }));
   expect(cols()).toEqual(["emp_id", "first_name", "department", "salary", "last_name"]);   // added at the end
   await userEvent.click(within(show).getByRole("checkbox", { name: "first_name" }));
   expect(cols()).toEqual(["emp_id", "department", "salary", "last_name"]);
+  expect(within(a).getByRole("button", { name: "Columns (4 of 5)" })).toBeInTheDocument();
   await userEvent.click(within(a).getByRole("button", { name: "Show all 40" }));
   await waitFor(() => expect(within(a).getAllByRole("row")).toHaveLength(41));
   expect(calls.some(([u]) => u === "/api/results/r1/one-sided/A?limit=40")).toBe(true);
@@ -274,6 +284,44 @@ test("One-sided rows: two panels, their files, show all, the pattern and the key
   expect(screen.queryByText("Pattern in the rows only in HR:")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Suggest keys under Rows" }));
   expect(getView()).toMatchObject({ view: "setup", anchor: "rows" });
+});
+
+test("One-sided rows: B's panel reads B's own column names, from the Summary's ledger", async () => {
+  const base = serve([]);
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    const m = url.match(/^\/api\/results\/r1\/one-sided\/B\?limit=(\d+)$/);
+    if (!m) return base(url, init);
+    const d = oneSided("B", Number(m[1]));                    // the right_only file carries A's names
+    return json({ ...d, keys: ["emp_id"], columns: ["emp_id", "last_name", "department", "salary", "CostCenter"],
+                  constant: [{ column: "department", value: "People" }],
+                  groups: [{ title: "Key columns", items: ["emp_id"] }, { title: "Compared columns", items: ["last_name", "department", "salary"] },
+                           { title: "Not compared", items: ["CostCenter"], tone: "nc" }] });
+  }));
+  setView({ tab: "onesided" });
+  mount(<ResultsView run={RUN} limit={1000} />);
+  const b = await screen.findByRole("region", { name: "Only in Right" });
+  await within(b).findByText("no HR row with that EmployeeId");
+  await waitFor(() => expect(within(b).getAllByRole("columnheader").map((h) => h.textContent))
+    .toEqual(["EmployeeId", "last_name", "Dept", "Salary", "CostCenter"]));
+  expect(within(b).getByRole("link", { name: "HR_compare_Right__right_only.csv" })).toHaveTextContent(/^right_only\.csv$/);
+  expect(await screen.findByText("Pattern in the rows only in Right:")).toBeInTheDocument();
+  expect(screen.getByText("Dept", { selector: ".pattern span" })).toBeInTheDocument();
+});
+
+test("the Summary's two folds start closed and stay as they were left", async () => {
+  vi.stubGlobal("fetch", serve([]));
+  mount(<ResultsView run={RUN} limit={1000} />);
+  await screen.findByRole("table", { name: "Columns" });
+  const fold = (name: string) => screen.getByRole("region", { name }).querySelector("details")!;
+  expect(fold("Profile by bucket").open).toBe(false);
+  expect(fold("Columns & values").open).toBe(false);
+  await userEvent.click(screen.getByText("Profile by bucket"));
+  expect(fold("Profile by bucket").open).toBe(true);
+  cleanup();
+  mount(<ResultsView run={RUN} limit={1000} />);
+  await screen.findByRole("table", { name: "Columns" });
+  expect(fold("Profile by bucket").open).toBe(true);
+  expect(fold("Columns & values").open).toBe(false);
 });
 
 test("marks reads *italic* as well", () => {
@@ -294,6 +342,7 @@ test("Profile by bucket: Simple by default, Extended reads each column's facts a
   const calls: Call[] = [];
   vi.stubGlobal("fetch", serve(calls));
   mount(<ResultsView run={RUN} limit={1000} />);
+  await userEvent.click(await screen.findByText("Profile by bucket"));
   const depth = await screen.findByRole("group", { name: "Column profile" });
   expect(within(depth).getByRole("button", { name: "Simple" })).toHaveAttribute("aria-pressed", "true");
   await screen.findByText("Every column across these rows");

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
+import { Expander } from "../ui/Expander";
 import { num, Seg } from "../ui/kit";
 import { ColumnPick, notCompared } from "./ColumnPick";
 import { marks } from "../ui/marks";
@@ -10,7 +11,7 @@ import { usePick } from "./pickStore";
 import { Findings, type Finding } from "../profiling/column/Findings";
 import { qs, type BucketBody, type BucketFacts, type SideFacts } from "./types";
 
-/** Profile by bucket: top values per column for one bucket of rows (matched, differing, only in
+/** Profile by bucket, folded under the Summary: top values per column for one bucket of rows (matched, differing, only in
  * A, only in B) - the profile of what went wrong. The bucket is held by its id across runs (its
  * label carries this run's counts). */
 export function BucketProfile({ run, buckets, first, sidedTip }:
@@ -21,6 +22,7 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
   const [picked, setPicked] = usePick<string[] | null>(`bucket_pick_${bucket}`, null);
   // Simple: the top values, as it always was; Extended adds each column's facts as pills
   const [depth, setDepth] = usePick<"simple" | "extended">("bucket_depth", "simple");
+  const [open, setOpen] = usePick("fold_bucket", false);     // a closed fold under the Summary, kept as left
   const ask = picked ? `${qs("add", picked)}${picked.length ? "&" : "?"}exact=true` : "";
   const q = useQuery({
     enabled: !!bucket, staleTime: Infinity, placeholderData: (prev) => prev,
@@ -38,11 +40,8 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
   const now = picked ?? d?.shown ?? [];
   const nc = notCompared(d?.groups);
   return (
-    <section className="panel buckets" aria-labelledby="h-buckets">
-      <div className="panel-head">
-        <h2 id="h-buckets">Profile by bucket</h2>
-        <span className="sub">the top values of a set of rows · every mismatched column counted, tick any other · <span className="nc-word">not compared</span> columns in orange · paired rows count both sides</span>
-      </div>
+    <section className="panel fold buckets" aria-label="Profile by bucket">
+      <Expander open={open} onToggle={setOpen} title={<>Profile by bucket <span className="sub">the top values of a set of rows · every mismatched column counted, tick any other · <span className="nc-word">not compared</span> columns in orange · paired rows count both sides</span></>}>
       <div className="panel-body">
         <div className="bucket-bar">
           <Seg label="Bucket" value={bucket} onChange={setHeld} options={buckets.map((b) => ({ label: b.label, value: b.id }))} />
@@ -71,6 +70,7 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
           </>
         )}
       </div>
+      </Expander>
     </section>
   );
 }

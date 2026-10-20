@@ -57,23 +57,31 @@ test("pivot turns the A/B pairs into one row per key", () => {
   expect(rows[0].b.CostCenter).toBe("CC-110");
 });
 
-test("one row per key: differing cells read A → B, matching cells stay plain, one-sided columns marked", async () => {
+test("one row per key: differing cells read A → B, matching cells stay plain, one-sided columns one tick away", async () => {
   vi.stubGlobal("fetch", serve([]));
   mount(<DiffRowsTab run={RUN} />);
   const table = await screen.findByRole("table", { name: "Rows that differ" });
-  const rows = within(table).getAllByRole("row");
-  expect(rows).toHaveLength(3);                                          // head + one per key
-  const head = within(rows[0]).getAllByRole("columnheader").map((h) => h.textContent);
-  expect(head).toEqual(["emp_id", "last_name", "department", "salary", "hire_date", "first_name only in HR", "CostCenter only in Payroll", "Cells"].map((h, i) => (i === 0 ? ` ${h}` : h)));
-  const moreau = within(rows[1]).getAllByRole("cell");
+  const rows = () => within(table).getAllByRole("row");
+  const head = () => within(rows()[0]).getAllByRole("columnheader").map((h) => h.textContent);
+  expect(rows()).toHaveLength(3);                                        // head + one per key
+  // the columns only one side has can never differ, so they start hidden
+  expect(head()).toEqual([" emp_id", "last_name", "department", "salary", "hire_date", "Cells"]);
+  let moreau = within(rows()[1]).getAllByRole("cell");
   expect(moreau[0]).toHaveTextContent("E10402");
   expect(moreau[1]).toHaveTextContent("Moreau");
   expect(moreau[1].querySelector(".diff")).toBeNull();
   expect(moreau[2].querySelector(".diff")).toHaveTextContent("SalesSales EMEA");
-  expect(moreau[3].querySelector(".diff")).toHaveTextContent("14879.714836.87");
+  expect(moreau[3].querySelector(".diff")).toHaveTextContent("14,879.714,836.87");   // separators, decimals as given
+  expect(moreau[5]).toHaveTextContent("2");
+  expect(moreau[5]).toHaveClass("neg-n");
+  await userEvent.click(screen.getByRole("button", { name: /Show: all compared columns/ }));
+  const one = screen.getByRole("group", { name: "On one side only" });
+  await userEvent.click(within(one).getByRole("checkbox", { name: /first_name/ }));
+  await userEvent.click(within(one).getByRole("checkbox", { name: /CostCenter/ }));
+  expect(head()).toEqual([" emp_id", "last_name", "department", "salary", "hire_date", "first_name only in HR", "CostCenter only in Payroll", "Cells"]);
+  moreau = within(rows()[1]).getAllByRole("cell");
   expect(moreau[5]).toHaveTextContent("Anna");
   expect(moreau[6]).toHaveTextContent("CC-110");
-  expect(moreau[7]).toHaveTextContent("2");
   expect(screen.getByText(/Showing/).closest("span")).toHaveTextContent("Showing 2 of 3 rows");
   expect(screen.getByRole("link", { name: "cell_diffs.csv" })).toHaveAttribute("href", "/api/results/r1/file/X__cell_diffs.csv");
 });

@@ -1,13 +1,14 @@
-// web/src/results/SummaryView.tsx - the Summary tab (SPEC §08): the tiles, the Columns panel with
-// its match bars and the one-sided columns, Profile by bucket, Why they differ beside them, and
-// Columns & values (each column's value pairs) folded at the bottom.
+// web/src/results/SummaryView.tsx - the Summary tab (SPEC §08): the tiles and their caption, the
+// Columns panel with its match bars and the one-sided columns, Why they differ beside it, and under
+// them two folds: Profile by bucket and Columns & values (each column's value pairs).
 import type { RunView } from "../compare/types";
 import { Expander } from "../ui/Expander";
-import { Bar, Chip, num, pctText, Tile } from "../ui/kit";
+import { Chip, num, pctText, Tile } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { BucketProfile } from "./BucketProfile";
 import { ColumnsView } from "./ColumnsView";
 import { Failed } from "./Failed";
+import { usePick } from "./pickStore";
 import { useSummary } from "./useSummary";
 import { WhyTheyDiffer } from "./WhyTheyDiffer";
 import { countsOf, ledgerRows, type LedgerRow, type Summary } from "./types";
@@ -20,17 +21,18 @@ function ReadAs({ text }: { text: string }) {
   return <span className="read-as"><Chip>{type}</Chip>{rest.length > 0 && <span className="how">{rest.join(" · ")}</span>}</span>;
 }
 
-/** Two bars for a column: how much matched, and under it how much did not - drawn at least a
- *  sliver wide when anything differs, so 6 mismatches in 600,000 still show. The figure never
- *  reads 100% unless every row agrees. */
+/** One bar for a column: how much matched, and at its end in red how much did not - drawn at
+ *  least a sliver wide when anything differs, so 6 mismatches in 600,000 still show. The figure
+ *  never reads 100% unless every row agrees. */
 function MatchBars({ ok, bad, pct }: { ok: number; bad: number; pct: number }) {
   const all = ok + bad;
   const miss = all ? (100 * bad) / all : 0;
+  const tone = bad ? (pct >= 95 ? "good" : "warn") : "ok";
   return (
     <span className="barcell match-bars" title={bad ? `${num(bad)} of ${num(all)} differ - ${pctText(bad, all)}%` : undefined}>
-      <span className="bars">
-        <Bar pct={pct} tone={bad ? (pct >= 95 ? "good" : "warn") : "ok"} />
-        <span className="bar miss" role="presentation"><i style={{ width: bad ? `max(3px, ${miss}%)` : 0 }} /></span>
+      <span className="bar" role="presentation">
+        <i className={tone} style={{ width: `${Math.max(0, Math.min(100, pct))}%` }} />
+        {bad > 0 && <i className="miss" style={{ width: `max(3px, ${miss}%)` }} />}
       </span>
       <span className="v">{all ? pctText(ok, all) : pct.toFixed(2)}%</span>
     </span>
@@ -68,7 +70,6 @@ function ColumnsPanel({ s, names, matched }: { s: Summary; names: [string, strin
         <h2 id="h-cols">Columns</h2>
         <span className="sub">{hash ? "values present on one side only, per compared column" : `match measured on the ${num(matched)} paired rows`}</span>
       </div>
-      <div className="panel-note"><span>{marks(s.key_line)}</span></div>
       <div className="tblwrap">
         <table className="tbl" aria-label="Columns">
           <thead><tr>
@@ -99,6 +100,7 @@ function ColumnsPanel({ s, names, matched }: { s: Summary; names: [string, strin
 
 export function SummaryView({ run }: { run: RunView }) {
   const q = useSummary(run.id);
+  const [values, setValues] = usePick("fold_values", false);
   if (q.error) return <Failed error={q.error} />;
   const s = q.data;
   if (!s) return <p className="caption">Reading…</p>;
@@ -126,24 +128,27 @@ export function SummaryView({ run }: { run: RunView }) {
         {overall !== undefined && <Tile label="Overall match" value={String(overall)} />}
         <Tile label="Columns compared" value={num(cc.Compared as number)} small={`of ${num(every)} · key ${num(cc.Key as number)}`} />
       </div>
-      {s.overall_caption && <p className="caption">{s.overall_caption}</p>}
-      {s.hash_caption && <p className="caption">{s.hash_caption}</p>}
-      {s.mode !== "hash" && (
-        <section className="panel cols-values" aria-label="Columns & values">
-          <Expander title={<>Columns &amp; values <span className="sub">each compared column's value pairs, and the near-match analysis</span></>}>
-            <ColumnsView run={run} />
-          </Expander>
-        </section>
+      {(s.key_line || s.overall_caption) && (
+        <p className="caption">{s.key_line && marks(s.key_line)}{s.key_line && s.overall_caption && " · "}{s.overall_caption}</p>
       )}
+      {s.hash_caption && <p className="caption">{s.hash_caption}</p>}
       <div className="split">
         <div className="main">
           <ColumnsPanel s={s} names={run.names} matched={c.matched} />
-          <BucketProfile run={run} buckets={s.buckets} first={s.default_bucket} sidedTip={s.sided_tip} />
         </div>
         <div className="side">
           <WhyTheyDiffer run={run} s={s} />
         </div>
       </div>
+      <BucketProfile run={run} buckets={s.buckets} first={s.default_bucket} sidedTip={s.sided_tip} />
+      {s.mode !== "hash" && (
+        <section className="panel fold cols-values" aria-label="Columns & values">
+          <Expander open={values} onToggle={setValues}
+            title={<>Columns &amp; values <span className="sub">each compared column's value pairs, and the near-match analysis</span></>}>
+            <ColumnsView run={run} />
+          </Expander>
+        </section>
+      )}
     </div>
   );
 }

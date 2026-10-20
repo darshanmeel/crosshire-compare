@@ -23,7 +23,7 @@
 .panel-note b { font-weight: 600; color: var(--fs-text); }
 
 /* Profile by bucket */
-.buckets { border-top: 0; }
+.buckets .expander-body { padding: 0; gap: 0; }
 .buckets .panel-body { gap: 14px; }
 .buckets .seg { max-width: 100%; }
 .buckets .seg button { height: auto; min-height: 30px; white-space: normal; text-align: left; }
@@ -51,7 +51,7 @@
 .col-pick-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 0 14px; max-height: 200px; overflow: auto; }
 .col-pick-list .check { min-height: 32px; overflow-wrap: anywhere; }
 .col-pick-list .check.on { color: var(--fs-text); font-weight: 500; }
-.cols-values .expander { border: 0; background: transparent; }
+.fold .expander { border: 0; background: transparent; }
 
 /* Why they differ */
 .why .panel-body { gap: 16px; }
@@ -69,10 +69,11 @@
 .why-pair svg { color: var(--fs-text4); flex: none; }
 .why-text { margin: 0; font-size: 13px; color: var(--fs-text2); }
 .why-go { align-self: flex-start; }
+.why-text .why-link { padding: 0 4px; vertical-align: middle; }
 
-/* Columns & values (folded) */
-.cols-values > .expander > summary { padding: 14px 20px; font-size: 15px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
-.cols-values > .expander > summary .sub { font-size: 12.5px; font-weight: 400; color: var(--fs-text3); }
+/* the Summary's two folds: Profile by bucket, Columns & values */
+.fold > .expander > summary { padding: 14px 20px; font-size: 15px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.fold > .expander > summary .sub { font-size: 12.5px; font-weight: 400; color: var(--fs-text3); }
 .cols-values .expander-body { padding: 0 20px 18px; }
 .cv { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .cv-cards { display: flex; flex-direction: column; border: 1px solid var(--fs-line); border-radius: var(--r-sm); }
@@ -96,6 +97,16 @@ fieldset.col-pick { margin: 0; }
 .only .tbl { min-width: 560px; }
 .only .tbl td { white-space: nowrap; }
 .only .tbl td.keycell { font-weight: 500; }
+/* the panel lets its Columns menu out; every column is shown, so the key stays put on the left */
+.panel.only { overflow: visible; }
+.only .panel-head { align-items: center; }
+.only .panel-head .sub { flex: 1 1 140px; min-width: 0; }        /* the line wraps before the buttons do */
+.only .panel-head .actions { gap: 8px; flex-wrap: wrap; }
+.only .tbl th.keycell:first-child, .only .tbl td.keycell:first-child { position: sticky; left: 0; box-shadow: inset -1px 0 0 var(--fs-border); }
+.only .tbl th.keycell:first-child { z-index: 3; }
+.only .tbl td.keycell:first-child { z-index: 1; background: var(--fs-panel); }
+.only .tbl th { z-index: 2; }
+.only .menu-pop .col-pick { border: 0; padding: 4px; }
 .only .panel-foot { border-top: 1px solid var(--fs-border); }
 .onesided .callout code { white-space: nowrap; }
 .onesided .callout .pattern { display: block; }
@@ -106,8 +117,6 @@ fieldset.col-pick { margin: 0; }
   .summary .tile .v { font-size: 24px; }
   .why .kv li { grid-template-columns: minmax(0, 1fr) 48px 40px; gap: 8px; }
 }
-.only-pick { padding-bottom: 0; }
-.only-pick .col-pick-list { max-height: 160px; }
 
 /* A column only one side has - not compared - is told apart wherever it is ticked: in the picker,
    on its profile and in the one-sided tables. */
@@ -118,8 +127,8 @@ fieldset.col-pick { margin: 0; }
 .tbl th.nc { background: var(--fs-warn-bg); color: var(--fs-warn); }
 .tbl td.nc { box-shadow: inset 0 0 0 9999px var(--fs-warn-bg); }
 
-/* A column's match: the matched share above, the mismatched share in red below it. */
-.match-bars .bars { display: flex; flex-direction: column; gap: 3px; flex: 1 1 auto; min-width: 60px; }
-.match-bars .bar.miss { height: 4px; }
-.match-bars .bar.miss i { background: var(--fs-neg); }
+/* A column's match: one bar, the matched share and the mismatched share in red at its end. */
+.match-bars .bar { display: flex; }
+.match-bars .bar i { flex: 0 1 auto; border-radius: 0; }
+.match-bars .bar i.miss { flex: none; background: var(--fs-neg); }
 .match-bars .v { min-width: 72px; }

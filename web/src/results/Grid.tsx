@@ -1,3 +1,4 @@
+import { grouped } from "../ui/kit";
 import type { Frame } from "./types";
 
 const COUNTS = /^(Rows|Count|Matched|Mismatches|Mismatched|Values only|Cells that|Distinct|Fully|Avg edit)/;
@@ -8,7 +9,7 @@ function shown(x: unknown, col: string): string {
     if (col === "Match %" || col === "%" || col === "Similarity %") return `${x.toFixed(col === "Similarity %" ? 1 : 2)}%`;
     if (COUNTS.test(col)) return x.toLocaleString("en-US", { maximumFractionDigits: 2 });
   }
-  return String(x);
+  return grouped(x);                       // a number value with its separators, its decimals as given
 }
 
 /** A results table on the kit's .tbl: numbers right-aligned in mono with thousands separators, a

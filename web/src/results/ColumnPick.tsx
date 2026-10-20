@@ -1,5 +1,5 @@
 // web/src/results/ColumnPick.tsx - which columns a part of the results shows: Profile by bucket
-// and the One-sided rows tab tick them from the same grouped list.
+// and the One-sided rows tab (inside each panel's Columns menu) tick them from the same grouped list.
 import { useState } from "react";
 import { Button, LinkButton } from "../ui/kit";
 
@@ -11,7 +11,7 @@ export const notCompared = (groups: { tone?: "nc"; items: (string | { name: stri
 const FILTER_AT = 12;
 
 /** Every column on offer, a checkbox each, under Key columns / Mismatched / Matching (or Compared) / Not compared -
- *  always in view, so what is shown can be seen and changed at any time. `shown` is what is ticked
+ *  so what is shown can be seen and changed at any time. `shown` is what is ticked
  *  to begin with (never a column that is not compared); a filter when the pair is wide. */
 export function ColumnPick({ label, groups, shown, now, set }:
   { label: string; groups: Group[]; shown: string[]; now: string[]; set: (v: string[] | null) => void }) {

@@ -1,74 +1,60 @@
 // web/src/results/DiffRowsTab.tsx - Results · Differing rows (SPEC §09): one row per key, a differing
 // cell as "A value → B value", filter chips per differing column, a search over the loaded rows, a
 // Show menu to hide columns, the cell differences file, paging and the near-match analysis.
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import type { RunView } from "../compare/types";
 import { Icon } from "../ui/icons";
-import { Bar, Button, Callout, DiffCell, num } from "../ui/kit";
+import { Bar, Button, Callout, DiffCell, grouped, MenuButton, num } from "../ui/kit";
 import { fileUrl, pivot, useDiffRows, useNearMatch, type DiffRowsPage, type KeyRow } from "./detailApi";
 import { Failed } from "./Failed";
 import "./detail.css";
 
 type Show = "all" | "differing" | "custom";
+type Col = { name: string; tag: ReactNode; side: string };
 
-function Value({ v }: { v: unknown }) {
+function Value({ v, raw }: { v: unknown; raw?: boolean }) {
   if (v == null) return <span className="rd-null">null</span>;
   if (v === "") return <span className="rd-null">empty</span>;
-  return <>{typeof v === "number" ? num(v) : String(v)}</>;
+  return <>{raw ? String(v) : grouped(v)}</>;
 }
 
 /** What the search looks in: a number both raw and as shown (10240.93 and 10,240.93). */
-const text = (v: unknown) => (v == null ? "" : typeof v === "number" ? `${v} ${num(v)}` : String(v)).toLowerCase();
+const text = (v: unknown) => (v == null ? "" : `${v} ${grouped(v)}`).toLowerCase();
+const same = (s: Set<string>, l: string[]) => s.size === l.length && l.every((c) => s.has(c));
 
-/** The Show menu: every column a checkbox, with the two quick picks above them. */
-function ShowMenu({ all, differing, hidden, setHidden, show, setShow }: {
-  all: { name: string; tag: ReactNode }[]; differing: Set<string>; hidden: Set<string>;
-  setHidden: (h: Set<string>) => void; show: Show; setShow: (s: Show) => void;
+/** The Show menu: every compared column a checkbox, with the two quick picks above them, and the
+ *  columns only one side has - never a difference, so off to begin with - under "On one side only". */
+function ShowMenu({ all, differing, hidden, setHidden }: {
+  all: Col[]; differing: Set<string>; hidden: Set<string>; setHidden: (h: Set<string>) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-  const menu = useId();
-  useEffect(() => {
-    if (!open) return;
-    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    addEventListener("mousedown", away);
-    addEventListener("keydown", key);
-    return () => { removeEventListener("mousedown", away); removeEventListener("keydown", key); };
-  }, [open]);
-  const shown = all.length - hidden.size;
-  const word = show === "all" ? "all compared columns" : show === "differing" ? "columns that differ" : `${shown} of ${all.length} columns`;
-  const pick = (s: Show) => {
-    setShow(s);
-    setHidden(s === "differing" ? new Set(all.map((c) => c.name).filter((c) => !differing.has(c))) : new Set());
-  };
+  const one = all.filter((c) => c.side).map((c) => c.name);
+  const matching = [...one, ...all.filter((c) => !c.side && !differing.has(c.name)).map((c) => c.name)];
+  const show: Show = same(hidden, one) ? "all" : same(hidden, matching) ? "differing" : "custom";
+  const word = show === "all" ? "all compared columns" : show === "differing" ? "columns that differ" : `${all.length - hidden.size} of ${all.length} columns`;
+  const box = (c: Col) => (
+    <label key={c.name} className="check">
+      <input type="checkbox" checked={!hidden.has(c.name)} onChange={(e) => {
+        const h = new Set(hidden);
+        if (e.target.checked) h.delete(c.name); else h.add(c.name);
+        setHidden(h);
+      }} />
+      <span className="m">{c.name}</span>{c.tag}
+    </label>
+  );
   return (
-    <div className="rd-menu" ref={box}>
-      <button type="button" className="fchip" aria-expanded={open} aria-controls={menu} onClick={() => setOpen(!open)}>
-        Show: {word}<Icon name="chevron" size="sm" />
+    <MenuButton label={<>Show: {word}</>} group="Columns to show">
+      <button type="button" className="rd-opt" aria-pressed={show === "all"} onClick={() => setHidden(new Set(one))}>All compared columns</button>
+      <button type="button" className="rd-opt" aria-pressed={show === "differing"} onClick={() => setHidden(new Set(matching))}>
+        Only columns that differ - hide matching ones
       </button>
-      {open && (
-        <div className="rd-pop" id={menu} role="group" aria-label="Columns to show">
-          <button type="button" className="rd-opt" aria-pressed={show === "all"} onClick={() => pick("all")}>All compared columns</button>
-          <button type="button" className="rd-opt" aria-pressed={show === "differing"} onClick={() => pick("differing")}>
-            Only columns that differ - hide matching ones
-          </button>
-          <div className="rd-pop-list">
-            {all.map((c) => (
-              <label key={c.name} className="check">
-                <input type="checkbox" checked={!hidden.has(c.name)} onChange={(e) => {
-                  const h = new Set(hidden);
-                  if (e.target.checked) h.delete(c.name); else h.add(c.name);
-                  setHidden(h);
-                  setShow(h.size === 0 ? "all" : "custom");
-                }} />
-                <span className="m">{c.name}</span>{c.tag}
-              </label>
-            ))}
-          </div>
+      <div className="rd-pop-list">{all.filter((c) => !c.side).map(box)}</div>
+      {one.length > 0 && (
+        <div className="rd-pop-list" role="group" aria-labelledby="rd-one-h">
+          <span className="rd-pop-head" id="rd-one-h">On one side only</span>
+          {all.filter((c) => c.side).map(box)}
         </div>
       )}
-    </div>
+    </MenuButton>
   );
 }
 
@@ -111,8 +97,7 @@ function NearMatch({ runId, onClose }: { runId: string; onClose: () => void }) {
 export function DiffRowsTab({ run }: { run: RunView }) {
   const [column, setColumn] = useState("");
   const [find, setFind] = useState("");
-  const [hidden, setHidden] = useState<Set<string>>(new Set());
-  const [show, setShow] = useState<Show>("all");
+  const [picked, setHidden] = useState<Set<string> | null>(null);   // null: every compared column, none of the one-sided ones
   const [near, setNear] = useState(false);
   const q = useDiffRows(run.id, column);
   const first: DiffRowsPage | undefined = q.data?.pages[0];
@@ -130,14 +115,15 @@ export function DiffRowsTab({ run }: { run: RunView }) {
   if (!run.diff_rows) return <div className="rd"><Callout tone="pos" icon="check">No rows differ - every matched row agrees on every compared column.</Callout></div>;
 
   const differing = new Set(first.by_column.map((c) => c.column));
-  const all = [
-    ...first.columns.map((c) => ({ name: c, tag: null as ReactNode, side: "" })),
-    ...first.only_a.map((c) => ({ name: c, tag: <span className="chip a">only in {NA}</span> as ReactNode, side: "a" })),
-    ...first.only_b.map((c) => ({ name: c, tag: <span className="chip b">only in {NB}</span> as ReactNode, side: "b" })),
+  const all: Col[] = [
+    ...first.columns.map((c) => ({ name: c, tag: null, side: "" })),
+    ...first.only_a.map((c) => ({ name: c, tag: <span className="chip a">only in {NA}</span>, side: "a" })),
+    ...first.only_b.map((c) => ({ name: c, tag: <span className="chip b">only in {NB}</span>, side: "b" })),
   ];
+  const hidden = picked ?? new Set([...first.only_a, ...first.only_b]);
   const cols = all.filter((c) => !hidden.has(c.name));
   const total = first.total;
-  const cell = (r: KeyRow, c: { name: string; side: string }) => {
+  const cell = (r: KeyRow, c: Col) => {
     if (c.side === "a") return <td key={c.name} className="m rd-one"><Value v={r.a[c.name]} /></td>;
     if (c.side === "b") return <td key={c.name} className="m rd-one"><Value v={r.b[c.name]} /></td>;
     if (r.diff.has(c.name)) return <td key={c.name} className="m"><DiffCell a={<Value v={r.a[c.name]} />} b={<Value v={r.b[c.name]} />} /></td>;
@@ -163,7 +149,7 @@ export function DiffRowsTab({ run }: { run: RunView }) {
           <input type="search" aria-label="Find a key or value" placeholder="Find a key or value" value={find} onChange={(e) => setFind(e.target.value)} />
         </label>
         <span className="grow" />
-        <ShowMenu all={all} differing={differing} hidden={hidden} setHidden={setHidden} show={show} setShow={setShow} />
+        <ShowMenu all={all} differing={differing} hidden={hidden} setHidden={setHidden} />
         {first.file && (
           <a className="btn sm" href={fileUrl(run.id, first.file)} download title={first.file}>
             <Icon name="download" />cell_diffs.csv
@@ -177,17 +163,17 @@ export function DiffRowsTab({ run }: { run: RunView }) {
           <DiffCell a={`${NA} value`} b={`${NB} value`} />
           <span>· matching cells stay plain · sorted by cells that differ, most first</span>
         </div>
-        <div className="tblwrap">
+        <div className="tblwrap rd-scroll">
           <table className="tbl rd-tbl" aria-label="Rows that differ" style={{ minWidth: Math.max(720, 140 * (first.keys.length + cols.length) + 72) }}>
             <thead><tr>
-              {first.keys.map((k) => <th key={k} scope="col"><Icon name="key" size="sm" /> {k}</th>)}
+              {first.keys.map((k) => <th key={k} scope="col" className="rd-key"><Icon name="key" size="sm" /> {k}</th>)}
               {cols.map((c) => <th key={c.name} scope="col" className={c.side ? `rd-only-h ${c.side}` : undefined}>{c.name}{c.tag && <> {c.tag}</>}</th>)}
               <th scope="col" className="num">Cells</th>
             </tr></thead>
             <tbody>
               {seen.map((r, i) => (
                 <tr key={`${r.key.map(String).join("\u0001")}-${i}`}>
-                  {r.key.map((k, j) => <td key={j} className="m rd-key"><Value v={k} /></td>)}
+                  {r.key.map((k, j) => <td key={j} className="m rd-key"><Value v={k} raw /></td>)}
                   {cols.map((c) => cell(r, c))}
                   <td className="num m neg-n">{num(r.n)}</td>
                 </tr>

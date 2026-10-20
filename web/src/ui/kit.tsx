@@ -1,11 +1,20 @@
 // The redesign's shared pieces (design/COMPONENTS.md), on the classes in styles.css. Each is a thin
 // wrapper over a real control: buttons are <button>, toggles say aria-pressed, groups say role="group".
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { Icon, type IconName } from "./icons";
 
 const fmt = new Intl.NumberFormat("en-US");
 /** A number with thousands separators; anything else as it is. */
 export const num = (n: number | string | null | undefined) => (typeof n === "number" ? fmt.format(n) : n ?? "");
+const PLAIN = /^-?(0|[1-9]\d*)(\.\d+)?$/;
+/** A number value as a cell shows it: thousands separators, its decimals as given ("14879.70" ->
+ *  "14,879.70"). Anything else - text, a date, a zero-padded code - as it is. */
+export function grouped(v: unknown): string {
+  const s = String(v);
+  if (!PLAIN.test(s)) return s;
+  const [i, d] = s.split(".");
+  return i.replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (d === undefined ? "" : `.${d}`);
+}
 /** "1 pair", "6 pairs" - the count with its separators and the word it counts. */
 export const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 
@@ -43,6 +52,31 @@ export function Button({ variant = "default", size = "md", icon, iconAfter, coun
     <button type={type} className={cls} {...rest}>
       {icon && <Icon name={icon} />}{children}{count !== undefined && <span className="count">{count}</span>}{iconAfter && <Icon name={iconAfter} />}
     </button>
+  );
+}
+
+/** A chip that opens a panel under it - closed again by a click away or Escape (focus goes back to
+ *  the chip). `group` names the panel as a group when it holds a list of picks. */
+export function MenuButton({ label, group, wide, children, ...rest }:
+  { label: ReactNode; group?: string; wide?: boolean; children: ReactNode; "aria-label"?: string; title?: string }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null), btn = useRef<HTMLButtonElement>(null);
+  const id = useId();
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { setOpen(false); btn.current?.focus(); } };
+    addEventListener("mousedown", away);
+    addEventListener("keydown", key);
+    return () => { removeEventListener("mousedown", away); removeEventListener("keydown", key); };
+  }, [open]);
+  return (
+    <div className="menu" ref={box}>
+      <button ref={btn} type="button" className="fchip" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} {...rest}>
+        {label}<Icon name="chevron" size="sm" />
+      </button>
+      {open && <div className={wide ? "menu-pop wide" : "menu-pop"} id={id} role={group ? "group" : undefined} aria-label={group}>{children}</div>}
+    </div>
   );
 }
 

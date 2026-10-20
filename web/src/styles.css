@@ -186,7 +186,7 @@ button.chip { cursor: pointer; } button.chip:hover { color: var(--fs-accent); }
 .bar i.ok { background: var(--fs-bar-ok); } .bar i.warn { background: var(--fs-bar-warn); } .bar i.good { background: var(--fs-bar-good); }
 .barcell { display: flex; align-items: center; gap: 10px; }
 .barcell .v { font-family: var(--font-mono); font-size: 12px; min-width: 56px; text-align: right; }
-.neg-n { color: var(--fs-neg); font-weight: 500; }
+.neg-n, .tbl td.neg-n { color: var(--fs-neg); font-weight: 500; }
 .key-ico { color: var(--fs-accent); }
 
 /* verdict + outcome */
@@ -232,6 +232,19 @@ button.chip { cursor: pointer; } button.chip:hover { color: var(--fs-accent); }
 .fchip.on, .fchip[aria-pressed="true"] { background: var(--fs-text); border-color: var(--fs-text); color: var(--fs-panel); }
 .fchip .n { font-family: var(--font-mono); font-size: 11px; color: var(--fs-neg); }
 .fchip.on .n, .fchip[aria-pressed="true"] .n { color: var(--fs-panel); opacity: .8; }
+/* a chip that opens a panel under it (kit MenuButton) */
+.menu { position: relative; max-width: 100%; }
+.menu > .fchip { max-width: 100%; }
+.menu-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(320px, calc(100vw - 32px)); max-height: 380px; overflow: auto;
+  display: flex; flex-direction: column; gap: 4px; padding: 8px; background: var(--fs-panel); border: 1px solid var(--fs-line); border-radius: var(--r-md);
+  box-shadow: 0 8px 28px var(--fs-accent-dim); }
+.menu-pop.wide { width: min(560px, calc(100vw - 32px)); max-height: 460px; }
+/* on a phone the panel spans its toolbar or panel head, so it never runs off the screen */
+@media (max-width: 760px) {
+  .toolbar:has(> .menu), .panel-head:has(.menu) { position: relative; }
+  .menu { position: static; }
+  .menu-pop, .menu-pop.wide { left: 0; right: 0; width: auto; }
+}
 .search { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border: 1px solid var(--fs-border2); border-radius: 999px; background: var(--fs-panel); color: var(--fs-text3); flex: 1 1 220px; max-width: 360px; }
 .search input { flex: 1 1 auto; min-width: 0; height: 30px; border: 0; outline: none; background: transparent; color: var(--fs-text); font-size: 13px; padding: 0; box-shadow: none; }
 .search:focus-within { border-color: var(--fs-accent); }
