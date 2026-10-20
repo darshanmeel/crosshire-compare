@@ -1,13 +1,19 @@
 // web/src/keys/RowsEditor.tsx - the rows page (SPEC §06): how rows pair up, the rows each side reads,
-// the filters at compare, profile by bucket, profile both files, the run settings, then Compare.
-import type { ReactNode } from "react";
+// the filters at compare, profile by bucket, then More (profile both files and the run settings, folded
+// with their values on its line, open by itself while a profile runs or is held), then Compare.
+import { useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { api } from "../api/client";
 import { useRunCompare, useRunError } from "../compare/actions";
 import { TICK_COMPARE } from "../compare/types";
 import { useCompareNow } from "../compare/useCompare";
-import { useSetup } from "../setup/api";
+import { useSetup, type ProfileView } from "../setup/api";
+import type { EngineView } from "../shell/EngineLimits";
+import { useLog } from "../shell/LogPanel";
 import { goToSection } from "../shell/view";
 import { useSources } from "../sources/useSources";
-import { Button, Section } from "../ui/kit";
+import { Icon } from "../ui/icons";
+import { Button, num, Section } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { FiltersBox } from "../values/FiltersBox";
 import { BucketCard } from "./BucketCard";
@@ -24,6 +30,31 @@ function Sub({ id, title, sub, children }: { id: string; title: string; sub?: st
       <div className="sec-head"><h3 id={id}>{title}</h3>{sub && <span className="sub">{sub}</span>}</div>
       {children}
     </section>
+  );
+}
+
+/** Profile both files and the run settings under one fold: its line says the profile and every
+ *  setting, so they read without opening it. Kept mounted while closed, so a profile job is followed. */
+function More({ children }: { children: ReactNode }) {
+  const p = useQuery({ queryKey: ["setup-profile"], queryFn: () => api.get<ProfileView>("/api/setup/profile") }).data;
+  const set = useCompareNow().data?.settings;
+  const eng = useQuery({ queryKey: ["engine"], queryFn: () => api.get<EngineView>("/api/engine") }).data;
+  const profiling = !!useLog().data?.entries?.some((e) => e.state === "running" && e.kind === "Profile" && e.page === "Compare");
+  const [open, setOpen] = useState<boolean | null>(null);
+  const shown = open ?? (profiling || !!p);
+  const onOff = (on: boolean | undefined) => (on ? "on" : "off");
+  const said = [
+    profiling ? "profiling…" : p ? (p.stale ? "profile out of date" : "both files profiled") : "not profiled",
+    set && `re-run on every change ${onOff(set.auto_rerun)}`,
+    set && `profile first ${onOff(set.auto_profile)}`,
+    set && `${num(set.display_rows)} rows per section`,
+    eng?.memory && `DuckDB ${eng.memory} · spill ${eng.disk}`,
+  ].filter(Boolean).join(" · ");
+  return (
+    <details className="rows-more" open={shown} onToggle={(e) => { const now = e.currentTarget.open; if (now !== shown) setOpen(now); }}>
+      <summary><span className="t">More</span><span className="sub">{said}</span><Icon name="chevron" /></summary>
+      <div className="rows-more-body">{children}</div>
+    </details>
   );
 }
 
@@ -65,10 +96,12 @@ export function RowsEditor() {
       <Sub id="rows-bucket" title="Profile by bucket" sub="optional - the Summary then shows what each group of rows holds">
         <BucketCard />
       </Sub>
-      <ProfileBox />
-      <Sub id="rows-run" title="Run settings">
-        <RunSettingsCard />
-      </Sub>
+      <More>
+        <ProfileBox />
+        <Sub id="rows-run" title="Run settings">
+          <RunSettingsCard />
+        </Sub>
+      </More>
       <CompareRow />
     </Section>
   );

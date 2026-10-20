@@ -124,7 +124,7 @@ test("a checked key: the uniqueness line and its table; a key written differentl
   const calls = stub({ "/api/setup/keys": () => checked, "/api/setup": () => KEYED, "/api/setup/keys/check": () => checked,
                        "/api/setup/keys/formats/1/apply": () => checked, "DELETE /api/setup/keys/formats": () => checked });
   mount(<KeyBox />);
-  expect(await screen.findByRole("table", { name: "Key check" })).toBeInTheDocument();
+  expect(await screen.findByRole("table", { name: "Key check", hidden: true })).toBeInTheDocument();   // behind Every figure of the check
   expect(screen.getByText("identifies a single row on both sides.", { exact: false })).toBeInTheDocument();
   expect(screen.getByText("Applied").closest(".pos")).not.toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Apply" }));
@@ -133,6 +133,34 @@ test("a checked key: the uniqueness line and its table; a key written differentl
   await waitFor(() => expect(calls.some(([u]) => u === "/api/setup/keys/check")).toBe(true));
   await userEvent.click(screen.getByRole("button", { name: "Dismiss" }));
   await waitFor(() => expect(calls.some(([u, i]) => u === "/api/setup/keys/formats" && i?.method === "DELETE")).toBe(true));
+});
+
+test("a key on a small pair is checked once on its own; on a pair of a million rows or more it waits for Check key", async () => {
+  const checked: KeysView = { ...KEYS, keys: ["emp_id"], mode: "key",
+    report: { said: { tone: "success", text: "**Unique on both sides** · 2,960 keys in both" }, columns: ["Side", "Rows"], rows: [["HR", 3000]] } };
+  let held: KeysView = { ...KEYS, keys: ["emp_id"], mode: "key" };
+  const calls = stub({ "/api/setup/keys": () => held, "/api/setup": () => KEYED, "/api/sources": () => SOURCES(),
+                       "/api/setup/keys/check": () => { held = checked; return checked; } });
+  mount(<KeyBox />);
+  expect(await screen.findByText("Unique on both sides", { selector: "b" })).toBeInTheDocument();
+  expect(calls.filter(([u, i]) => u === "/api/setup/keys/check" && i?.method === "POST")).toHaveLength(1);
+  expect(screen.getByRole("button", { name: "Check key" })).toBeEnabled();          // still there, for a re-check
+
+  resetView();
+  const big = stub({ "/api/setup/keys": () => ({ ...KEYS, keys: ["emp_id"], mode: "key" }), "/api/setup": () => KEYED,
+                     "/api/sources": () => SOURCES({ A: side("A", { rows: 1_000_000 }) }) });
+  mount(<KeyBox />);
+  expect(await screen.findByText(/counts its uniqueness and overlap/)).toBeInTheDocument();
+  await waitFor(() => expect(big.some(([u]) => u === "/api/sources")).toBe(true));
+  expect(big.some(([u]) => u === "/api/setup/keys/check")).toBe(false);
+});
+
+test("the tips sit behind How key search works", async () => {
+  stub({ "/api/setup/keys": () => ({ ...KEYS, keys: ["emp_id"], mode: "key" }), "/api/setup": () => KEYED });
+  mount(<KeyBox />);
+  const fold = (await screen.findByText("How key search works")).closest("details")!;
+  expect(fold).not.toHaveAttribute("open");
+  expect(within(fold).getByText("Suggest keys", { selector: "b" })).toBeInTheDocument();
 });
 
 // ---- Profile both files ---------------------------------------------------------------------
@@ -174,14 +202,21 @@ test("Rows to read: the rows pill, a condition built, Apply loads the side again
   mount(<RowsToReadCard tag="A" />);
   const card = await screen.findByRole("region", { name: "Rows to read from HR" });
   expect(await within(card).findByText("3,000 rows")).toBeInTheDocument();
-  await userEvent.click(within(card).getByText("Build a condition"));
+  const build = within(card).getByRole("button", { name: "Build a condition" });
+  expect(build).toHaveAttribute("aria-expanded", "false");
+  expect(within(card).queryByLabelText("Column")).toBeNull();
+  await userEvent.click(build);
+  expect(build).toHaveAttribute("aria-expanded", "true");
   await userEvent.selectOptions(within(card).getByLabelText("Column"), "salary");
   await userEvent.type(within(card).getByLabelText("Value"), "100");
   await userEvent.click(within(card).getByRole("button", { name: "Add to filter" }));
   await waitFor(() => expect(within(card).getByLabelText("Filter · WHERE")).toHaveValue("salary > '100'"));
   expect(sent(calls, "/api/sources/quick-clause")[0]).toMatchObject({ column: "salary", value: "100", where: "" });
   await userEvent.type(within(card).getByLabelText("Order by"), "salary");
-  await userEvent.click(within(card).getByLabelText("Descending"));
+  const desc = within(card).getByRole("button", { name: "Descending" });
+  expect(desc).toHaveAttribute("aria-pressed", "false");
+  await userEvent.click(desc);
+  expect(desc).toHaveAttribute("aria-pressed", "true");
   await userEvent.type(within(card).getByLabelText("Top N"), "500");
   await userEvent.click(within(card).getByRole("button", { name: "Apply to HR" }));
   await waitFor(() => expect(sent(calls, "/api/sources/A/load")).toHaveLength(1));
@@ -276,11 +311,28 @@ test("the rows page: its parts in order, Back to the setup, and Compare HR again
   expect(screen.getByRole("region", { name: "Rows to read from PR" })).toBeInTheDocument();
   expect(await screen.findByText("Filters at compare")).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Profile by bucket" })).toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Profile both files" })).toBeInTheDocument();
-  expect(await screen.findByLabelText("Rows to display per section")).toBeInTheDocument();
+  const more = (await screen.findByText(/not profiled · re-run on every change off · profile first off · 1,000 rows per section/)).closest("details")!;
+  expect(more).not.toHaveAttribute("open");                       // no profile held or running: folded, its values on the line
+  await userEvent.click(within(more).getByText("More"));
+  expect(more).toHaveAttribute("open");
+  expect(within(more).getByRole("heading", { name: "Profile both files" })).toBeInTheDocument();
+  expect(await within(more).findByLabelText("Rows to display per section")).toBeInTheDocument();
   expect(await screen.findByText("1 column on key emp_id · no filters applied")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Compare HR against PR" }));
   await waitFor(() => expect(calls.some(([u, i]) => u === "/api/compare" && i?.method === "POST")).toBe(true));
   await userEvent.click(screen.getByRole("button", { name: "Back to the setup" }));
   expect(getView()).toMatchObject({ view: "setup", anchor: "rows" });
+});
+
+test("the rows page: More opens by itself when a profile is held, and says so on its line", async () => {
+  const prof = { stale: false, names: ["HR", "PR"], stale_said: "", both: { columns: ["Column"], rows: [["salary"]] },
+                 A: { columns: ["Column", "Type", "Nulls", "Distinct"], rows: [["salary", "number", 0, 3000]] },
+                 B: { columns: ["Column", "Type", "Nulls", "Distinct"], rows: [["salary", "number", 0, 2985]] }, freq_columns: [], freq_default: [] };
+  stub({ "/api/setup": () => KEYED, "/api/setup/keys": () => ({ ...KEYS, keys: ["emp_id"], mode: "key" }), "/api/setup/filters": () => FILTERS,
+         "/api/sources": () => SOURCES(), "/api/compare": () => compareState(), "/api/setup/profile": () => prof,
+         "/api/engine": () => ({ memory: "2GB", disk: "20GB", memory_from: "default", disk_from: "default", machine_memory: 2 ** 34, default_memory: "2GB", default_disk: "20GB" }) });
+  mount(<RowsEditor />);
+  const line = await screen.findByText(/^both files profiled · .* · DuckDB 2GB · spill 20GB$/);
+  await waitFor(() => expect(line.closest("details")).toHaveAttribute("open"));
+  expect(screen.getByRole("button", { name: "Profile again" })).toBeInTheDocument();
 });

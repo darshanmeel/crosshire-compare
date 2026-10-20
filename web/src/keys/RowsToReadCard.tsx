@@ -1,5 +1,5 @@
-// web/src/keys/RowsToReadCard.tsx - one side's "Rows to read" card (SPEC §06): WHERE, a condition
-// built from Column / Condition / Value, Order by (+ Descending), Top N, the rows the side holds, and
+// web/src/keys/RowsToReadCard.tsx - one side's "Rows to read" card (SPEC §06): WHERE (with "Build a
+// condition" on its label row: Column / Condition / Value), Order by (+ a Descending toggle), Top N, the rows the side holds, and
 // Apply - which loads the side again with these options, the body the side card's Load sends - and
 // Copy to the other side. What is typed lives in sources/formStore, so the side card sees it too.
 import { useId, useState } from "react";
@@ -10,6 +10,7 @@ import { getForm, setForm, useSideForm } from "../sources/formStore";
 import { useSources } from "../sources/useSources";
 import { loadBody, type SideView, type Tag } from "../sources/types";
 import { useQuickClause } from "../sources/useQuickClause";
+import { Icon } from "../ui/icons";
 import { Button, LinkButton, num, Pill, SideBadge } from "../ui/kit";
 import { marks } from "../ui/marks";
 import "./keys.css";
@@ -40,6 +41,7 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
   const [orderWas, setOrderWas] = useState(f.order_by);
   if (orderWas !== f.order_by) { setOrderWas(f.order_by); setOrderDraft(f.order_by.join(", ")); }
   const unknown = splitCols(orderDraft).filter((c) => cols.length && !cols.includes(c));
+  const [building, setBuilding] = useState(false);
   const [said, setSaid] = useState<{ warnings: string[]; error: string; done: boolean }>({ warnings: [], error: "", done: false });
   const q = useQuickClause(tag, cols, (e) => setSaid({ warnings: [], error: errorText(e), done: false }));
   const apply = useMutation({
@@ -72,32 +74,35 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
       </div>
       {view?.cut && <p className="caption rtr-cut">{view.cut}</p>}
       <div className="field">
-        <label className="lbl" htmlFor={`${id}-w`}>Filter · WHERE</label>
+        <div className="rtr-wherehead">
+          <label className="lbl" htmlFor={`${id}-w`}>Filter · WHERE</label>
+          {cols.length > 0 && <LinkButton aria-expanded={building} aria-controls={`${id}-b`} onClick={() => setBuilding(!building)}>Build a condition</LinkButton>}
+        </div>
         <textarea className="in mono" id={`${id}-w`} rows={3} value={f.where} onChange={(e) => set({ where: e.target.value })}
                   placeholder={cols[0] ? `e.g. ${cols[0]} IS NOT NULL AND hire_date >= '2026-07-20'` : "e.g. hire_date >= '2026-07-20'"} />
       </div>
-      {cols.length > 0 && (
-        <details className="rtr-build">
-          <summary>Build a condition</summary>
-          <div className="row">
-            <select className="in mono" aria-label="Column" value={q.col} onChange={(e) => q.setCol(e.target.value)}>{cols.map((c) => <option key={c}>{c}</option>)}</select>
-            <select className="in" aria-label="Condition" value={q.op} onChange={(e) => q.setOp(e.target.value)}>{ops.map((o) => <option key={o}>{o}</option>)}</select>
-            <input type="text" className="in mono grow" aria-label="Value" disabled={q.noValue} placeholder="2026-07-20 · Finance · 100"
-                   value={q.value} onChange={(e) => q.setValue(e.target.value)} />
-            <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
-          </div>
-        </details>
+      {cols.length > 0 && building && (
+        <div className="row rtr-build" id={`${id}-b`}>
+          <select className="in mono" aria-label="Column" value={q.col} onChange={(e) => q.setCol(e.target.value)}>{cols.map((c) => <option key={c}>{c}</option>)}</select>
+          <select className="in" aria-label="Condition" value={q.op} onChange={(e) => q.setOp(e.target.value)}>{ops.map((o) => <option key={o}>{o}</option>)}</select>
+          <input type="text" className="in mono grow" aria-label="Value" disabled={q.noValue} placeholder="2026-07-20 · Finance · 100"
+                 value={q.value} onChange={(e) => q.setValue(e.target.value)} />
+          <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
+        </div>
       )}
       <div className="row spread rtr-order">
         <span className="field grow">
           <label className="lbl" htmlFor={`${id}-o`}>Order by</label>
-          <input type="text" className="in mono" id={`${id}-o`} list={`${id}-cols`} placeholder={cols[0] ?? "a column"} value={orderDraft}
-                 onChange={(e) => setOrderDraft(e.target.value)} onBlur={commitOrder}
-                 onKeyDown={(e) => { if (e.key === "Enter") commitOrder(); }} />
+          <span className="rtr-orderin">
+            <input type="text" className="in mono" id={`${id}-o`} list={`${id}-cols`} placeholder={cols[0] ?? "a column"} value={orderDraft}
+                   onChange={(e) => setOrderDraft(e.target.value)} onBlur={commitOrder}
+                   onKeyDown={(e) => { if (e.key === "Enter") commitOrder(); }} />
+            <button type="button" className={f.desc ? "icon-btn rtr-desc on" : "icon-btn rtr-desc"} aria-label="Descending" aria-pressed={f.desc}
+                    title={f.desc ? "Descending - press for ascending" : "Ascending - press for descending"}
+                    disabled={!splitCols(orderDraft).length} onClick={() => set({ desc: !f.desc })}><Icon name="sortdesc" /></button>
+          </span>
           <datalist id={`${id}-cols`}>{cols.map((c) => <option key={c} value={c} />)}</datalist>
         </span>
-        <label className="check rtr-desc"><input type="checkbox" checked={f.desc} disabled={!splitCols(orderDraft).length}
-                                                onChange={(e) => set({ desc: e.target.checked })} />Descending</label>
         <span className="field">
           <label className="lbl" htmlFor={`${id}-n`}>Top N</label>
           <input type="number" className="in mono rtr-top" id={`${id}-n`} min={0} max={500_000_000} step={1000} placeholder="all"

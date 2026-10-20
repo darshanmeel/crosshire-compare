@@ -30,9 +30,9 @@
 .pairup button.chip .ov, .profilebox button.chip .ov { color: var(--fs-text3); padding-left: 6px; border-left: 1px solid var(--fs-border2); }
 .pairup button.chip.on .ov, .profilebox button.chip.on .ov { color: inherit; opacity: .8; }
 
-details.pairup-more > summary, details.rtr-build > summary { cursor: pointer; font-size: 12.5px; color: var(--fs-text3); min-height: 32px; display: flex; align-items: center; }
-details.pairup-more > summary:hover, details.rtr-build > summary:hover { color: var(--fs-accent); }
-details.rtr-build[open] > summary { margin-bottom: 6px; }
+details.pairup-more > summary { cursor: pointer; font-size: 12.5px; color: var(--fs-text3); min-height: 32px; display: flex; align-items: center; }
+details.pairup-more > summary:hover { color: var(--fs-accent); }
+.pairup .callout details.pairup-more > summary { min-height: 32px; margin-top: 4px; }
 
 /* Rows to read */
 .rtr textarea { width: 100%; min-height: 84px; resize: vertical; }
@@ -40,10 +40,16 @@ details.rtr-build[open] > summary { margin-bottom: 6px; }
 .rtr .rtr-order .grow { flex: 1 1 200px; }
 .rtr .rtr-order input[type=text] { width: 100%; }
 .rtr .rtr-top { width: 96px; text-align: right; }
-.rtr .rtr-desc { min-height: 36px; }
+.rtr .rtr-wherehead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
+.rtr .rtr-wherehead .link-btn { min-height: 32px; font-size: 12.5px; }
+.rtr .rtr-orderin { display: flex; gap: 8px; align-items: center; }
+.rtr .rtr-orderin input { flex: 1; min-width: 0; }
+.rtr .rtr-desc { flex: none; border-radius: var(--r-sm); }
+.rtr .rtr-desc.on { background: var(--fs-text); border-color: var(--fs-text); color: var(--fs-panel); }
+.rtr .rtr-desc:disabled { opacity: .45; cursor: default; color: var(--fs-text3); border-color: var(--fs-border2); }
 .rtr .rtr-cut { margin: -6px 0 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
-.rtr .rtr-build .row > select { flex: 0 1 auto; max-width: 100%; }
-.rtr .rtr-build .row > input { flex: 1 1 140px; min-width: 0; }
+.rtr .rtr-build > select { flex: 0 1 auto; max-width: 100%; }
+.rtr .rtr-build > input { flex: 1 1 140px; min-width: 0; }
 .warn-text { color: var(--fs-warn); }
 
 /* Filters at compare */
@@ -51,9 +57,12 @@ details.rtr-build[open] > summary { margin-bottom: 6px; }
 .atcompare .filters-tbl td { white-space: nowrap; }
 .atcompare .filters-tbl .icon-btn { width: 32px; height: 32px; }
 .atcompare .filters-foot { padding-top: 12px; }
+.atcompare.empty .panel-head { align-items: center; padding-bottom: 14px; }
 
 /* Profile by bucket and Run settings: one row of controls */
-.card.bucket, .card.runset { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 20px; }
+.card.bucket { gap: 10px; padding: 14px 20px; }
+.bucket-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.card.runset { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding: 14px 20px; }
 .bucket .bucket-col { width: 240px; max-width: 100%; }
 .bucket-say { font-size: 12.5px; color: var(--fs-text2); }
 .runset-rows { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--fs-text2); }
@@ -66,6 +75,16 @@ details.rtr-build[open] > summary { margin-bottom: 6px; }
 .profilebox .freq-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .profilebox .side-a { color: var(--fs-side-a); } .profilebox .side-b { color: var(--fs-side-b); }
 .profilebox .callout.warn { align-items: center; }
+
+/* More: Profile both files and Run settings, folded, their values on the line */
+details.rows-more > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-height: 44px; padding: 12px 20px; cursor: pointer;
+  background: var(--fs-panel); border: 1px solid var(--fs-line); border-radius: var(--r-md); }
+details.rows-more > summary .t { font-size: 15px; font-weight: 600; color: var(--fs-text); }
+details.rows-more > summary .sub { font-size: 12.5px; color: var(--fs-text3); }
+details.rows-more > summary:hover .t { color: var(--fs-accent); }
+details.rows-more > summary .icon { align-self: center; margin-left: auto; color: var(--fs-text3); transition: transform .15s; }
+details.rows-more[open] > summary .icon { transform: rotate(180deg); }
+.rows-more-body { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
 
 /* the bottom: Compare and what it will do */
 .rows-go { display: flex; flex-direction: column; gap: 8px; padding-top: 4px; }

@@ -203,7 +203,7 @@ test("the filters: a row added, a value typed, and what the server cannot read s
     return view;
   });
   mount(<FiltersBox />);
-  await userEvent.click(await screen.findByText("Filters - which rows take part, on the common names"));
+  await userEvent.click(await screen.findByRole("button", { name: "Add a filter" }));     // the one line: the held blank row opens
   await userEvent.selectOptions(screen.getByLabelText("Column, filter 1"), "salary");
   await userEvent.selectOptions(screen.getByLabelText("Operator, filter 1"), "between");
   await userEvent.type(screen.getByLabelText("Value, filter 1"), "1");
@@ -225,7 +225,7 @@ test("the filters: a typed value and an Operator changed at once are sent one af
     return view;
   });
   mount(<FiltersBox />);
-  await userEvent.click(await screen.findByText("Filters - which rows take part, on the common names"));
+  await userEvent.click(await screen.findByRole("button", { name: "Add a filter" }));     // the one line: the held blank row opens
   await userEvent.type(screen.getByLabelText("Value, filter 1"), "2026-01-01");
   await userEvent.selectOptions(screen.getByLabelText("Operator, filter 1"), "between");     // the blur and this change race
   await waitFor(() => expect(bodies(calls, "/api/setup/filters")).toHaveLength(2));
@@ -245,7 +245,7 @@ test("the filters: a 409 shows the filters as they are now and says why", async 
     return held;
   });
   mount(<FiltersBox />);
-  await userEvent.click(await screen.findByText("Filters - which rows take part, on the common names"));
+  await userEvent.click(await screen.findByRole("button", { name: "Add a filter" }));     // the one line: the held blank row opens
   await userEvent.selectOptions(screen.getByLabelText("Operator, filter 1"), "between");
   expect(await screen.findByText(/The filters changed since/)).toBeInTheDocument();
   await waitFor(() => expect(screen.getByLabelText("Value, filter 1")).toHaveValue("elsewhere"));

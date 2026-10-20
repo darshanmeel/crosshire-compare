@@ -23,6 +23,7 @@ export const activeFilters = (f?: FiltersView) => (f?.rows ?? []).filter((r) => 
 export function FiltersBox() {
   const qc = useQueryClient();
   const q = useFilters();
+  const [opened, setOpened] = useState(false);       // Add pressed on the one line: the grid shows, even with no column picked yet
   const [put, setPut] = useState<{ pending: boolean; error: unknown }>({ pending: false, error: null });
   const queue = useRef<Promise<void>>(Promise.resolve());
   const f = q.data;
@@ -49,39 +50,56 @@ export function FiltersBox() {
     </select>
   );
   const n = activeFilters(f).length;
+  const grid = f.rows.length > 0 && (n > 0 || opened);
+  const add = <Button size="sm" icon="plus" onClick={() => {
+    // from the one line, a blank row the server holds already is the one to fill
+    if (!grid) setOpened(true);
+    if (grid || !f.rows.length) save((rows) => [...rows, BLANK]);
+  }}>Add a filter</Button>;
+  const errors = <>
+    {f.error && <div className="note error">{marks(f.error)}</div>}
+    {(q.error != null || put.error != null) && <div className="note error">{errorText(q.error ?? put.error)}</div>}
+  </>;
+  if (!grid) return (                                // none picked yet: one line, the grid after Add
+    <div className="panel atcompare empty">
+      <div className="panel-head">
+        <h3>Filters at compare</h3>
+        <span className="sub">No filter - every paired row takes part</span>
+        <div className="actions">{add}</div>
+      </div>
+      {(f.error || q.error != null || put.error != null) && <div className="panel-body">{errors}</div>}
+    </div>
+  );
   return (
     <div className="panel atcompare">
       <div className="panel-head">
         <h3>Filters at compare</h3>
         <span className="sub">Filters - which rows take part, on the common names</span>
-        <div className="actions"><span className={`pill ${n ? "ok" : "idle"}`}><i />{n ? `${n} applied` : "none"}</span></div>
+        {n > 0 && <div className="actions"><span className="pill ok"><i />{n} applied</span></div>}
       </div>
       <div className="panel-note">
         <span>{marks("Both sides, after types · values match exactly (*Ignore case* does not apply) · to shrink a big file before it is read: **Rows to read** above")}</span>
       </div>
-      {f.rows.length > 0 && (
-        <div className="tblwrap">
-          <table className="tbl compact filters-tbl" aria-label="Filters">
-            <thead><tr><th>Apply to</th><th>Column</th><th>Operator</th><th>Value</th><th>Type</th><th aria-label="Remove" /></tr></thead>
-            <tbody>{f.rows.map((r, i) => (
-              <tr key={i}>
-                <td>{select(i, "Apply to", f.apply_to)}</td>
-                <td>{select(i, "Column", ["", ...f.columns], true)}</td>
-                <td>{select(i, "Operator", f.ops)}</td>
-                <td><CommitInput className="in mono" aria-label={`Value, filter ${i + 1}`} value={r.Value} title="in / not in: comma separated. between: two values."
-                                 onDone={(v) => change(i, { Value: v })} /></td>
-                <td>{select(i, "Type", f.types)}</td>
-                <td><button type="button" className="icon-btn" aria-label={`Remove filter ${i + 1}`}
-                            onClick={() => save((rows) => rows.filter((_, j) => j !== i))}><Icon name="x" size="sm" /></button></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-      )}
+      <div className="tblwrap">
+        <table className="tbl compact filters-tbl" aria-label="Filters">
+          <thead><tr><th>Apply to</th><th>Column</th><th>Operator</th><th>Value</th><th>Type</th><th aria-label="Remove" /></tr></thead>
+          <tbody>{f.rows.map((r, i) => (
+            <tr key={i}>
+              <td>{select(i, "Apply to", f.apply_to)}</td>
+              <td>{select(i, "Column", ["", ...f.columns], true)}</td>
+              <td>{select(i, "Operator", f.ops)}</td>
+              <td><CommitInput className="in mono" aria-label={`Value, filter ${i + 1}`} value={r.Value} title="in / not in: comma separated. between: two values."
+                               onDone={(v) => change(i, { Value: v })} /></td>
+              <td>{select(i, "Type", f.types)}</td>
+              <td><button type="button" className="icon-btn" aria-label={`Remove filter ${i + 1}`}
+                          onClick={() => save((rows) => rows.filter((_, j) => j !== i))}><Icon name="x" size="sm" /></button></td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
       <div className="panel-body filters-foot">
-        <div><Button size="sm" icon="plus" onClick={() => save((rows) => [...rows, BLANK])}>Add a filter</Button></div>
-        {f.error && <div className="note error">{marks(f.error)}</div>}
-        {(q.error != null || put.error != null) && <div className="note error">{errorText(q.error ?? put.error)}</div>}
+        <div>{add}</div>
+        {errors}
       </div>
     </div>
   );

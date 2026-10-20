@@ -39,16 +39,17 @@ export function BucketCard() {
   const on = !!col;
   return (
     <div className="card bucket">
-      <label className="check"><input type="checkbox" checked={on} disabled={!names.length}
-                                      onChange={(e) => setCol(e.target.checked ? first : "")} />Count a column in every bucket</label>
-      <select className="in mono bucket-col" id={`${id}-c`} aria-label="Bucket column" value={col || first} disabled={!on}
-              onChange={(e) => setCol(e.target.value)}>
-        {names.map((c) => <option key={c} value={c}>{label(c)}</option>)}
-      </select>
-      <span className="bucket-say">{on
-        ? <>its top values in matched, differing and one-sided rows · the column is compared as usual, too</>
-        : <>off - the buckets list the key columns' top values</>}</span>
-      <span className="grow" />
+      <div className="bucket-row">
+        <label className="check"><input type="checkbox" checked={on} disabled={!names.length}
+                                        onChange={(e) => setCol(e.target.checked ? first : "")} />Count a column in every bucket</label>
+        <select className="in mono bucket-col" id={`${id}-c`} aria-label="Bucket column" value={col || first} disabled={!on}
+                onChange={(e) => setCol(e.target.value)}>
+          {names.map((c) => <option key={c} value={c}>{label(c)}</option>)}
+        </select>
+        <span className="bucket-say">{on
+          ? <>its top values in matched, differing and one-sided rows · the column is compared as usual, too</>
+          : <>off - the buckets list the key columns' top values</>}</span>
+      </div>
       <span className="caption">Which rows match worst, and what they hold: <strong>Summary → Profile by bucket</strong>.</span>
     </div>
   );

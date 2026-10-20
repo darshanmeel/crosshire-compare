@@ -9,7 +9,7 @@ import { json, mount, type Call } from "../setup/testkit";
 const VIEW: FiltersView = { rows: [], rev: "0", columns: ["emp_id", "salary"], apply_to: ["Both", "HR", "PR"],
                             ops: ["=", "between"], types: ["auto", "number"], error: "" };
 
-test("Filters at compare: open with none, a row added and filled, the count, then removed", async () => {
+test("Filters at compare: one line while empty, the grid after Add, filled, the count, then removed", async () => {
   let view = VIEW;
   const calls: Call[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
@@ -19,7 +19,8 @@ test("Filters at compare: open with none, a row added and filled, the count, the
   }));
   mount(<FiltersBox />);
   expect(await screen.findByRole("heading", { name: "Filters at compare" })).toBeInTheDocument();
-  expect(screen.getByText("none")).toBeInTheDocument();
+  expect(screen.getByText("No filter - every paired row takes part")).toBeInTheDocument();   // one line while empty, no "none" pill
+  expect(screen.queryByText("none")).toBeNull();
   expect(screen.queryByRole("table", { name: "Filters" })).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Add a filter" }));
   const table = await screen.findByRole("table", { name: "Filters" });
