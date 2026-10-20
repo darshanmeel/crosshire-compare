@@ -2,7 +2,7 @@
 // at once and staged, and Load then reads the staged copy.
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "../api/client";
+import { api, errorText } from "../api/client";
 import { Dropzone } from "../ui/kit";
 import type { SideView, Tag } from "./types";
 
@@ -13,7 +13,7 @@ export function UploadBox({ tag, staged, types, onBusy }:
   const up = useMutation({
     mutationFn: (file: File) => { onBusy?.(true); return api.upload<SideView>(`/api/sources/${tag}/upload?filename=${encodeURIComponent(file.name)}`, file); },
     onSuccess: () => { setErr(""); qc.invalidateQueries({ queryKey: ["sources"] }); },
-    onError: (e) => setErr(e instanceof ApiError ? e.detail : String(e)),
+    onError: (e) => setErr(errorText(e)),
     onSettled: () => onBusy?.(false),
   });
   const hint = tag === "P" ? "a wide or big table takes minutes — cut it down under Rows to read to try a slice"

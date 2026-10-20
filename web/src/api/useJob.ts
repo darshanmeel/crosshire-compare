@@ -2,8 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLog } from "../shell/LogPanel";
-import { errorText } from "../setup/api";
-import { api, ApiError, type LogEntry } from "./client";
+import { api, ApiError, errorText, type LogEntry } from "./client";
 
 export const JOB_GONE = "The job is no longer known - check the Log, or start it again.";
 

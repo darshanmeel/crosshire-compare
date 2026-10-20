@@ -5,7 +5,7 @@
 // / "File" - the e2e runs find the side by it.
 import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type Meta } from "../api/client";
+import { api, errorText, type Meta } from "../api/client";
 import { Button, LinkButton, Pill, SideBadge, type Tone } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { DatabaseBox } from "./DatabaseBox";
@@ -78,7 +78,7 @@ export function SideCard({ tag, meta, compact = false }: { tag: Tag; meta: Meta;
       qc.invalidateQueries({ queryKey: ["sources"] });
       qc.invalidateQueries({ queryKey: ["preview", tag] });
     },
-    onError: (e) => setSaid({ warnings: [], error: e instanceof ApiError ? e.detail : String(e) }),
+    onError: (e) => setSaid({ warnings: [], error: errorText(e) }),
   });
 
   const loaded = !!view?.loaded;

@@ -3,7 +3,7 @@
 // state are read again so the rail and the running panel follow them. A refusal stays on the
 // mutation, where useRunError finds it.
 import { useMutation, useMutationState, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type LogEntry } from "../api/client";
+import { api, errorText, type LogEntry } from "../api/client";
 import { setView } from "../shell/view";
 
 const RUN = ["start-run"];
@@ -35,5 +35,5 @@ export const useRunAuto = () => useStart("/api/auto");
 export function useRunError(): string {
   const last = useMutationState({ filters: { mutationKey: RUN }, select: (m) => m.state }).at(-1);
   if (!last || last.status !== "error") return "";
-  return last.error instanceof ApiError ? last.error.detail : String(last.error);
+  return errorText(last.error);
 }

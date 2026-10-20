@@ -2,12 +2,13 @@
 // which rows take part, on the common names, after types - applied when the run compares, unlike
 // Rows to read, which cuts a side as it is read. Owned by the rows page (keys/).
 import { useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client";
 import { Icon } from "../ui/icons";
-import { Button } from "../ui/kit";
+import { Button, CommitInput } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { errorText, type FilterRow, type FiltersView } from "../setup/api";
+import { useFilters } from "../keys/summary";
 import "../keys/keys.css";
 
 export const FILTERS_KEY = ["setup-filters"];
@@ -17,20 +18,11 @@ const BLANK: FilterRow = { "Apply to": "Both", Column: "", Operator: "=", Value:
 /** The filters that take part: a column picked. */
 export const activeFilters = (f?: FiltersView) => (f?.rows ?? []).filter((r) => r.Column);
 
-function ValueCell({ value, label, onDone }: { value: string; label: string; onDone: (v: string) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [was, setWas] = useState(value);
-  if (value !== was) { setWas(value); setDraft(value); }
-  return <input type="text" className="in mono" aria-label={label} value={draft} title="in / not in: comma separated. between: two values."
-                onChange={(e) => setDraft(e.target.value)} onBlur={() => { if (draft !== value) onDone(draft); }}
-                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />;
-}
-
 /** The Rows filters: which rows take part, on the common names. Kept on the server for the columns
  *  and names they were typed against; a filter that cannot be read is kept and said. */
 export function FiltersBox() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: KEY, queryFn: () => api.get<FiltersView>("/api/setup/filters") });
+  const q = useFilters();
   const [put, setPut] = useState<{ pending: boolean; error: unknown }>({ pending: false, error: null });
   const queue = useRef<Promise<void>>(Promise.resolve());
   const f = q.data;
@@ -76,7 +68,8 @@ export function FiltersBox() {
                 <td>{select(i, "Apply to", f.apply_to)}</td>
                 <td>{select(i, "Column", ["", ...f.columns], true)}</td>
                 <td>{select(i, "Operator", f.ops)}</td>
-                <td><ValueCell value={r.Value} label={`Value, filter ${i + 1}`} onDone={(v) => change(i, { Value: v })} /></td>
+                <td><CommitInput className="in mono" aria-label={`Value, filter ${i + 1}`} value={r.Value} title="in / not in: comma separated. between: two values."
+                                 onDone={(v) => change(i, { Value: v })} /></td>
                 <td>{select(i, "Type", f.types)}</td>
                 <td><button type="button" className="icon-btn" aria-label={`Remove filter ${i + 1}`}
                             onClick={() => save((rows) => rows.filter((_, j) => j !== i))}><Icon name="x" size="sm" /></button></td>

@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import { resetView } from "../shell/view";
 import { json, mount, type Call } from "../sources/testkit";
-import { resetPicks } from "./picks";
+import { resetPicks } from "../results/pickStore";
 import { ProfileView } from "./ProfileView";
 import { resetKept } from "./SaveRow";
 import { defaults, profile, profiling, T } from "./testkit";

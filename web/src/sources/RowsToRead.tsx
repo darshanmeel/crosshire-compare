@@ -1,14 +1,12 @@
 // web/src/sources/RowsToRead.tsx - what the card's "Rows to read: …" opens: a quick filter builder,
 // the WHERE, the order and the top N, applied as the side is read. The full editor is the Rows view.
-import { useEffect, useId, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { useEffect, useId } from "react";
+import { errorText } from "../api/client";
 import { Button, num } from "../ui/kit";
 import { Tips } from "../ui/Tips";
 import { useSideForm } from "./formStore";
 import type { SideForm, Tag } from "./types";
-
-const NULL_OPS = ["is null", "is not null"];
+import { useQuickClause } from "./useQuickClause";
 
 /** The link's text: "all", or what cuts the rows ("filtered · top 1,000"). */
 export function rowsSummary(f: SideForm): string {
@@ -20,18 +18,11 @@ export function rowsSummary(f: SideForm): string {
 export function RowsToRead({ tag, cols, quickOps }: { tag: Tag; cols: string[]; quickOps: string[] }) {
   const id = useId();
   const [f, set] = useSideForm(tag);
-  const [qc, setQc] = useState("");
-  const [qo, setQo] = useState("=");
-  const [qv, setQv] = useState("");
-  const col = cols.includes(qc) ? qc : cols[0] ?? "";
+  const q = useQuickClause(tag, cols);
   useEffect(() => {                 // another file now: its columns are not this one's (kept while none are known)
     const kept = f.order_by.filter((c) => cols.includes(c));
     if (cols.length && kept.length !== f.order_by.length) set({ order_by: kept });
   }, [cols.join("\u0000")]);
-  const add = useMutation({
-    mutationFn: () => api.send<{ where: string }>("POST", "/api/sources/quick-clause", { column: col, op: qo, value: qv, where: f.where }),
-    onSuccess: (r) => set({ where: r.where }),
-  });
   return (
     <div className="rows-to-read">
       <Tips items={f.how === "database"
@@ -40,18 +31,19 @@ export function RowsToRead({ tag, cols, quickOps }: { tag: Tag; cols: string[]; 
       {cols.length > 0 && (
         <div className="quick">
           <label className="field"><span className="lbl">Column</span>
-            <select className="in mono" aria-label="Column" value={col} onChange={(e) => setQc(e.target.value)}>{cols.map((c) => <option key={c}>{c}</option>)}</select>
+            <select className="in mono" aria-label="Column" value={q.col} onChange={(e) => q.setCol(e.target.value)}>{cols.map((c) => <option key={c}>{c}</option>)}</select>
           </label>
           <label className="field"><span className="lbl">Condition</span>
-            <select className="in" aria-label="Condition" value={qo} onChange={(e) => setQo(e.target.value)}>{quickOps.map((o) => <option key={o}>{o}</option>)}</select>
+            <select className="in" aria-label="Condition" value={q.op} onChange={(e) => q.setOp(e.target.value)}>{quickOps.map((o) => <option key={o}>{o}</option>)}</select>
           </label>
           <label className="field"><span className="lbl">Value</span>
-            <input type="text" className="in mono" aria-label="Value" disabled={NULL_OPS.includes(qo)} placeholder="2026-07-20 · Finance · 100"
-                   value={qv} onChange={(e) => setQv(e.target.value)} />
+            <input type="text" className="in mono" aria-label="Value" disabled={q.noValue} placeholder="2026-07-20 · Finance · 100"
+                   value={q.value} onChange={(e) => q.setValue(e.target.value)} />
           </label>
-          <Button size="sm" icon="plus" onClick={() => add.mutate()}>Add to filter</Button>
+          <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
         </div>
       )}
+      {q.add.isError && <div className="note error" role="alert">{errorText(q.add.error)}</div>}
       <label className="field"><span className="lbl">Filter (WHERE)</span>
         <textarea className="in mono" aria-label="Filter (WHERE)" rows={3} placeholder={"hire_date >= '2026-07-20'\nAND department = 'Finance'"}
                   value={f.where} onChange={(e) => set({ where: e.target.value })} />

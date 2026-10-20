@@ -16,6 +16,7 @@ import { FrameTable } from "../setup/FrameTable";
 import "./keys.css";
 
 export const KEYS_KEY = ["setup-keys"];
+export const useKeys = (enabled = true) => useQuery({ queryKey: KEYS_KEY, queryFn: () => api.get<KeysView>("/api/setup/keys"), enabled });
 
 type Mode = "key" | "position" | "hash";
 
@@ -33,7 +34,7 @@ function overlapOf(columns: string[], row: unknown[] | undefined): string {
 /** The match mode, the key and everything that checks it. */
 export function KeyBox() {
   const qc = useQueryClient();
-  const q = useQuery({ queryKey: KEYS_KEY, queryFn: () => api.get<KeysView>("/api/setup/keys") });
+  const q = useKeys();
   const { data: setup } = useSetup();
   const [picks, setPicks] = useState<number[]>([]);
   const [err, setErr] = useState("");

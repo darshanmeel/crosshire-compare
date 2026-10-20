@@ -2,7 +2,7 @@
 // fields each driver needs); a secret goes in and never comes back - the server shows only a ${NAME}.
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type Meta } from "../api/client";
+import { api, errorText, type Meta } from "../api/client";
 import { Button, LinkButton, Seg } from "../ui/kit";
 import { NEW, connBody, envName, refreshConnections, type ConnForm, type PwWhere, type Tested } from "./types";
 
@@ -44,7 +44,7 @@ export function ConnectionForm({ meta, pick, onDone, onTested }: {
     setWhere(w);
   };
 
-  const fail = (e: unknown) => setSaid({ tone: "error", text: e instanceof ApiError ? e.detail : String(e) });
+  const fail = (e: unknown) => setSaid({ tone: "error", text: errorText(e) });
   const name = (v.name ?? "").trim();
   const test = useMutation({
     mutationFn: () => api.send<Tested>("POST", "/api/connections/test", { ...connBody(f, v, where), name: name || "TEST" }),

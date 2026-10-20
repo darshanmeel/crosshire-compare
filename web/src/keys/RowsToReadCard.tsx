@@ -4,16 +4,16 @@
 // Copy to the other side. What is typed lives in sources/formStore, so the side card sees it too.
 import { useId, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "../api/client";
+import { api, errorText } from "../api/client";
 import { refreshSetup, useSetup } from "../setup/api";
 import { getForm, setForm, useSideForm } from "../sources/formStore";
 import { useSources } from "../sources/useSources";
 import { loadBody, type SideView, type Tag } from "../sources/types";
+import { useQuickClause } from "../sources/useQuickClause";
 import { Button, LinkButton, num, Pill, SideBadge } from "../ui/kit";
 import { marks } from "../ui/marks";
 import "./keys.css";
 
-const NULL_OPS = ["is null", "is not null"];
 const splitCols = (t: string) => t.split(",").map((c) => c.trim()).filter(Boolean);
 
 /** The rows a side holds, as the pill says it. */
@@ -40,16 +40,8 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
   const [orderWas, setOrderWas] = useState(f.order_by);
   if (orderWas !== f.order_by) { setOrderWas(f.order_by); setOrderDraft(f.order_by.join(", ")); }
   const unknown = splitCols(orderDraft).filter((c) => cols.length && !cols.includes(c));
-  const [qc_, setQc] = useState("");
-  const [qo, setQo] = useState("=");
-  const [qv, setQv] = useState("");
-  const col = cols.includes(qc_) ? qc_ : cols[0] ?? "";
   const [said, setSaid] = useState<{ warnings: string[]; error: string; done: boolean }>({ warnings: [], error: "", done: false });
-  const clause = useMutation({
-    mutationFn: () => api.send<{ where: string }>("POST", "/api/sources/quick-clause", { column: col, op: qo, value: qv, where: f.where }),
-    onSuccess: (r) => { set({ where: r.where }); setQv(""); },
-    onError: (e) => setSaid({ warnings: [], error: e instanceof ApiError ? e.detail : String(e), done: false }),
-  });
+  const q = useQuickClause(tag, cols, (e) => setSaid({ warnings: [], error: errorText(e), done: false }));
   const apply = useMutation({
     mutationFn: () => {
       const g = getForm(tag);                      // as it is now - the order typed was just committed
@@ -61,7 +53,7 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
       qc.invalidateQueries({ queryKey: ["preview", tag] });
       refreshSetup(qc);
     },
-    onError: (e) => setSaid({ warnings: [], error: e instanceof ApiError ? e.detail : String(e), done: false }),
+    onError: (e) => setSaid({ warnings: [], error: errorText(e), done: false }),
   });
   const commitOrder = () => set({ order_by: splitCols(orderDraft) });
   /** The other side gets the same cut; the order's columns become their partners where the table pairs them. */
@@ -88,11 +80,11 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
         <details className="rtr-build">
           <summary>Build a condition</summary>
           <div className="row">
-            <select className="in mono" aria-label="Column" value={col} onChange={(e) => setQc(e.target.value)}>{cols.map((c) => <option key={c}>{c}</option>)}</select>
-            <select className="in" aria-label="Condition" value={qo} onChange={(e) => setQo(e.target.value)}>{ops.map((o) => <option key={o}>{o}</option>)}</select>
-            <input type="text" className="in mono grow" aria-label="Value" disabled={NULL_OPS.includes(qo)} placeholder="2026-07-20 · Finance · 100"
-                   value={qv} onChange={(e) => setQv(e.target.value)} />
-            <Button size="sm" icon="plus" disabled={clause.isPending} onClick={() => clause.mutate()}>Add to filter</Button>
+            <select className="in mono" aria-label="Column" value={q.col} onChange={(e) => q.setCol(e.target.value)}>{cols.map((c) => <option key={c}>{c}</option>)}</select>
+            <select className="in" aria-label="Condition" value={q.op} onChange={(e) => q.setOp(e.target.value)}>{ops.map((o) => <option key={o}>{o}</option>)}</select>
+            <input type="text" className="in mono grow" aria-label="Value" disabled={q.noValue} placeholder="2026-07-20 · Finance · 100"
+                   value={q.value} onChange={(e) => q.setValue(e.target.value)} />
+            <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
           </div>
         </details>
       )}

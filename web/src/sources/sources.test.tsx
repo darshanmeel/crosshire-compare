@@ -71,6 +71,22 @@ test("Add to filter writes the server's clause into the WHERE box", async () => 
   await userEvent.type(screen.getByLabelText("Value"), "Fin");
   await userEvent.click(screen.getByRole("button", { name: "Add to filter" }));
   await waitFor(() => expect(screen.getByLabelText("Filter (WHERE)")).toHaveValue("\"department\" ILIKE '%Fin%'"));
+  expect(screen.getByLabelText("Value")).toHaveValue("");           // emptied for the next condition
+});
+
+test("a clause the server refuses is said under the builder, and Value is kept", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url === "/api/sources/A/schema") return json({ label: "hr.csv", kind: "csv", columns: [{ name: "salary", type: "VARCHAR" }], error: "" });
+    if (url === "/api/sources/quick-clause") return json({ detail: "between takes two values" }, 400);
+    return json(body({ sides: { A: view("A", { staged: "hr.csv" }), B: view("B"), P: view("P") } }));
+  }));
+  mount(<SideCard tag="A" meta={META} />);
+  await userEvent.click(await screen.findByRole("button", { name: /^Rows to read: all/ }));
+  await userEvent.type(await screen.findByLabelText("Value"), "100");
+  await userEvent.click(screen.getByRole("button", { name: "Add to filter" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("between takes two values");
+  expect(screen.getByLabelText("Value")).toHaveValue("100");
+  expect(screen.getByLabelText("Filter (WHERE)")).toHaveValue("");
 });
 
 test("the names: the box wins, and two sides of one name are told apart", () => {

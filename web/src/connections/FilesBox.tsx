@@ -1,7 +1,7 @@
 // Import a connections file (JSON or YAML) after a preview, or download the saved ones without passwords.
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "../api/client";
+import { api, errorText } from "../api/client";
 import { Icon } from "../ui/icons";
 import { Button, Chip } from "../ui/kit";
 import { marks } from "../ui/marks";
@@ -15,7 +15,7 @@ export function FilesBox({ rows }: { rows: ConnRow[] }) {
   const [found, setFound] = useState<Found[]>([]);
   const [keep, setKeep] = useState(false);
   const [said, setSaid] = useState<{ tone: string; text: string } | null>(null);
-  const fail = (e: unknown) => setSaid({ tone: "error", text: e instanceof ApiError ? e.detail : String(e) });
+  const fail = (e: unknown) => setSaid({ tone: "error", text: errorText(e) });
 
   const preview = async (f: File) => {
     setSaid(null); setFound([]);

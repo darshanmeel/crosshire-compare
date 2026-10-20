@@ -2,7 +2,7 @@
 // in a folder saved under Connections; Browse… opens the file dialog where the app runs.
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { api, ApiError, type Meta } from "../api/client";
+import { api, errorText, type Meta } from "../api/client";
 import { Button } from "../ui/kit";
 import { useSideForm } from "./formStore";
 import { NoteLine } from "./NoteLine";
@@ -26,7 +26,7 @@ export function PathBox({ tag, meta }: { tag: Tag; meta: Meta }) {
   const browse = useMutation({
     mutationFn: () => api.send<{ path: string; file: string }>("POST", "/api/sources/browse", { start: f.path, folder }),
     onSuccess: (r) => { setErr(""); if (r.file) set({ file: r.file }); else if (r.path) set({ path: r.path, folder: "" }); },
-    onError: (e) => setErr(e instanceof ApiError ? e.detail : String(e)),
+    onError: (e) => setErr(errorText(e)),
   });
   return (
     <div className="pathbox">

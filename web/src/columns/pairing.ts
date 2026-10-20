@@ -1,6 +1,7 @@
 // web/src/columns/pairing.ts - what the pairing board says about a row, worked out from the setup view
 // (no fetching here): its role, how the pair was made, its steps in a line, its case.
 import type { Row, SetupReady, Spec } from "../setup/api";
+import { plural } from "../ui/kit";
 
 export type Role = "key" | "compare" | "skip";
 
@@ -49,8 +50,6 @@ export const isText = (r: Row) => r.Type === "text";
 export const caseText = (v: string, ignoreCase: boolean) =>
   v === "ignore" ? "ignore" : v === "exact" ? "exact" : `${ignoreCase ? "ignore" : "exact"} · default`;
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
-
 /** The section's sub-line: `6 pairs · 1 only in HR · 1 only in Payroll`. */
 export function subLine(s: SetupReady): string {
   const [NA, NB] = s.names;
@@ -69,5 +68,3 @@ export function guessLine(s: SetupReady): string {
 }
 export const guessPairs = (s: SetupReady) =>
   s.rows.filter((r) => originOf(r, s.names).guess).map((r) => `${r["A column"]} ⇄ ${r["B column"]}`);
-
-export { plural };

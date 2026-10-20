@@ -2,7 +2,7 @@
 // query, the fetch cap. The fetch is a job that writes Parquet; Load then reads that Parquet.
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type LogEntry } from "../api/client";
+import { api, errorText, type LogEntry } from "../api/client";
 import { useJobOfKind } from "../api/useJob";
 import { useConnections } from "../connections/ConnectionsManager";
 import { setView } from "../shell/view";
@@ -26,7 +26,7 @@ export function DatabaseBox({ tag }: { tag: Tag }) {
   const plan = useQuery({ queryKey: ["db", tag, d], enabled: !!name,
                           queryFn: () => api.send<DbPlan>("POST", `/api/sources/${tag}/db`, d) });
   const [err, setErr] = useState("");
-  const fail = (e: unknown) => setErr(e instanceof ApiError ? e.detail : String(e));
+  const fail = (e: unknown) => setErr(errorText(e));
   const refresh = () => ["db", "sources", "connections"].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   const start = useMutation({
     mutationFn: () => api.send<LogEntry>("POST", `/api/sources/${tag}/fetch`, { ...d, password: f.password || null }),

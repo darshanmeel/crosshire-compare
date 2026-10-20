@@ -1,12 +1,13 @@
 // web/src/results/WhyTheyDiffer.tsx - the Summary's side panel: per differing column the most
 // frequent (A value -> B value) pairs, or - when every pair is different - how alike the values
 // are (near-match); then the one-sided rows, with their pattern when the data has one.
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQueries } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { setView } from "../shell/view";
 import { Bar, Button, num } from "../ui/kit";
 import { Icon } from "../ui/icons";
+import { useNearMatch } from "./detailApi";
 import { useOneSided } from "./OneSidedTab";
 import { ledgerRows, countsOf, type Frame, type Pairs, type Summary } from "./types";
 
@@ -34,8 +35,7 @@ export function WhyTheyDiffer({ run, s }: { run: RunView; s: Summary }) {
     })),
   });
   const allDistinct = pairs.some((p) => p.data && p.data.mismatches > 0 && p.data.distinct === p.data.mismatches);
-  const near = useQuery({ enabled: allDistinct, staleTime: Infinity, queryKey: ["results", run.id, "near-match"],
-                          queryFn: () => api.get<Frame>(`/api/results/${run.id}/near-match`) });
+  const near = useNearMatch(run.id, allDistinct);
   const c = countsOf(s);
   const a = useOneSided(run.id, "A", 6, c.onlyA > 1), b = useOneSided(run.id, "B", 6, c.onlyB > 1);
   const pattern = [{ name: NA, d: a.data }, { name: NB, d: b.data }].filter((x) => x.d && x.d.total > 1 && x.d.constant.length);

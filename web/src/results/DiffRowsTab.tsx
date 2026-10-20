@@ -2,14 +2,11 @@
 // cell as "A value → B value", filter chips per differing column, a search over the loaded rows, a
 // Show menu to hide columns, the cell differences file, paging and the near-match analysis.
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { Icon } from "../ui/icons";
 import { Bar, Button, Callout, DiffCell, num } from "../ui/kit";
-import { fileUrl, pivot, useDiffRows, type DiffRowsPage, type KeyRow } from "./detailApi";
+import { fileUrl, pivot, useDiffRows, useNearMatch, type DiffRowsPage, type KeyRow } from "./detailApi";
 import { Failed } from "./Failed";
-import type { Frame } from "./types";
 import "./detail.css";
 
 type Show = "all" | "differing" | "custom";
@@ -77,8 +74,7 @@ function ShowMenu({ all, differing, hidden, setHidden, show, setShow }: {
 
 /** How close the differing values are - asked for on its button, since it reads every cell. */
 function NearMatch({ runId, onClose }: { runId: string; onClose: () => void }) {
-  const q = useQuery({ staleTime: Infinity, queryKey: ["results", runId, "near-match"],
-                       queryFn: () => api.get<Frame>(`/api/results/${runId}/near-match`) });
+  const q = useNearMatch(runId);
   const f = q.data;
   const col = (name: string) => f?.columns.indexOf(name) ?? -1;
   return (

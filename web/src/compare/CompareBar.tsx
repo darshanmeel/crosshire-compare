@@ -4,7 +4,7 @@
 import { useId } from "react";
 import { useSetup } from "../setup/api";
 import { NoteLine } from "../sources/NoteLine";
-import { Button, Callout, num } from "../ui/kit";
+import { Button, Callout, num, plural } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { useRunCompare, useRunError } from "./actions";
 import { TICK_COMPARE } from "./types";
@@ -12,8 +12,6 @@ import { useCompareNow } from "./useCompare";
 import "./running.css";
 
 export const NOTHING_PAIRED = "Nothing is paired yet - pick a counterpart for at least one column in the table.";   // = comparing.NOTHING_PAIRED
-
-const plural = (n: number, one: string, many: string) => `${num(n)} ${n === 1 ? one : many}`;
 
 export function CompareBar() {
   const st = useCompareNow().data;

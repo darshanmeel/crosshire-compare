@@ -4,7 +4,7 @@
 // new run starts at its own folder again (the same kept pick SaveRow uses).
 import { useId, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { api, ApiError } from "../api/client";
+import { api, errorText } from "../api/client";
 import { NoteLine } from "../sources/NoteLine";
 import type { Note } from "../sources/types";
 import { Button } from "../ui/kit";
@@ -21,7 +21,7 @@ export function FolderSave({ runId, what, label, field, folder, onSaved }: {
   const go = useMutation({
     mutationFn: () => api.send<SaveOut>("POST", `/api/results/${runId}/save`, { what, folder: typed }),
     onSuccess: (r) => { setSaid({ tone: "success", text: r.text }); onSaved?.(r.files); },
-    onError: (e) => setSaid({ tone: "error", text: e instanceof ApiError ? e.detail : String(e) }),
+    onError: (e) => setSaid({ tone: "error", text: errorText(e) }),
   });
   return (
     <div className="rd-folder">

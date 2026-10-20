@@ -8,15 +8,15 @@ import type { RunView } from "../compare/types";
 import { Button } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { Tips } from "../ui/Tips";
+import { useNearMatch } from "./detailApi";
 import { Failed } from "./Failed";
 import { Grid } from "./Grid";
 import { NONE, usePick } from "./pickStore";
-import { qs, type ColumnsBody, type Frame } from "./types";
+import { qs, type ColumnsBody } from "./types";
 
 function NearMatch({ runId }: { runId: string }) {
   const [asked, setAsked] = useState(false);
-  const q = useQuery({ enabled: asked, staleTime: Infinity, queryKey: ["results", runId, "near-match"],
-                       queryFn: () => api.get<Frame>(`/api/results/${runId}/near-match`) });
+  const q = useNearMatch(runId, asked);
   return (
     <div className="cv-block">
       <h3>Near-match analysis - is it formatting or real data?</h3>

@@ -7,7 +7,8 @@ import type { SourcesBody } from "../sources/types";
 import { FILTERS_KEY, activeFilters } from "../values/FiltersBox";
 import { num } from "../ui/kit";
 
-export const useFilters = () => useQuery({ queryKey: FILTERS_KEY, queryFn: () => api.get<FiltersView>("/api/setup/filters") });
+export const useFilters = (enabled = true) =>
+  useQuery({ queryKey: FILTERS_KEY, queryFn: () => api.get<FiltersView>("/api/setup/filters"), enabled });
 
 export const NOKEY_SHORT = { position: "by position", hash: "by hash of compared columns" } as const;
 

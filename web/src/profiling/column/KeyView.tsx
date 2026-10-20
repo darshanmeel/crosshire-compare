@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { api } from "../../api/client";
 import { useSetup } from "../../setup/api";
 import { setView } from "../../shell/view";
-import { Button, Callout, num, Panel, StatGrid } from "../../ui/kit";
+import { Button, Callout, num, Panel, plural, StatGrid } from "../../ui/kit";
 import { NotShown, Points, readShape, share, type Point } from "../ColumnDetail";
 import { pct } from "../frame";
 import { Findings, type Finding } from "./Findings";
@@ -64,7 +64,6 @@ export function saysId(name: string) {
 }
 
 const M = ({ children }: { children: ReactNode }) => <code>{children}</code>;
-const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 const range = (a: string, b: string) => (a === b ? a : `${a} - ${b}`);
 
 /** The Compare page's setup view, when the column table is in it. */

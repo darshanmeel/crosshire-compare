@@ -1,11 +1,13 @@
 // The redesign's shared pieces (design/COMPONENTS.md), on the classes in styles.css. Each is a thin
 // wrapper over a real control: buttons are <button>, toggles say aria-pressed, groups say role="group".
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { Icon, type IconName } from "./icons";
 
 const fmt = new Intl.NumberFormat("en-US");
 /** A number with thousands separators; anything else as it is. */
 export const num = (n: number | string | null | undefined) => (typeof n === "number" ? fmt.format(n) : n ?? "");
+/** "1 pair", "6 pairs" - the count with its separators and the word it counts. */
+export const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 
 /** `part` of `whole` as a percentage, two decimals - but never 0 or 100 when it is neither: 6 rows
  *  of 629,424 read 0.001 and 99.999, with as many decimals as that takes (up to 6). The page's
@@ -16,6 +18,20 @@ export function pctText(part: number, whole: number) {
   if (!(part > 0 && part < whole) || (pct >= 0.005 && pct <= 99.995)) return pct.toFixed(2);
   const d = Math.min(6, -Math.floor(Math.log10(Math.min(pct, 100 - pct)))), f = 10 ** d;
   return ((pct < 50 ? Math.ceil(pct * f) : Math.floor(pct * f)) / f).toFixed(d).replace(/0+$/, "");
+}
+
+type CommitProps = Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "onBlur" | "onKeyDown"> & {
+  value: string; onDone: (v: string) => void; trim?: boolean;
+};
+/** A box that keeps what is typed and hands it on when it is left or Enter is pressed; a new value
+ *  from outside (the server renamed it, say) replaces the draft. */
+export function CommitInput({ value, onDone, trim, type = "text", ...rest }: CommitProps) {
+  const [draft, setDraft] = useState(value);
+  const [was, setWas] = useState(value);
+  if (value !== was) { setWas(value); setDraft(value); }
+  const done = () => { const v = trim ? draft.trim() : draft; if (v !== value) onDone(v); };
+  return <input type={type} {...rest} value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={done}
+                onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />;
 }
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {

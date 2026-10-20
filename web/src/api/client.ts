@@ -2,6 +2,9 @@ export class ApiError extends Error {
   constructor(public status: number, public detail: string) { super(detail); }
 }
 
+/** What the page shows for a failed call: the server's detail, or the error as text. */
+export const errorText = (e: unknown) => (e instanceof ApiError ? e.detail : String(e));
+
 async function parse<T>(r: Response): Promise<T> {
   if (!r.ok) {
     let detail = r.statusText;

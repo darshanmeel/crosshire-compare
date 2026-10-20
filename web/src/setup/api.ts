@@ -62,7 +62,7 @@ export const SETUP_KEY = ["setup"];
 export const DERIVED_KEYS = ["setup-keys", "setup-profile", "setup-freq", "setup-try", "setup-filters"];
 export const STALE_TABLE = "The column table changed since - it is shown again as it is now.";
 
-export const errorText = (e: unknown) => (e instanceof ApiError ? e.detail : String(e));
+export { errorText } from "../api/client";
 
 export function useSetup() {
   return useQuery({ queryKey: SETUP_KEY, queryFn: () => api.get<SetupView>("/api/setup") });

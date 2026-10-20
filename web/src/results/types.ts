@@ -1,4 +1,5 @@
-export type Frame = { columns: string[]; rows: unknown[][] };
+import type { Frame } from "../setup/api";
+export type { Frame };
 export type Metric = { label: string; value: number | string; help?: string };
 export type Summary = {
   mode: "key" | "hash" | "position"; keys: string[]; key_line: string; key_warning: { head: string; points: string[] } | null;

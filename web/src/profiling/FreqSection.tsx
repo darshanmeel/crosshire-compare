@@ -1,10 +1,10 @@
 // web/src/profiling/FreqSection.tsx - Value frequencies (screen 15): one column at a time, picked
 // in the head, its eight most frequent values as bars. The ten most and ten least frequent of any
 // column are on its detail page (FreqBars, used there too).
+import { usePick } from "../results/pickStore";
 import { Bar, LinkButton, num, Panel } from "../ui/kit";
 import { fmt, pct, rowsOf, type Row } from "./frame";
 import { openColumn } from "./ColumnsTable";
-import { usePicks } from "./picks";
 import type { Frame, FreqInfo, Profile } from "./types";
 import { useFreq } from "./useProfiling";
 
@@ -51,15 +51,15 @@ function firstPick(p: Profile, freq: FreqInfo): string[] {
 export function FreqSection({ p, made }: { p: Profile; made: string }) {
   const freq = p.freq;
   const dflt = firstPick(p, freq);
-  const [picked, setPicked] = usePicks(freq.columns, dflt);
-  const column = picked[0] ?? dflt[0] ?? null;           // the one picked dropped out: the default again
+  const [kept, setKept] = usePick<string | null>("freq-col", null);    // kept across the Compare | Profiling switch
+  const column = kept && freq.columns.includes(kept) ? kept : dflt[0] ?? null;   // the one picked dropped out: the default again
   const q = useFreq(column, made);
   const st = rowsOf(p.stats).find((r) => r.Column === column);
   return (
     <Panel className="prof-freq" title="Value frequencies"
       sub={st ? `${num(st.Distinct as number)} distinct · all ${num(st.Rows as number)} rows` : undefined}
       actions={freq.columns.length > 0 && (
-        <select className="sel type" aria-label="Value frequencies of" value={column ?? ""} onChange={(e) => setPicked([e.target.value])}>
+        <select className="sel type" aria-label="Value frequencies of" value={column ?? ""} onChange={(e) => setKept(e.target.value)}>
           {freq.columns.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       )}>

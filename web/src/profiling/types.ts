@@ -1,7 +1,8 @@
 // web/src/profiling/types.ts - what /api/profiling answers (tablecmp/web/routes_profiling.py)
+import type { Frame } from "../setup/api";
 import type { Tone } from "../sources/types";
 
-export type Frame = { columns: string[]; rows: unknown[][] };
+export type { Frame };
 export type FreqInfo = { columns: string[]; picked: string[]; titles: Record<string, string> };
 export type Profile = {
   headline: string; keys: { tone: Tone; text: string; table: Frame }; stats: Frame; notes: string[];

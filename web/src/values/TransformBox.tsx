@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { marks } from "../ui/marks";
 import { Icon } from "../ui/icons";
-import { Button, Chip, num, Pill, Seg, type Tone as PillTone } from "../ui/kit";
+import { Button, Chip, CommitInput, num, Pill, plural, Seg, type Tone as PillTone } from "../ui/kit";
 import { errorText, useSetupSend, useStepsRebuild, type CheckView, type Frame, type SetupReady, type Spec, type Step, type StepsMeta, type TryView } from "../setup/api";
 import { FrameTable } from "../setup/FrameTable";
 import { sideLabels } from "../sources/names";
@@ -21,8 +21,6 @@ export const useStepsMeta = () =>
 
 /** "N", "find", "format" - a parameter's label cut to its name, as values.describe_step does. */
 const shortLabel = (label: string) => label.split(" -")[0].split(",")[0];
-
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 /** Text pairs follow "Ignore case in values" unless the column table set their case. */
 function caseOf(s: SetupReady, spec: Spec): string | null {
@@ -76,17 +74,12 @@ function Say({ spec, labels }: { spec: Spec; labels: [string, string] }) {
 
 /** A parameter box that keeps what is typed and hands it on when it is left. */
 function ParamBox({ k, m, value, label, onDone }: { k: string; m: StepsMeta; value: string; label: string; onDone: (v: string) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [was, setWas] = useState(value);
-  if (value !== was) { setWas(value); setDraft(value); }
   const numeric = m.numeric.includes(k);
   return (
     <span className="vx-param">
       <span className="lbl" aria-hidden="true">{shortLabel(m.labels[k] ?? k)}</span>
-      <input type={numeric ? "number" : "text"} aria-label={label} value={draft} className={k === "expr" ? "wide" : k === "fmt" ? "" : "short"}
-             min={numeric ? 1 : undefined} max={numeric ? 100000 : undefined}
-             onChange={(e) => setDraft(e.target.value)} onBlur={() => { if (draft !== value) onDone(draft); }}
-             onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
+      <CommitInput type={numeric ? "number" : "text"} aria-label={label} value={value} className={k === "expr" ? "wide" : k === "fmt" ? "" : "short"}
+                   min={numeric ? 1 : undefined} max={numeric ? 100000 : undefined} onDone={onDone} />
     </span>
   );
 }

@@ -6,7 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { Editable, Row, SetupReady } from "../setup/api";
 import { setView } from "../shell/view";
 import { Icon } from "../ui/icons";
-import { LinkButton, Seg } from "../ui/kit";
+import { CommitInput, LinkButton, Seg } from "../ui/kit";
 import { caseText, isText, originOf, paired, roleOf, specIndex, stepsLine, type Role } from "./pairing";
 
 /** Past this many rows only the rows in sight are drawn - a pair of wide files has hundreds. */
@@ -23,17 +23,6 @@ const HELP = {
 };
 
 type Edit = (row: number, column: Editable, value: string | boolean) => void;
-
-/** The Common name box: typed freely, sent when the box is left or Enter is pressed. */
-function NameCell({ value, label, disabled, onDone }: { value: string; label: string; disabled: boolean; onDone: (v: string) => void }) {
-  const [draft, setDraft] = useState(value);
-  const [was, setWas] = useState(value);
-  if (value !== was) { setWas(value); setDraft(value); }        // the server renamed it (made it unique)
-  const done = () => { if (draft.trim() !== value) onDone(draft.trim()); };
-  return <input type="text" className="in mono" aria-label={label} value={draft} disabled={disabled}
-                onChange={(e) => setDraft(e.target.value)} onBlur={done}
-                onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />;
-}
 
 /** What DuckDB read a column as and what its values look like - the select's tooltip. */
 const sniffed = (detected: string, looks: string) =>
@@ -67,8 +56,8 @@ function Detail({ row, i, s, busy, edit }: { row: Row; i: number; s: SetupReady;
         <div className="cols-detail-body">
           <label className="field cols-name">
             <span className="lbl">Common name</span>
-            <NameCell value={row["Common name"]} label={`Common name, row ${i + 1}`} disabled={busy}
-                      onDone={(v) => edit(i, "Common name", v)} />
+            <CommitInput className="in mono" aria-label={`Common name, row ${i + 1}`} value={row["Common name"]} disabled={busy} trim
+                         onDone={(v) => edit(i, "Common name", v)} />
           </label>
           {side("A", NA)}
           {side("B", NB)}

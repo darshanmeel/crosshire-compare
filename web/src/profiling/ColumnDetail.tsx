@@ -21,7 +21,7 @@ import { WhenView } from "./column/WhenView";
 import "./profiling.css";
 
 const NEAR_KEY = 10;     // distinct % of rows from which a column is a near-key: it decides others by that alone
-const READS_AS = 0.9;    // of the filled values: a column that reads as a date or a timestamp from this share
+export const READS_AS = 0.9;    // of the filled values: a column that reads as a date or a timestamp from this share
 
 const C = ({ children }: { children: string }) => <code>{children}</code>;
 
@@ -76,28 +76,29 @@ function isCode(o: Row, st: Row) {
 }
 
 export function Outliers({ o, kind, filled, st, made }: { o?: Row; kind: string; filled: number; st: Row; made: string }) {
-  const isNum = kind === "number";
   const cast = useCasts(made).data?.columns?.find((x) => x.column === st.Column);
   const when = cast && ([cast.timestamp && "timestamp", cast.date && "date"] as const)
-    .find((k) => k && cast[k]!.any >= 0.9 * cast.filled);
-  if (!o) return (
+    .find((k) => k && cast[k]!.any >= READS_AS * cast.filled);
+  return (
     <Panel title="Outliers" sub="1.5 × IQR fence"><div className="panel-body">
-      <p className="caption">Outliers are looked for in number, date and timestamp columns.</p>
+      {outlierBody(o, kind, filled, st, when)}
     </div></Panel>
   );
+}
+
+/** What the Outliers panel says: why there is no fence, or the fence and what falls past it. */
+function outlierBody(o: Row | undefined, kind: string, filled: number, st: Row, when: string | false | undefined): ReactNode {
+  const isNum = kind === "number";
+  if (!o) return <p className="caption">Outliers are looked for in number, date and timestamp columns.</p>;
   if (isNum && when) return (
-    <Panel title="Outliers" sub="1.5 × IQR fence"><div className="panel-body">
-      <Points name="Outlier findings" items={[
-        { label: `Reads as a ${when}`, value: <>{fmt(o.Lowest, true)} … {fmt(o.Highest, true)}</>,
-          note: `the digits of a ${when} - a fence on them means nothing; see Parts` }]} />
-    </div></Panel>
+    <Points name="Outlier findings" items={[
+      { label: `Reads as a ${when}`, value: <>{fmt(o.Lowest, true)} … {fmt(o.Highest, true)}</>,
+        note: `the digits of a ${when} - a fence on them means nothing; see Parts` }]} />
   );
   if (isNum && isCode(o, st)) return (
-    <Panel title="Outliers" sub="1.5 × IQR fence"><div className="panel-body">
-      <Points name="Outlier findings" items={[
-        { label: "Reads like a code", value: <>{fmt(o.Lowest, true)} … {fmt(o.Highest, true)}</>,
-          note: "whole numbers, nearly all different - an id, not a measure, so no fence" }]} />
-    </div></Panel>
+    <Points name="Outlier findings" items={[
+      { label: "Reads like a code", value: <>{fmt(o.Lowest, true)} … {fmt(o.Highest, true)}</>,
+        note: "whole numbers, nearly all different - an id, not a measure, so no fence" }]} />
   );
   const n = Number(o.Outliers ?? 0);
   const op = Number(o["Outlier %"] ?? 0);
@@ -128,7 +129,7 @@ export function Outliers({ o, kind, filled, st, made }: { o?: Row; kind: string;
   }
   const pcts = ["P1", "P5", "P25", "Median", "P75", "P95", "P99"].filter((k) => o[k] !== "" && o[k] != null);
   return (
-    <Panel title="Outliers" sub="1.5 × IQR fence"><div className="panel-body">
+    <>
       <Points name="Outlier findings" items={items} />
       {pcts.length > 0 && (
         <div className="tblwrap">
@@ -138,7 +139,7 @@ export function Outliers({ o, kind, filled, st, made }: { o?: Row; kind: string;
           </table>
         </div>
       )}
-    </div></Panel>
+    </>
   );
 }
 
@@ -353,9 +354,10 @@ export function ColumnDetail({ p, column, made, name, label }: { p: Profile; col
   const as = pick?.column === column ? pick.as : when || kind;
   const asWhen = as === "date" || as === "timestamp";
   const keys = keyColumns(p);
+  const isKey = keys.length === 1 && keys[0] === column;
   const opts = readings(kind, cast);
   // beside the reading: the format a date or a timestamp is read in, a number's places, a text key's leading zeros
-  const hit = (as === "date" || as === "timestamp" || as === "number") && as !== kind ? cast?.[as] : undefined;
+  const hit = (asWhen || as === "number") && as !== kind ? cast?.[as] : undefined;
   const places = isNum && shapes.length ? Math.max(...shapes.map((r) => (String(r.Pattern).split(".")[1] ?? "").length)) : -1;
   const read = hit && castType(as as "date" | "timestamp" | "number", hit);
   // the same queries the column's page makes, so each is asked once: a number's places and the
@@ -363,14 +365,13 @@ export function ColumnDetail({ p, column, made, name, label }: { p: Profile; col
   const numForm = useNumberFormText(column, made, isNum && as === "number");
   const flagForm = useFlagForm(column, made, kind === "boolean");
   const spell = useSpelling(column, made, isText && as === "text").data;
-  const isKey = keys.length === 1 && keys[0] === column;
   const form = read ? (read.form ? `${read.type} · ${read.form}` : read.type)
     : numForm || flagForm
     || (places === 0 ? "whole" : places > 0 ? `${places} place${places > 1 ? "s" : ""}` : "")
     || (isText && isKey ? "keep leading zeros" : isText && as === "text" ? textForm(st, spell) : "");
   const view: ColumnViewProps = { p, column, made, st, as, cast };
   // a page per kind of column: the key, a date or a timestamp (or text read as one), a number, a flag, text
-  const body = keys.length === 1 && keys[0] === column ? <KeyView {...view} />
+  const body = isKey ? <KeyView {...view} />
     : asWhen ? <WhenView {...view} />
     : kind === "number" ? <NumberView {...view} />
     : kind === "boolean" ? <FlagView {...view} />
@@ -380,7 +381,7 @@ export function ColumnDetail({ p, column, made, name, label }: { p: Profile; col
       <div className="sec-head prof-colhead">
         <Button size="sm" icon="arrowl" onClick={() => setView({ column: null })}>All columns</Button>
         <h2 className="m">{column}</h2>
-        {keys.length === 1 && keys[0] === column && <Chip tone="key">key</Chip>}
+        {isKey && <Chip tone="key">key</Chip>}
         {opts.length > 1
           ? <label className="prof-readas"><span>read as</span>
               <select className="sel" value={as} onChange={(e) => setPick({ column, as: e.target.value })}>
@@ -390,7 +391,7 @@ export function ColumnDetail({ p, column, made, name, label }: { p: Profile; col
             </label>
           : <span className="prof-readas"><span>read as</span><Chip>{kind}</Chip>{form && <code className="readas-form">{form}</code>}</span>}
         <span className="prof-sem" title="what the column most likely holds - a guess from its name, type and values">
-          {semantic(column, as, Number(st.Distinct), Number(st.Rows), keys.length === 1 && keys[0] === column, shapes[0] ? String(shapes[0].Pattern) : "")}</span>
+          {semantic(column, as, Number(st.Distinct), Number(st.Rows), isKey, shapes[0] ? String(shapes[0].Pattern) : "")}</span>
         <span className="sub">column {i + 1} of {all.length} · {name}{label ? ` · ${label}` : ""}</span>
         <div className="actions">
           <Button icon="arrowl" disabled={!prev} onClick={() => prev && openColumn(prev)}>Previous{prev && ` · ${prev}`}</Button>

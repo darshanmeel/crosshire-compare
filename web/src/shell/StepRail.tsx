@@ -1,16 +1,16 @@
 import { Fragment, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
 import { useRunAuto, useRunCompare, useRunError } from "../compare/actions";
 import { useCompareNow } from "../compare/useCompare";
+import { useFilters } from "../keys/summary";
 import { useRunProfile } from "../profiling/actions";
 import { useProfiling, useSaveDefaults } from "../profiling/useProfiling";
-import { useSetup, type FiltersView } from "../setup/api";
+import { useSetup } from "../setup/api";
 import { useSideForm } from "../sources/formStore";
 import { sideLabels, sideName } from "../sources/names";
 import { useSources } from "../sources/useSources";
 import { Icon } from "../ui/icons";
 import { Button, num } from "../ui/kit";
+import { activeFilters } from "../values/FiltersBox";
 import { useLog } from "./LogPanel";
 import type { Page } from "./usePage";
 import { goToSection, setView, useView } from "./view";
@@ -57,7 +57,7 @@ export function CompareRail() {
   const auto = useRunAuto();
   const refused = useRunError();
   const ready = !!setup?.ready;
-  const filters = useQuery({ queryKey: ["setup-filters"], enabled: ready, queryFn: () => api.get<FiltersView>("/api/setup/filters") }).data;
+  const filters = useFilters(ready).data;
   const A = src?.sides?.A, B = src?.sides?.B;
   const loaded = !!(A?.loaded && B?.loaded);
   const busy = !!st?.busy || compare.isPending || auto.isPending;
@@ -67,7 +67,7 @@ export function CompareRail() {
   const state = (i: number): StepState =>
     i === 4 && busy ? "run" : i === cur ? "now" : i < cur || (i === 4 && run) ? "done" : "todo";
   const sourcesSub = [A?.loaded && `${NA} ${rowsOf(A.rows)}`, B?.loaded && `${NB} ${rowsOf(B.rows)}`].filter(Boolean).join(" · ") || "nothing loaded yet";
-  const nFilters = filters?.rows?.filter((r) => r.Column).length ?? 0;
+  const nFilters = activeFilters(filters).length;
   const cut = [A?.cut, B?.cut].filter(Boolean).length;
   const steps: RailStep[] = [
     { title: "Sources", sub: sourcesSub, state: state(1), go: () => goToSection("sources") },

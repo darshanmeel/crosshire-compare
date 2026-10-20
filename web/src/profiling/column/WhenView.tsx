@@ -5,7 +5,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { api } from "../../api/client";
-import { Callout, num, Panel, Seg, StatGrid, type SegOption } from "../../ui/kit";
+import { Callout, num, Panel, plural, Seg, StatGrid, type SegOption } from "../../ui/kit";
 import { Dependencies, NotShown, Points, share, type Point } from "../ColumnDetail";
 import { pct } from "../frame";
 import { Findings, type Finding } from "./Findings";
@@ -68,7 +68,6 @@ const clock = (s: string | null) => (s ?? "").slice(11);
 const weekdayOf = (d: string) => WEEKDAY_NAMES[new Date(`${d}T00:00:00Z`).getUTCDay()];
 const sum = (xs: Count[] | undefined) => (xs ?? []).reduce((s, x) => s + x.n, 0);
 const some = (xs: Count[] | undefined) => (xs ?? []).filter((x) => x.n > 0);
-const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 
 /** Calendar years, months and days from one date to another: "8 y 8 m 27 d". */
 export function ymd(a: string, b: string) {

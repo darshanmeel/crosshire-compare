@@ -28,6 +28,11 @@ export function pivot(page: Pick<DiffRowsPage, "keys" | "frame" | "marks" | "cel
   return out;
 }
 
+/** GET /api/results/{run}/near-match - how close the differing values are; one cache for every view that asks. */
+export const useNearMatch = (runId: string, enabled = true) =>
+  useQuery({ enabled, staleTime: Infinity, queryKey: ["results", runId, "near-match"],
+             queryFn: () => api.get<Frame>(`/api/results/${runId}/near-match`) });
+
 export function useDiffRows(runId: string, column: string) {
   return useInfiniteQuery<DiffRowsPage, Error, InfiniteData<DiffRowsPage>, string[], number>({
     queryKey: ["results", runId, "diff-rows", column], staleTime: Infinity, initialPageParam: 0, 

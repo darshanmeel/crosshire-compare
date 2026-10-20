@@ -6,7 +6,7 @@ import { resetForms } from "../sources/formStore";
 import { body, json, mount, view, type Call } from "../sources/testkit";
 import { ProfilingPage, STALE } from "./ProfilingPage";
 import { NOTHING_STANDS_OUT } from "./ProfileView";
-import { resetPicks } from "./picks";
+import { resetPicks } from "../results/pickStore";
 import { resetKept } from "./SaveRow";
 import { defaults, entry, profile, profiling, T } from "./testkit";
 

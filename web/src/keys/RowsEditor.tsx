@@ -1,19 +1,17 @@
 // web/src/keys/RowsEditor.tsx - the rows page (SPEC §06): how rows pair up, the rows each side reads,
 // the filters at compare, profile by bucket, profile both files, the run settings, then Compare.
 import type { ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
 import { useRunCompare, useRunError } from "../compare/actions";
 import { TICK_COMPARE } from "../compare/types";
 import { useCompareNow } from "../compare/useCompare";
-import { useSetup, type KeysView } from "../setup/api";
+import { useSetup } from "../setup/api";
 import { goToSection } from "../shell/view";
 import { useSources } from "../sources/useSources";
 import { Button, Section } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { FiltersBox } from "../values/FiltersBox";
 import { BucketCard } from "./BucketCard";
-import { KEYS_KEY, KeyBox } from "./KeyBox";
+import { KeyBox, useKeys } from "./KeyBox";
 import { ProfileBox } from "./ProfileBox";
 import { RowsToReadCard } from "./RowsToReadCard";
 import { RunSettingsCard } from "./RunSettingsCard";
@@ -34,7 +32,7 @@ function CompareRow() {
   const { data: s } = useSetup();
   const { data: f } = useFilters();
   const { data: src } = useSources();
-  const k = useQuery({ queryKey: KEYS_KEY, queryFn: () => api.get<KeysView>("/api/setup/keys") }).data;
+  const k = useKeys().data;
   const go = useRunCompare();
   const err = useRunError();
   if (!st || st.gate === "load") return null;

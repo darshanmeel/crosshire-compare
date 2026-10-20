@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type Meta } from "../api/client";
+import { api, errorText, type Meta } from "../api/client";
 import { getForm, setForm } from "../sources/formStore";
 import { loadBody, type Tag } from "../sources/types";
 import { Button } from "../ui/kit";
@@ -52,7 +52,7 @@ export function Welcome({ page, meta, setPage }: { page: Page; meta?: Meta; setP
   const ex = useTryExample(meta);
   const [err, setErr] = useState("");
   const tryIt = () => ex.mutate(page === "Compare" ? [["A", "HR", "A"], ["B", "Payroll", "B"]] : [["P", "HR", "A"]],
-    { onSuccess: () => setErr(""), onError: (e) => setErr(e instanceof ApiError ? e.detail : String(e)) });
+    { onSuccess: () => setErr(""), onError: (e) => setErr(errorText(e)) });
   return (
     <section className="hero" aria-label="Welcome">
       <div>

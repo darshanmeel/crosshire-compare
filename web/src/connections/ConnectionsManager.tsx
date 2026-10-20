@@ -2,7 +2,7 @@
 // form, import and export. useConnections() is the list the header, the Database box and this share.
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type Meta } from "../api/client";
+import { api, errorText, type Meta } from "../api/client";
 import { Button, Chip, Pill } from "../ui/kit";
 import { ConnectionForm } from "./ConnectionForm";
 import { FilesBox } from "./FilesBox";
@@ -30,7 +30,7 @@ function ConnCard({ r, tested, onTested, onEdit, editing }: {
       return api.send<Tested>("POST", "/api/connections/test", { ...savedBody(c), name: r.name });
     },
     onSuccess: (t) => { setErr(""); onTested(t); },
-    onError: (e) => setErr(e instanceof ApiError ? e.detail : String(e)),
+    onError: (e) => setErr(errorText(e)),
   });
   const forget = useMutation({
     mutationFn: () => api.send("DELETE", `/api/connections/${encodeURIComponent(r.name)}/password`),

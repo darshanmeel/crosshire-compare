@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../../api/client";
 import { Bar, Callout, num, Panel, Seg, StatGrid } from "../../ui/kit";
-import { CouldBe, Dependencies, NotShown, Outliers, Points, share, toNum, type Point } from "../ColumnDetail";
+import { CouldBe, Dependencies, NotShown, Outliers, Points, READS_AS, share, toNum, type Point } from "../ColumnDetail";
 import { FreqBars, splitFreq } from "../FreqSection";
 import { fmt, pct, rowsOf, type Row } from "../frame";
 import type { PartGroup } from "../types";
@@ -26,7 +26,6 @@ const SKEW = 5;          // mean at least this many times the median: heavily sk
 const ONE_BIN = 0.9;     // share of rows in one equal-width bin from which the bins say nothing
 const LONG = 5;          // % of values past the fence from which they are a long tail, not strays
 const EXTREME = 10;      // the highest this many times the P99: an extreme value
-const READS_AS = 0.9;    // of the filled values: a number that reads as a date or a timestamp from this share
 type Mode = "equal" | "log" | "pct";
 const MODES: { value: Mode; label: string }[] = [
   { value: "equal", label: "Equal width" }, { value: "log", label: "Log" }, { value: "pct", label: "Percentile" }];

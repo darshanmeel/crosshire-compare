@@ -3,7 +3,7 @@
 // A limit the machine's owner fixed with COMPARE_DUCKDB_MEMORY / _DISK shows, but cannot be edited.
 import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError } from "../api/client";
+import { api, errorText } from "../api/client";
 import { Button } from "../ui/kit";
 
 export type EngineView = {
@@ -27,7 +27,7 @@ export function EngineLimits() {
   const memory = draft.memory ?? v.memory, disk = draft.disk ?? v.disk;
   const changed = memory !== v.memory || disk !== v.disk;
   const fixed = (k: "memory" | "disk") => v[`${k}_from`] === "env";
-  const err = save.error instanceof ApiError ? save.error.detail : save.error ? String(save.error) : "";
+  const err = save.error ? errorText(save.error) : "";
   return (
     <form className="engine-limits" aria-label="DuckDB limits"
           onSubmit={(e) => { e.preventDefault(); if (changed) save.mutate({ memory, disk }); }}>

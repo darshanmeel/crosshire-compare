@@ -4,7 +4,7 @@
 // server compares when both sides opened; App switches to the results when that compare ends.
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type LogEntry, type Meta } from "../api/client";
+import { api, errorText, type LogEntry, type Meta } from "../api/client";
 import { useJobOfKind } from "../api/useJob";
 import { Icon } from "../ui/icons";
 import { Button, Dropzone, Panel, Pill, Seg } from "../ui/kit";
@@ -101,7 +101,7 @@ export function ConfigPanel() {
   const start = useMutation({
     mutationFn: (b: { text?: string; path?: string }) => api.send<LogEntry>("POST", "/api/sources/config", b),
     onSuccess: (e) => { setErr(""); setRan(""); follow(e.id); qc.invalidateQueries({ queryKey: ["log"] }); },
-    onError: (e) => setErr(e instanceof ApiError ? e.detail : String(e)),
+    onError: (e) => setErr(errorText(e)),
   });
   const { follow, busy } = useJobOfKind("Config", "Compare", "", (e) => {
     if (e.state === "error") { setErr(e.lines.at(-1) ?? e.label); setRan("error"); } else setRan("done");
@@ -110,7 +110,7 @@ export function ConfigPanel() {
   const browse = useMutation({
     mutationFn: () => api.send<{ path: string; file: string }>("POST", "/api/sources/browse", { start: path, folder: "" }),
     onSuccess: (r) => { setErr(""); if (r.path) setPath(r.path); },
-    onError: (e) => setErr(e instanceof ApiError ? e.detail : String(e)),
+    onError: (e) => setErr(errorText(e)),
   });
 
   const read = async (f: File) => {
