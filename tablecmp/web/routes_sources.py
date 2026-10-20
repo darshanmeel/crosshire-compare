@@ -2,7 +2,6 @@
 columns a pick has, Load and the preview, a database fetch as a job, and Run from a config."""
 from __future__ import annotations
 
-import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -123,19 +122,13 @@ def sources(ws: Workspace = Depends(workspace)) -> dict:
 
 @router.get("/folders")
 def list_folders() -> list[dict]:
-    try:
-        found = cx.folders()
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    found = _folders()
     return [{"name": n, "host": c.host} for n, c in sorted(found.items())]
 
 
 @router.get("/folders/{name}/files")
 def folder_list(name: str) -> dict:
-    try:
-        found = cx.folders()
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    found = _folders()
     if name not in found:
         raise HTTPException(404, f"No folder connection called {name}.")
     root = found[name].host
@@ -152,10 +145,7 @@ def browse(body: BrowseIn) -> dict:
         raise HTTPException(409, "There is no screen here to open a file dialog on - type the path.")
     root = ""
     if body.folder:
-        try:
-            found = cx.folders()
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
+        found = _folders()
         root = found[body.folder].host if body.folder in found else ""
     start = root or (str(Path(body.start.strip().strip('"')).parent) if body.start.strip() else "")
     try:
@@ -290,8 +280,7 @@ def preview(tag: str, n: int = Query(10, ge=1, le=100), ws: Workspace = Depends(
         df = preview_rows(s, n)
     except duckdb.Error as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {"columns": [str(c) for c in df.columns],
-            "rows": json.loads(df.to_json(orient="values", date_format="iso", default_handler=str))}
+    return sw.frame(df)
 
 
 def _connection(name: str) -> cx.Connection:
@@ -303,6 +292,13 @@ def _connection(name: str) -> cx.Connection:
     if c is None or c.is_folder:
         raise HTTPException(400, f"No database connection called {name} - pick one.")
     return c
+
+
+def _folders() -> dict[str, cx.Connection]:
+    try:
+        return cx.folders()
+    except ValueError as exc:                # a connections file that cannot be read
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.post("/{tag}/db")

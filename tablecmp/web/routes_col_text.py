@@ -16,7 +16,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from ..sql import ident
 from .profile_held import held_answer
 from .routes_profiling import _held, _spec
-from .sides import side
 from .workspace import Workspace, workspace
 
 router = APIRouter(prefix="/api/profiling")
@@ -231,9 +230,6 @@ def column_similar(column: str = Query(..., max_length=1000), method: str = Quer
     spec = _spec(prof, column)
     if method and method not in METHODS:
         raise HTTPException(400, f"Method is one of {', '.join(METHODS)}.")
-    P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
     key = (column, round(threshold, 2))
     st = prof["stats"]
     row = st[st["Column"] == column]

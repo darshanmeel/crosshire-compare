@@ -4,7 +4,6 @@ when the page lists it, profile.csv, and the six-file save. The profile stays in
 workspace - its DataFrames never leave Python, only their rows do."""
 from __future__ import annotations
 
-import json
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -13,14 +12,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from .. import profiling, setup
+from .. import profiling
 from ..loading import DEFAULT_NAMES
 from ..outputs import default_save_folder, run_id
 from ..sql import ident, lit
-from ..values import ColSpec, ReadOptions
+from ..values import ColSpec
 from . import jobs
 from . import profile_held
+from . import setupws as sw
 from .profile_held import held_answer
+from .setupws import frame
 from .sides import PAGE, side
 from .workspace import Workspace, workspace
 
@@ -53,17 +54,6 @@ class HistOut(BaseModel):
     column: str
     kind: str
     bins: list[HistBin]
-
-
-def read_options(ws: Workspace) -> ReadOptions:
-    """How values are read - the switches set on the Compare page or by a config."""
-    return setup.read_options(ws.data.get("settings"))
-
-
-def frame(df: pd.DataFrame) -> dict:
-    """A table as the page draws it: the column names and the rows, NaN and NaT as null."""
-    return {"columns": [str(c) for c in df.columns],
-            "rows": json.loads(df.to_json(orient="values", date_format="iso", default_handler=str))}
 
 
 def _name(text: str) -> str:
@@ -114,7 +104,7 @@ def view(ws: Workspace = Depends(workspace)) -> dict:
     if not built or built[0] is not prof:
         built = (prof, profile_view(prof))
         ws.data[BUILT] = built
-    return {"profile": built[1], "stale": key != profiling.profile_key(P, read_options(ws)), "made": made}
+    return {"profile": built[1], "stale": key != profiling.profile_key(P, sw.opts(ws)), "made": made}
 
 
 @router.get("/defaults")
@@ -142,7 +132,7 @@ def run_profile(body: RunIn, ws: Workspace = Depends(workspace)) -> dict:
         P = side(ws, "P")                        # under the lock: the table as it is now
         if not P.loaded:
             raise ValueError("Load a table in the sidebar first.")
-        opts = read_options(ws)
+        opts = sw.opts(ws)
         key = profiling.profile_key(P, opts)
         found = profiling.make_profile(P, name, opts, ctx.say, body.key_cols, body.top_keys,
                                        shortlist=body.shortlist)
@@ -216,12 +206,7 @@ def hist(column: str = Query(..., max_length=1000), bins: int = Query(10, ge=1, 
     timestamps only (any other type answers no bins). Read-only: the held profile names the
     column and its type, DuckDB counts on the loaded table."""
     _, prof, _ = _held(ws)
-    spec = next((ColSpec(**s) for s in prof.get("specs", []) if s["canon"] == column), None)
-    if spec is None:
-        raise HTTPException(404, f"No column called {column} in this profile.")
-    P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
+    spec = _spec(prof, column)
     if spec.kind not in HIST_KINDS:
         return {"column": column, "kind": spec.kind, "bins": []}
     return {"column": column, "kind": spec.kind,
@@ -351,8 +336,6 @@ def cast_counts(ws: Workspace = Depends(workspace)) -> dict:
 
 
 def _casts_held(ws: Workspace, prof: dict) -> dict:
-    if not side(ws, "P").loaded:
-        raise HTTPException(409, "Load a table first.")
     return held_answer(ws, prof, ("casts",),
                        lambda con: {"columns": casts(con, "prof", [ColSpec(**s) for s in prof.get("specs", [])])})
 
@@ -444,9 +427,6 @@ def column_parts(column: str = Query(..., max_length=1000), n: int = Query(3, ge
     so the parts never wait on the casts."""
     _, prof, _ = _held(ws)
     spec = _spec(prof, column)
-    P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
     if spec.kind not in READ_AS:
         return {"column": column, "kind": spec.kind, "reads_as": "", "groups": []}
     if read and read not in READ_AS:
@@ -474,9 +454,6 @@ def column_spelling(column: str = Query(..., max_length=1000), ws: Workspace = D
     and outer spaces are ignored, and how many filled values carry outer spaces - read-only."""
     _, prof, _ = _held(ws)
     spec = _spec(prof, column)
-    P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
     if spec.kind != "text":
         return {"column": column, "distinct": 0, "folded": 0, "padded": 0}
     v = f"CAST({ident(spec.canon)} AS VARCHAR)"

@@ -17,7 +17,6 @@ from ..sql import ident, lit
 from ..values import ColSpec
 from .profile_held import held_answer
 from .routes_profiling import MONTHS, WEEKDAYS, _casts_held, _held, _reads, _spec, _value, _when_ok, read_when
-from .sides import side
 from .workspace import Workspace, workspace
 
 router = APIRouter(prefix="/api/profiling")
@@ -245,9 +244,6 @@ def column_when(column: str = Query(..., max_length=1000), read: str = Query("",
     rows per bin and its parts. `as` reads a text or number column as a date or a timestamp first."""
     _, prof, _ = _held(ws)
     spec = _spec(prof, column)
-    P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
     if spec.kind in ("date", "timestamp"):
         kind, read_from = spec.kind, False
     elif read in ("date", "timestamp") and spec.kind in ("text", "number"):

@@ -14,7 +14,7 @@ from __future__ import annotations
 import re
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from .. import profiling
 from ..sql import ident, lit
@@ -25,7 +25,6 @@ from . import routes_col_text as tx
 from .routes_col_key import keycheck
 from .routes_col_when import when_facts
 from .routes_profiling import READS_AS, _held, reads_as
-from .sides import side
 from .workspace import Workspace, workspace
 
 router = APIRouter(prefix="/api/profiling")
@@ -286,9 +285,6 @@ def findings(ws: Workspace = Depends(workspace)) -> dict:
 
 
 def _base(ws: Workspace, prof: dict) -> dict:
-    P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
     specs = [ColSpec(**s) for s in prof.get("specs", [])]
     con = profile_held.cursor(ws, prof)
     try:

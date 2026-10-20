@@ -709,9 +709,13 @@ def paired_path(run: dict) -> Path | None:
 
 
 def value_pairs(run: dict, n: int = 5) -> dict[str, pd.DataFrame]:
-    """Per differing column: the n most frequent (left value, right value) pairs with count and %."""
+    """Per differing column: the n most frequent (left value, right value) pairs with count and %
+    - worked out once per run and n, since `cd` does not change (the page asks again and again)."""
     if not cells_table(run):
         return {}
+    cache = run.setdefault("_pairs", {})
+    if n in cache:
+        return cache[n]
     con = run["con"]
     df = con.execute(f"""
         SELECT column_name AS col, coalesce(left_value, {lit(label(None))}) AS a,
@@ -720,7 +724,8 @@ def value_pairs(run: dict, n: int = 5) -> dict[str, pd.DataFrame]:
         FROM cd GROUP BY 1, 2, 3
         QUALIFY row_number() OVER (PARTITION BY column_name ORDER BY count(*) DESC, a, b) <= {int(n)}
         ORDER BY col, n DESC, a, b""").fetchdf()
-    return {col: sub.drop(columns=["col"]).reset_index(drop=True) for col, sub in df.groupby("col", sort=False)}
+    cache[n] = {col: sub.drop(columns=["col"]).reset_index(drop=True) for col, sub in df.groupby("col", sort=False)}
+    return cache[n]
 
 
 def paired_where(run: dict, keys: list[str], bucket: str) -> str | None:

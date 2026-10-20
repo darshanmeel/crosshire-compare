@@ -20,6 +20,7 @@ from .. import comparing, results
 from .. import setup as su
 from ..compare import signature
 from ..runconfig import make_config
+from ..sql import lit
 from . import jobs
 from . import setupws as sw
 from .sides import side
@@ -143,7 +144,7 @@ def start_compare(ws: Workspace) -> dict:
             ws.data["compare_said"] = [("error", problem)]
             raise RuntimeError(problem)
         A, B = side(ws, "A"), side(ws, "B")
-        opts = su.read_options(settings(ws))
+        opts = sw.opts(ws)
         config = make_config(p.cfg, A, B, p.NA, p.NB, ws.data["cmap"], filters_now(ws))
         t0 = time.perf_counter()
         try:
@@ -200,6 +201,19 @@ def run_of(ws: Workspace, run_id: str) -> dict:
     return run
 
 
+def one_sided_source(run: dict, tag: str) -> tuple[str, str] | None:
+    """The run's left_only / right_only file ("left" or "right"): its name and how DuckDB reads
+    it - None when the run wrote none."""
+    stem = f"{run['pair']}__{tag}_only"
+    files = run["files"]
+    p = next((Path(files[n]) for n in (f"{stem}.csv", f"{stem}.parquet")
+              if n in files and Path(files[n]).is_file()), None)
+    if p is None:
+        return None
+    return p.name, (f"read_parquet({lit(str(p))})" if p.suffix == ".parquet"
+                    else f"read_csv({lit(str(p))}, all_varchar=true)")
+
+
 @contextmanager
 def guard(run: dict, view: str) -> Iterator[None]:
     """An engine error while a view is built, said in a sentence: the folder swept, or the reason."""
@@ -209,3 +223,12 @@ def guard(run: dict, view: str) -> Iterator[None]:
         if not Path(run["folder"]).exists():
             raise HTTPException(410, results.GONE) from exc
         raise HTTPException(400, f"Could not build the {view} view: {exc}") from exc
+
+
+@contextmanager
+def reading(ws: Workspace, run_id: str, view: str) -> Iterator[dict]:
+    """The run asked for, under the workspace's lock, with its engine errors said as guard says them."""
+    with ws.lock:
+        run = run_of(ws, run_id)
+        with guard(run, view):
+            yield run

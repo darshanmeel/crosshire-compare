@@ -57,19 +57,15 @@ def files_view(ws: Workspace, run: dict) -> dict:
 
 @router.get("/{run_id}/files")
 def files(run_id: str, ws: Workspace = Depends(workspace)) -> dict:
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Downloads"):
-            return files_view(ws, run)
+    with runs.reading(ws, run_id, "Downloads") as run:
+        return files_view(ws, run)
 
 
 @router.get("/{run_id}/report")
 def report(run_id: str, limit: int | None = Query(None, ge=100, le=10_000), download: bool = False,
            ws: Workspace = Depends(workspace)) -> HTMLResponse:
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Report"):
-            html = report_html(ws, run, limit)
+    with runs.reading(ws, run_id, "Report") as run:
+        html = report_html(ws, run, limit)
     headers = dict(NO_SCRIPTS)
     if download:
         headers["Content-Disposition"] = f'attachment; filename="{run["pair"]}__report.html"'
@@ -95,33 +91,27 @@ def one_file(run_id: str, name: str, ws: Workspace = Depends(workspace)) -> File
 @router.post("/{run_id}/paired")
 def write_paired(run_id: str, ws: Workspace = Depends(workspace)) -> dict:
     """The paired rows - every matched row, both sides beside each other - written when asked for."""
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Downloads"):
-            paired_path(run)
-            return files_view(ws, run)
+    with runs.reading(ws, run_id, "Downloads") as run:
+        paired_path(run)
+        return files_view(ws, run)
 
 
 @router.post("/{run_id}/zip")
 def write_zip(run_id: str, ws: Workspace = Depends(workspace)) -> dict:
     """Every file of the run in one archive beside the run folder - the paired rows written first."""
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Downloads"):
-            paired_path(run)
-            zip_run(run)
-            return files_view(ws, run)
+    with runs.reading(ws, run_id, "Downloads") as run:
+        paired_path(run)
+        zip_run(run)
+        return files_view(ws, run)
 
 
 @router.post("/{run_id}/parquet")
 def write_parquet(run_id: str, ws: Workspace = Depends(workspace)) -> dict:
     """Parquet copies of the run's tables, the paired rows among them - the zip goes, to be rebuilt."""
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Downloads"):
-            paired_path(run)
-            write_parquet_copies(run)
-            return files_view(ws, run)
+    with runs.reading(ws, run_id, "Downloads") as run:
+        paired_path(run)
+        write_parquet_copies(run)
+        return files_view(ws, run)
 
 
 @router.post("/{run_id}/save")
@@ -130,26 +120,24 @@ def save(run_id: str, body: SaveIn, ws: Workspace = Depends(workspace)) -> dict:
     on this machine - under COMPARE_OUT_DIR when it is set."""
     if not body.folder.strip():
         raise HTTPException(400, rs.SAVE_BLANK)
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Downloads"):
-            if body.what == "report":
-                chosen: dict = {f"{run['pair']}__report.html": report_html(ws, run).encode("utf-8")}
-            elif body.what == "config":
-                p = rs.config_path(run)
-                if p is None:
-                    raise HTTPException(404, "This run has no config file.")
-                chosen = {p.name: p}
-            else:
-                report_html(ws, run)
-                chosen = {p.name: p for p in run["files"].values() if p.exists()}
-                chosen.update(rs.paired_first(run))
-            try:
-                target, written = rs.save_files(chosen, body.folder, run)
-            except ValueError as exc:
-                raise HTTPException(400, str(exc)) from exc
-            ws.data["save_dir"] = rs.save_base_after(target, run)
-            return {"tone": "success", "text": rs.saved_line(target, written), "files": files_view(ws, run)}
+    with runs.reading(ws, run_id, "Downloads") as run:
+        if body.what == "report":
+            chosen: dict = {f"{run['pair']}__report.html": report_html(ws, run).encode("utf-8")}
+        elif body.what == "config":
+            p = rs.config_path(run)
+            if p is None:
+                raise HTTPException(404, "This run has no config file.")
+            chosen = {p.name: p}
+        else:
+            report_html(ws, run)
+            chosen = {p.name: p for p in run["files"].values() if p.exists()}
+            chosen.update(rs.paired_first(run))
+        try:
+            target, written = rs.save_files(chosen, body.folder, run)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        ws.data["save_dir"] = rs.save_base_after(target, run)
+        return {"tone": "success", "text": rs.saved_line(target, written), "files": files_view(ws, run)}
 
 
 def diff_rows_body(run: dict, offset: int, limit: int, column: str) -> dict:
@@ -213,7 +201,5 @@ def diff_rows_body(run: dict, offset: int, limit: int, column: str) -> dict:
 def diff_rows(run_id: str, offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=10_000),
               column: str = "", ws: Workspace = Depends(workspace)) -> dict:
     """The Differing rows tab, a page at a time - read-only, from the run's own tables."""
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Differing rows"):
-            return diff_rows_body(run, offset, limit, column)
+    with runs.reading(ws, run_id, "Differing rows") as run:
+        return diff_rows_body(run, offset, limit, column)

@@ -4,7 +4,6 @@ Columns & values, and the near-match analysis. Every read takes the workspace's 
 DuckDB connection serves one thread at a time. The wording is results.py's."""
 from __future__ import annotations
 
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -14,7 +13,7 @@ from ..column_facts import column_facts
 from ..compare import (bucket_profile, bucket_rows, cells_table, column_ledger, diffs_by_key_value, differing_rows,
                        ledger_counts, near_match, side_labels, value_pairs)
 from ..profile import label
-from ..sql import ident, lit, scratch
+from ..sql import ident, scratch
 from ..values import ColSpec
 from . import runs
 from . import setupws as sw
@@ -225,38 +224,30 @@ def columns_body(run: dict, limit: int, pick: list[str]) -> dict:
 
 @router.get("/{run_id}/summary")
 def summary(run_id: str, ws: Workspace = Depends(workspace)) -> dict:
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Summary"):
-            return summary_body(run)
+    with runs.reading(ws, run_id, "Summary") as run:
+        return summary_body(run)
 
 
 @router.get("/{run_id}/buckets/{bucket}")
 def bucket(run_id: str, bucket: str, add: list[str] = Query(default=[]), exact: bool = False,
            ws: Workspace = Depends(workspace)) -> dict:
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Summary"):
-            return bucket_body(run, bucket, add, exact)
+    with runs.reading(ws, run_id, "Summary") as run:
+        return bucket_body(run, bucket, add, exact)
 
 
 @router.get("/{run_id}/buckets/{bucket}/facts")
 def bucket_facts(run_id: str, bucket: str, add: list[str] = Query(default=[]), exact: bool = False,
                  ws: Workspace = Depends(workspace)) -> dict:
     """The extended column profile of a bucket - asked for when the page shows it, read-only."""
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Summary"):
-            return facts_body(run, bucket, add, exact)
+    with runs.reading(ws, run_id, "Summary") as run:
+        return facts_body(run, bucket, add, exact)
 
 
 @router.get("/{run_id}/columns")
 def columns(run_id: str, pick: list[str] = Query(default=[], alias="open"),
             ws: Workspace = Depends(workspace)) -> dict:
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Columns & values"):
-            return columns_body(run, int(runs.settings(ws)["display_rows"]), pick)
+    with runs.reading(ws, run_id, "Columns & values") as run:
+        return columns_body(run, int(runs.settings(ws)["display_rows"]), pick)
 
 
 @router.get("/{run_id}/near-match")
@@ -280,15 +271,13 @@ def pairs_body(run: dict, column: str, limit: int) -> dict:
     out: dict = {"column": column, "mismatches": 0, "distinct": 0, "pairs": []}
     if not cells_table(run):
         return out
-    con = run["con"]
-    total, distinct = con.execute(
-        "SELECT count(*), count(DISTINCT (coalesce(left_value, chr(2)), coalesce(right_value, chr(2)))) "
-        "FROM cd WHERE column_name = ?", [column]).fetchone()
-    rows = con.execute(
-        "SELECT left_value, right_value, count(*) AS n FROM cd WHERE column_name = ? "
-        "GROUP BY 1, 2 ORDER BY n DESC, 1, 2 LIMIT ?", [column, int(limit)]).fetchall()
-    out.update(mismatches=int(total), distinct=int(distinct),
-               pairs=[{"a": label(a), "b": label(b), "n": int(n)} for a, b, n in rows])
+    # one pass: the windows count every pair before LIMIT keeps the top ones
+    rows = run["con"].execute(
+        "SELECT left_value, right_value, count(*) AS n, sum(count(*)) OVER () AS total, count(*) OVER () AS pairs "
+        "FROM cd WHERE column_name = ? GROUP BY 1, 2 ORDER BY n DESC, 1, 2 LIMIT ?", [column, int(limit)]).fetchall()
+    if rows:
+        out.update(mismatches=int(rows[0][3]), distinct=int(rows[0][4]),
+                   pairs=[{"a": label(a), "b": label(b), "n": int(n)} for a, b, n, *_ in rows])
     return out
 
 
@@ -297,18 +286,14 @@ def one_sided_body(run: dict, which: str, offset: int, limit: int) -> dict:
     the side's own key column names and the columns that hold one value on every row (a pattern
     the page may point out)."""
     tag = {"A": "left", "B": "right"}[which]
-    files = run["files"]
-    stem = f"{run['pair']}__{tag}_only"
-    path = next((files[n] for n in (f"{stem}.csv", f"{stem}.parquet") if n in files and Path(files[n]).is_file()),
-                None)
+    got = runs.one_sided_source(run, tag)
     specs = {d["canon"]: d for d in run["cfg"]["specs"]}
     own = "a_src" if which == "A" else "b_src"
     out: dict = {"side": which, "file": "", "keys": [], "total": 0, "offset": offset,
                  "columns": [], "rows": [], "constant": []}
-    if path is None:
+    if got is None:
         return out
-    p = Path(path)
-    src = f"read_parquet({lit(str(p))})" if p.suffix == ".parquet" else f"read_csv({lit(str(p))}, all_varchar=true)"
+    name, src = got
     con = scratch(ordered=True)
     try:
         con.execute(f"CREATE TABLE one AS SELECT * FROM {src}")
@@ -332,7 +317,7 @@ def one_sided_body(run: dict, which: str, offset: int, limit: int) -> dict:
         ("Compared columns", [c for c in cols if c not in keys and c in compared]),
         ("Not compared", [c for c in cols if c not in keys and c not in compared])) if i]
     rest = [c for c in cols if c not in keys and c in compared]        # a column only this side has waits to be ticked
-    out.update(file=p.name, keys=keys, total=int(total), columns=cols, rows=sw.frame(page)["rows"], constant=constant,
+    out.update(file=name, keys=keys, total=int(total), columns=cols, rows=sw.frame(page)["rows"], constant=constant,
                groups=groups, shown=[c for c in cols if c in keys] + rest[:rs.BUCKET_SHOWN])
     return out
 
@@ -340,10 +325,8 @@ def one_sided_body(run: dict, which: str, offset: int, limit: int) -> dict:
 @router.get("/{run_id}/pairs/{column}")
 def pairs(run_id: str, column: str, limit: int = Query(5, ge=1, le=100), ws: Workspace = Depends(workspace)) -> dict:
     """Why a column differs: its most frequent value pairs, for the Summary's side panel."""
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "Summary"):
-            return pairs_body(run, column, limit)
+    with runs.reading(ws, run_id, "Summary") as run:
+        return pairs_body(run, column, limit)
 
 
 @router.get("/{run_id}/one-sided/{which}")
@@ -352,7 +335,5 @@ def one_sided(run_id: str, which: str, offset: int = Query(0, ge=0), limit: int 
     """The rows only A (or only B) has, a page at a time, for the One-sided rows tab."""
     if which not in ("A", "B"):
         raise HTTPException(404, "A side is A or B.")
-    with ws.lock:
-        run = runs.run_of(ws, run_id)
-        with runs.guard(run, "One-sided rows"):
-            return one_sided_body(run, which, offset, limit)
+    with runs.reading(ws, run_id, "One-sided rows") as run:
+        return one_sided_body(run, which, offset, limit)

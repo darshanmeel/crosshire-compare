@@ -12,9 +12,7 @@ the column (keycheck, key_runs, beyond, id_span), so the Compare page can run th
 rows later; the routes only register the relation and call them. Read-only."""
 from __future__ import annotations
 
-from pathlib import Path
-
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from .. import results as rs
 from ..sql import ident, lit, scratch
@@ -22,7 +20,6 @@ from ..values import ColSpec
 from .profile_held import held_answer
 from . import runs
 from .routes_profiling import _held, _spec
-from .sides import side
 from .workspace import Workspace, workspace
 
 router = APIRouter(prefix="/api/profiling")
@@ -197,18 +194,8 @@ def key_check(column: str = Query(..., max_length=1000), ws: Workspace = Depends
     its shapes, prefix and number part with its runs and gaps, the order in the file, the next id."""
     _, prof, _ = _held(ws)
     spec = _spec(prof, column)
-    P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
     # the held table keeps the file's own order: "order in the file" reads it
     return held_answer(ws, prof, ("keycheck", column), lambda con: {"column": column, **keycheck(con, "prof", spec)})
-
-
-def _one_sided(run: dict, tag: str) -> Path | None:
-    stem = f"{run['pair']}__{tag}_only"
-    files = run["files"]
-    return next((Path(files[n]) for n in (f"{stem}.csv", f"{stem}.parquet")
-                 if n in files and Path(files[n]).is_file()), None)
 
 
 def compare_body(run: dict, column: str, fallback: tuple[str, str], stale: bool) -> dict:
@@ -228,11 +215,10 @@ def compare_body(run: dict, column: str, fallback: tuple[str, str], stale: bool)
         return out
     only = []
     for which, tag, i in (("A", "left", 0), ("B", "right", 1)):
-        p = _one_sided(run, tag)
+        got = runs.one_sided_source(run, tag)
         span = {"n": 0, "filled": 0, "min": "", "max": ""}
-        if p is not None:
-            src = (f"read_parquet({lit(str(p))})" if p.suffix == ".parquet"
-                   else f"read_csv({lit(str(p))}, all_varchar=true)")
+        if got is not None:
+            src = got[1]
             con = scratch(ordered=True)
             try:
                 con.execute(f"CREATE VIEW one AS SELECT * FROM {src}")

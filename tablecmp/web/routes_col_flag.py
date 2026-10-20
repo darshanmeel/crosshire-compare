@@ -14,8 +14,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from .. import profiling
 from ..sql import ident, scratch
 from ..values import ColSpec, register, typed_exprs
-from .profile_held import memo
-from .routes_profiling import _casts_held, _held, _spec, _value, read_options, read_when, reads_as
+from . import setupws as sw
+from .profile_held import held_answer, memo
+from .routes_profiling import _casts_held, _held, _spec, _value, read_when, reads_as
 from .sides import side
 from .workspace import Workspace, workspace
 
@@ -183,8 +184,6 @@ def column_flag(column: str = Query(..., max_length=1000), by: str = Query("", m
     _, prof, _ = _held(ws)
     spec = _spec(prof, column)
     P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
     stats = _stats(prof)
     whens = _whens(ws, prof) if any(r["Type"] in ("text", "number") and r["Distinct"] > GROUPS[1]
                                     for r in stats) else {}
@@ -195,7 +194,7 @@ def column_flag(column: str = Query(..., max_length=1000), by: str = Query("", m
             else groups[0] if groups else None)
     if by and pick is None:
         raise HTTPException(400, f"Group by one of {', '.join(g['column'] for g in groups) or 'no column'}.")
-    opts = read_options(ws)
+    opts = sw.opts(ws)
     raw = replace(spec, kind="text")              # the same column read as text: its spelling
     specs = [raw]
     if pick:
@@ -227,7 +226,7 @@ def column_flags(ws: Workspace = Depends(workspace)) -> dict:
     read them as one:
     {columns: [{column, filled, true, false}]}, worked out once per profile."""
     _, prof, _ = _held(ws)
-    return memo(ws, prof, ("flags",), lambda: _flags(ws, prof))
+    return _flags(ws, prof)
 
 
 def _flags(ws: Workspace, prof: dict) -> dict:
@@ -237,13 +236,7 @@ def _flags(ws: Workspace, prof: dict) -> dict:
     few = {str(r["Column"]) for r in _stats(prof)
            if (r["Type"] == "text" and 0 < r["Distinct"] <= FLAG_DISTINCT) or (r["Type"] == "number" and 0 < r["Distinct"] <= 2)}
     specs = [ColSpec(**s) for s in prof.get("specs", []) if s["canon"] in few and s["kind"] in ("text", "number")]
-    cols = []
-    if specs:
-        con = scratch()
-        try:
-            register(con, P, "prof", specs, "A", read_options(ws))
-            cols = flag_reads(con, "prof", [s.canon for s in specs],
-                              tuple(s.canon for s in specs if s.kind == "number"))
-        finally:
-            con.close()
+    # the held table has these columns, typed the same way: the file is not read again
+    cols = held_answer(ws, prof, ("flags",), lambda con: flag_reads(
+        con, "prof", [s.canon for s in specs], tuple(s.canon for s in specs if s.kind == "number"))) if specs else []
     return {"columns": cols}

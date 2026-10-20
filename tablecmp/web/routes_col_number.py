@@ -8,13 +8,12 @@ connection, so the same form can be worked out on other rows (a comparison's dif
 one-sided column); the route only registers the profiled table and calls it."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from ..sql import ident
 from ..values import ColSpec
 from .profile_held import held_answer
 from .routes_profiling import _band, _held, _spec
-from .sides import side
 from .workspace import Workspace, workspace
 
 router = APIRouter(prefix="/api/profiling")
@@ -129,9 +128,6 @@ def column_numform(column: str = Query(..., max_length=1000), ws: Workspace = De
     """A number column's form - any other type answers an empty one."""
     _, prof, _ = _held(ws)
     spec = _spec(prof, column)
-    P = side(ws, "P")
-    if not P.loaded:
-        raise HTTPException(409, "Load a table first.")
     if spec.kind != "number":
         return _empty(column)
     return held_answer(ws, prof, ("numform", column), lambda con: number_form(con, "prof", spec))

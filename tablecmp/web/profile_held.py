@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from ..sql import scratch
 from ..values import ColSpec, hold
+from . import setupws as sw
 from .sides import side
 from .workspace import Workspace
 
@@ -28,7 +29,6 @@ def drop(ws: Workspace) -> None:
 def cursor(ws: Workspace, prof: dict):
     """A connection of its own on the held table "prof" - every column of the profile, in the
     file's order, typed as profiled. Closed by the caller; the table stays."""
-    from .routes_profiling import read_options       # local import: routes_profiling imports this
     with _guard:
         got = ws.data.get(DB)
         if not got or got[0] is not prof:
@@ -37,7 +37,7 @@ def cursor(ws: Workspace, prof: dict):
             specs = [ColSpec(**s) for s in prof.get("specs", [])]
             stats = prof["stats"]
             rows = int(stats["Rows"].iloc[0]) if len(stats) else None
-            hold(con, side(ws, "P"), "prof", specs, "A", read_options(ws), rows)
+            hold(con, side(ws, "P"), "prof", specs, "A", sw.opts(ws), rows)
             got = (prof, con)
             ws.data[DB] = got
         return got[1].cursor()
@@ -84,31 +84,28 @@ def warm(ws: Workspace, prof: dict, say: Callable[[str], None]) -> None:
     from . import routes_profiling as rp
     stats = prof["stats"].to_dict("records")
     key = profiling.best_key(prof) or []
-    casts = {}
-    asks: list[tuple[str, Callable[[], Any]]] = [("casts", lambda: rp.cast_counts(ws)), ("overview", lambda: ov.findings(ws))]
+    say("Working out each column's page…")
+    try:                # the casts first: a text column read as a date opens on its date page
+        casts = {row["column"]: k for row in rp._casts_held(ws, prof)["columns"] if (k := rp.reads_as(row))}
+    except Exception:
+        casts = {}
+    asks: list[Callable[[], Any]] = [lambda: ov.findings(ws)]
     for r in stats:
         c, kind = str(r["Column"]), str(r["Type"])
         if len(key) == 1 and key[0] == c:
-            asks.append((c, lambda c=c: ky.key_check(c, ws)))
+            asks.append(lambda c=c: ky.key_check(c, ws))
         if kind == "text":
-            asks += [(c, lambda c=c: rp.column_spelling(c, ws)),
-                     (c, lambda c=c: tx.column_similar(c, "", tx.NGRAM_MIN, ws))]
+            asks += [lambda c=c: rp.column_spelling(c, ws), lambda c=c: tx.column_similar(c, "", tx.NGRAM_MIN, ws)]
         if kind == "number":
-            asks += [(c, lambda c=c: rp.hist(c, 10, ws)), (c, lambda c=c: nb.column_numform(c, ws))]
+            asks += [lambda c=c: rp.hist(c, 10, ws), lambda c=c: nb.column_numform(c, ws)]
         if kind in ("date", "timestamp"):
-            asks += [(c, lambda c=c, k=kind: wh.column_when(c, k, "", ws)), (c, lambda c=c: rp.hist(c, 10, ws))]
+            asks += [lambda c=c, k=kind: wh.column_when(c, k, "", ws), lambda c=c: rp.hist(c, 10, ws)]
         if kind == "boolean":
-            asks.append((c, lambda c=c: fl.column_flag(c, "", "", ws)))
+            asks.append(lambda c=c: fl.column_flag(c, "", "", ws))
         if kind in rp.READ_AS:
-            asks.append((c, lambda c=c, k=kind: rp.column_parts(c, 3, casts.get(c, k), ws)))
-    say("Working out each column's page…")
-    for i, (_, ask) in enumerate(asks):
-        if i == 2:          # the casts are in: a text column read as a date opens on its date page
-            for row in rp._casts_held(ws, prof)["columns"]:
-                got = rp.reads_as(row)
-                if got:
-                    casts[row["column"]] = got
-                    asks.append((row["column"], lambda c=row["column"], k=got: wh.column_when(c, k, "", ws)))
+            asks.append(lambda c=c, k=kind: rp.column_parts(c, 3, casts.get(c, k), ws))
+    asks += [lambda c=c, k=k: wh.column_when(c, k, "", ws) for c, k in casts.items()]
+    for ask in asks:
         try:
             ask()
         except Exception:
