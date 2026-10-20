@@ -57,8 +57,8 @@ export function Button({ variant = "default", size = "md", icon, iconAfter, coun
 
 /** A chip that opens a panel under it - closed again by a click away or Escape (focus goes back to
  *  the chip). `group` names the panel as a group when it holds a list of picks. */
-export function MenuButton({ label, group, wide, children, ...rest }:
-  { label: ReactNode; group?: string; wide?: boolean; children: ReactNode; "aria-label"?: string; title?: string }) {
+export function MenuButton({ label, group, wide, className = "fchip", children, ...rest }:
+  { label: ReactNode; group?: string; wide?: boolean; className?: string; children: ReactNode; "aria-label"?: string; title?: string }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null), btn = useRef<HTMLButtonElement>(null);
   const id = useId();
@@ -72,7 +72,7 @@ export function MenuButton({ label, group, wide, children, ...rest }:
   }, [open]);
   return (
     <div className="menu" ref={box}>
-      <button ref={btn} type="button" className="fchip" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} {...rest}>
+      <button ref={btn} type="button" className={className} aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} {...rest}>
         {label}<Icon name="chevron" size="sm" />
       </button>
       {open && <div className={wide ? "menu-pop wide" : "menu-pop"} id={id} role={group ? "group" : undefined} aria-label={group}>{children}</div>}
@@ -110,7 +110,7 @@ export function Seg<T extends string>({ options, value, onChange, mini, label }:
 
 export function SideBadge({ side }: { side: "a" | "b" | "k" | "A" | "B" | "P" }) {
   const s = side.toLowerCase() === "p" ? "k" : side.toLowerCase();
-  return <span className={`side-badge ${s}`} aria-hidden="true">{s === "k" ? "T" : s.toUpperCase()}</span>;
+  return <span className={`side-badge ${s}`} aria-hidden="true">{s === "k" ? <Icon name="table" /> : s.toUpperCase()}</span>;
 }
 
 /** A section of the page: mono numeral eyebrow, title, grey sub-line, actions on the right. */

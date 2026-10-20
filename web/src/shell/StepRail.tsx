@@ -3,7 +3,8 @@ import { useRunAuto, useRunCompare, useRunError } from "../compare/actions";
 import { useCompareNow } from "../compare/useCompare";
 import { useFilters } from "../keys/summary";
 import { useRunProfile } from "../profiling/actions";
-import { useProfiling, useSaveDefaults } from "../profiling/useProfiling";
+import { ProfileFiles } from "../profiling/SaveRow";
+import { useProfiling } from "../profiling/useProfiling";
 import { useSetup } from "../setup/api";
 import { useSideForm } from "../sources/formStore";
 import { sideLabels, sideName } from "../sources/names";
@@ -95,32 +96,22 @@ export function CompareRail() {
 }
 
 export function ProfileRail() {
-  const v = useView();
   const src = useSources().data;
   const [fp] = useSideForm("P");
   const P = src?.sides?.P;
   const name = P ? sideName("P", fp.name, P) : "Table";
   const held = useProfiling(!!P?.loaded).data;
   const { go, busy } = useRunProfile(name);
-  const csv = useSaveDefaults(name, held?.profile ? held.made : "").data?.csv_name;
   const secs = useLog().data?.last?.Profiling?.seconds;
-  const toFiles = () => {
-    const f = document.getElementById("profile-files");
-    f?.scrollIntoView({ behavior: "smooth", block: "start" });
-    f?.querySelector<HTMLInputElement>("input")?.focus({ preventScroll: true });
-  };
   const steps: RailStep[] = [
     { title: "Source", sub: P?.loaded ? `${name} ${rowsOf(P.rows)} rows` : "nothing loaded yet", state: P?.loaded ? "done" : "now", go: () => setView({ view: "setup", column: null }) },
     { title: "Profile", sub: busy ? "profiling…" : held?.profile ? (held.stale ? "from earlier settings" : secs != null ? `ready in ${secs}s` : "profiled") : P?.loaded ? "press Profile" : "-",
       state: busy ? "run" : P?.loaded ? (held?.profile ? "done" : "now") : "todo" },
   ];
-  const ready = !!held?.profile && !busy && !v.column;
+  const ready = !!held?.profile && !busy;
   return <StepRail steps={steps} actions={<>
     <Button variant={held?.profile ? "default" : "primary"} disabled={!P?.loaded || busy} onClick={go}>Profile</Button>
-    {ready && <>
-      <Button onClick={toFiles}>Save to folder</Button>
-      <a className="btn primary" href={`/api/profiling/profile.csv?name=${encodeURIComponent(name)}`} download={csv}><Icon name="download" />profile.csv</a>
-    </>}
+    {ready && <ProfileFiles name={name} made={held!.made} />}
   </>} />;
 }
 

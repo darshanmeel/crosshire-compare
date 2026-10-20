@@ -17,7 +17,8 @@ export function useProfileFailed(): string {
 // How far the key search goes - set on the Profile page, sent with every Profile, kept in this
 // browser between visits.
 const SEARCH_KEY = "profile.keySearch";
-let search: KeySearch = { key_cols: 5, top_keys: 5, shortlist: 10 };
+export const DEFAULT_SEARCH: KeySearch = { key_cols: 5, top_keys: 5, shortlist: 10 };
+let search: KeySearch = { ...DEFAULT_SEARCH };
 try { search = { ...search, ...JSON.parse(localStorage.getItem(SEARCH_KEY) ?? "{}") }; } catch { /* no storage */ }
 const searchSubs = new Set<() => void>();
 

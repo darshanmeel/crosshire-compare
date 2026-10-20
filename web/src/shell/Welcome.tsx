@@ -23,9 +23,9 @@ const COPY = {
     h: <>One table, <em>every column.</em></>,
     lede: <>Read by DuckDB once: which column identifies a row, what stands out, the statistics of every column, its outliers, shapes and dependencies, and its most and least frequent values.</>,
     how: [
-      [<strong>Load a table.</strong>, " A file on this machine, an upload, or a database table - cut it down under Rows to read if it is big."],
-      [<strong>Profile.</strong>, " Every column measured; with no single-column key, pairs, threes and fours are tried."],
-      [<strong>Read it.</strong>, " Key candidates, what stands out, and one page per column - then profile.csv or the six files to a folder."],
+      [<strong>Keys.</strong>, <> Every column is measured; with no single-column key, pairs, threes and fours are tried. <code>pip install desbordante</code> adds exact discovery.</>],
+      [<strong>Statistics and shapes.</strong>, " Nulls, distinct, min, max and the top value of every column; numbers get a distribution and outliers, text its patterns."],
+      [<strong>What stands out.</strong>, " Leading spaces, case variants, leading zeros, duplicates - the things that break a compare later."],
     ],
   },
 } as const;

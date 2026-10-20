@@ -1,9 +1,11 @@
 // web/src/profiling/SaveRow.tsx
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
-import { Button } from "../ui/kit";
+import { Icon } from "../ui/icons";
+import { Button, MenuButton } from "../ui/kit";
 import { marks } from "../ui/marks";
 import type { Saved } from "./types";
+import { useSaveDefaults } from "./useProfiling";
 
 // what each profile's folder box holds, by run id - kept across a trip to the other page (save_row's _kept)
 let kept: Record<string, string> = {};
@@ -45,4 +47,17 @@ export function SaveRow({ made, folder, name }: { made: string; folder: string; 
       {said && <div className={`note ${said.tone}`}>{marks(said.text)}</div>}
     </div>
   );
+}
+
+/** The profile's files, in the rail (15, 16): Save to folder opens the folder box, profile.csv downloads. */
+export function ProfileFiles({ name, made }: { name: string; made: string }) {
+  const d = useSaveDefaults(name, made).data;
+  return <>
+    <MenuButton className="btn" label={<><Icon name="folder" />Save to folder</>} group="Files" wide>
+      <p className="caption">All six tables of the profile, written to this folder</p>
+      {d ? <SaveRow made={made} folder={d.save_folder} name={name} /> : <p className="caption">Finding the folder…</p>}
+    </MenuButton>
+    <a className="btn primary" href={`/api/profiling/profile.csv?name=${encodeURIComponent(name)}`} download={d?.csv_name}
+       aria-label="Download profile.csv"><Icon name="download" />profile.csv</a>
+  </>;
 }

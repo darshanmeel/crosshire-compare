@@ -1,11 +1,16 @@
 // web/src/sources/SourcesSection.tsx - section 01 of the Compare page (screens 01, 03, 04, 07): the A and
 // B cards side by side - one line each while a run is going - and, when a side reads a database, the
 // table-vs-query note once (dismissable). ProfileSource is the Profile page's single card (14, 15).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Meta } from "../api/client";
 import { useCompareNow } from "../compare/useCompare";
-import { Callout, Section } from "../ui/kit";
+import { useRunProfile } from "../profiling/actions";
+import { useProfiling } from "../profiling/useProfiling";
+import { useView } from "../shell/view";
+import { Button, Callout, LinkButton, Section, SideBadge } from "../ui/kit";
 import { useSideForm } from "./formStore";
+import { loadedSummary } from "./LoadedLine";
+import { sideName } from "./names";
 import { SideCard } from "./SideCard";
 import { SideLine } from "./SideLine";
 import { useSources } from "./useSources";
@@ -57,10 +62,28 @@ export function SourcesSection({ meta }: { meta: Meta }) {
 export function ProfileSource({ meta }: { meta: Meta }) {
   const P = useSources().data?.sides?.P;
   const [fp] = useSideForm("P");
+  const name = P ? sideName("P", fp.name, P) : "Table";
+  const held = useProfiling(!!P?.loaded).data;
+  const { go, busy } = useRunProfile(name);
+  const { column } = useView();
+  const [editing, setEditing] = useState(false);       // a column's page: the card one click away
+  useEffect(() => { if (!column) setEditing(false); }, [column]);
+  if (P?.loaded && column && !editing) {               // screen 16: the source as one meta line
+    const s = loadedSummary(P);
+    return (
+      <div id="sources" className="profile-source loaded">
+        <p className="source-meta">
+          <SideBadge side="P" /><strong>{name}</strong><span>· {s.what} · {s.rest}</span>
+          <LinkButton onClick={() => setEditing(true)}>Edit source</LinkButton>
+        </p>
+      </div>
+    );
+  }
   if (P?.loaded)                        // screen 15: one compact card above the profile, no section head
     return (
       <div id="sources" className="profile-source loaded">
-        <SideCard tag="P" meta={meta} compact />
+        <SideCard tag="P" meta={meta} compact extra={held?.profile &&
+          <Button variant="dark" size="sm" icon="refresh" disabled={busy} onClick={go}>Profile again</Button>} />
         {fp.how === "database" && <DatabaseCallout />}
       </div>
     );

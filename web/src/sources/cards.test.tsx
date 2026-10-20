@@ -149,6 +149,26 @@ test("the Profile page: one card 'File' with Load while empty, then a compact ca
   expect(within(card).getByLabelText("First row is a header")).toBeChecked();
 });
 
+test("the Profile page: a held profile adds Profile again to the card; a column's page shows the source as one line", async () => {
+  const { profiling } = await import("../profiling/testkit");
+  const { setView } = await import("../shell/view");
+  const P = view("P", { loaded: true, name: "HR", label: "hr_employees.csv", rows: 3000, columns: ["emp_id", "first_name"], snapshot: true });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+    url === "/api/sources/folders" ? json([])
+      : url === "/api/sources/P/schema" ? json(SCHEMA)
+      : url === "/api/profiling" ? json(profiling())
+      : json(body({ sides: { A: view("A"), B: view("B"), P } }))));
+  setForm("P", { how: "path", path: "D:/x/hr_employees.csv", name: "HR" });
+  mount(<ProfileSource meta={META} />);
+  await waitFor(() => expect(screen.getByRole("region", { name: "File" })).toHaveClass("compact"));
+  expect(await within(screen.getByRole("region", { name: "File" })).findByRole("button", { name: "Profile again" })).toBeEnabled();
+  setView({ column: "emp_id" });
+  expect(await screen.findByText("· hr_employees.csv · 3,000 rows × 2 columns · Parquet snapshot")).toBeInTheDocument();
+  expect(screen.queryByRole("region", { name: "File" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Edit source" }));
+  expect(screen.getByRole("region", { name: "File" })).toBeInTheDocument();
+});
+
 test("while a run is going the sides collapse to one line each, keeping their regions", async () => {
   const B = view("B", { loaded: true, name: "Payroll", label: "payroll_employees.csv", rows: 2985, columns: ["EmployeeId"] });
   vi.stubGlobal("fetch", vi.fn(async (url: string) =>

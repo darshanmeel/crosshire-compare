@@ -31,6 +31,9 @@ const shade = (v: number) =>
 export function DepMatrix({ m, note }: { m: Frame; note: string }) {
   if (m.rows.length === 0) return null;
   const ys = m.columns.slice(1);
+  // every cell rounds to 0: one line instead of a grid of zeros
+  if (m.rows.every((r) => r.slice(1).every((v) => v == null || Math.round(v as number) === 0)))
+    return <p className="caption dep-matrix-none">Dependency matrix: every cell is 0 - no column decides another beyond chance{note && <> · {note}</>}.</p>;
   return (
     <figure className="dep-matrix">
       <div className="dep-matrix-scroll">

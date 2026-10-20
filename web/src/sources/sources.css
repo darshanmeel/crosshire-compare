@@ -65,3 +65,8 @@
 
 /* the foot's actions sit at its right end: Preview 10 rows, then Load to read the side again */
 .side-card .card-foot .foot-end { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-left: auto; }
+/* a column's page (16): the source as one line, the card one click away */
+.source-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 13px; color: var(--fs-text2); }
+.source-meta strong { color: var(--fs-text); font-weight: 600; }
+.source-meta .side-badge { width: 24px; height: 24px; }
+.source-meta .link-btn { min-height: 36px; }

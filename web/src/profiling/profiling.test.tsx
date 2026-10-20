@@ -45,12 +45,25 @@ function stub(calls: Call[], over: (url: string) => Response | undefined = () =>
   }));
 }
 
-test("before a profile: no Profile button of its own (it is in the rail), the tips say what it will do", async () => {
+test("before a profile: no Profile button of its own (it is in the rail), the tips and settings a fold away", async () => {
   stub([], (url) => (url === "/api/profiling" ? json(profiling({ profile: null, made: "" })) : undefined));
   mount(<ProfilingPage />);
-  expect(await screen.findByText(/Every column is measured/)).toBeInTheDocument();
-  expect(screen.getByText("Ready to profile")).toBeInTheDocument();
+  expect(await screen.findByText("Ready to profile")).toBeInTheDocument();
+  expect(screen.queryByText(/Every column is measured/)).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Settings" }));
+  expect(screen.getByText(/Every column is measured/)).toBeInTheDocument();
+  expect(screen.getByRole("group", { name: "Key search" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
+});
+
+test("before a profile: the settings fold opens by itself when the key search is not its default", async () => {
+  const { useKeySearch } = await import("./actions");
+  stub([], (url) => (url === "/api/profiling" ? json(profiling({ profile: null, made: "" })) : undefined));
+  function Set3() { const [, set] = useKeySearch(); return <button onClick={() => set({ key_cols: 3 })}>three</button>; }
+  mount(<><Set3 /><ProfilingPage /></>);
+  await userEvent.click(await screen.findByRole("button", { name: "three" }));
+  expect(await screen.findByRole("group", { name: "Key search" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Settings" })).toHaveAttribute("aria-expanded", "true");
 });
 
 test("the profile: verdict with the engine's headline, columns, key candidates, what stands out, the folds", async () => {
@@ -69,29 +82,42 @@ test("the profile: verdict with the engine's headline, columns, key candidates, 
   expect(within(table).getAllByRole("row")).toHaveLength(3);
   expect(within(table).getByRole("img", { name: "key" })).toBeInTheDocument();
   expect(within(table).getByText("100.00%", { exact: false })).toBeInTheDocument();
-  // read as · looks like, the semantic guess, what stands out, an arrow to the column's page
+  // read as · looks like, the semantic guess under the name, what stands out behind a dot, the name opens the page
   expect(within(table).getByText("number · remove thousands separators")).toBeInTheDocument();
   expect(within(table).getByText("identifier")).toBeInTheDocument();
   expect(within(table).getByText("category")).toBeInTheDocument();
   expect(within(table).getByText("unique · ascending in the file")).toBeInTheDocument();
-  expect(within(table).getByRole("button", { name: "Open the page of department" })).toBeInTheDocument();
+  expect(within(table).getByTitle("unique · ascending in the file")).toHaveTextContent("2");
+  expect(within(table).getByRole("button", { name: "department" })).toBeInTheDocument();
+  expect(within(table).getAllByRole("columnheader")).toHaveLength(7);
   // Key candidates: the chosen key, why, and the engine's sentence
   const keys = screen.getByRole("list", { name: "Key candidates" });
   expect(within(keys).getByText("unique by itself")).toBeInTheDocument();
   expect(within(keys).getByText("· 3,000 distinct of 3,000 · no nulls")).toBeInTheDocument();
+  // the engine's note: its first sentence, the rest a click away
+  expect(screen.queryByText("Found by measuring every column")).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "how it was found" }));
+  expect(screen.getByText("Found by measuring every column")).toBeInTheDocument();
+  // the search settings in a popover
+  await userEvent.click(screen.getByRole("button", { name: "Search settings" }));
+  expect(screen.getByRole("group", { name: "Key search" })).toBeInTheDocument();
+  // What stands out: the key and a column's list of values are said elsewhere, so nothing is left
+  expect(screen.getByText(NOTHING_STANDS_OUT)).toBeInTheDocument();
+  // Outliers, Patterns and Dependencies: three chips with counts, each opens its table below
+  const chips = screen.getByRole("group", { name: "Tables" });
+  expect(screen.queryByRole("region", { name: "Outliers" })).toBeNull();
+  await userEvent.click(within(chips).getByRole("button", { name: /^Outliers/ }));
+  const outliers = screen.getByRole("region", { name: "Outliers" });
+  expect(within(outliers).getByText(/One row per number, date and timestamp column/)).toBeInTheDocument();
+  expect(within(outliers).getByText("41,000")).toBeInTheDocument();
+  await userEvent.click(within(chips).getByRole("button", { name: /^Patterns 0/ }));
+  expect(screen.queryByRole("region", { name: "Outliers" })).toBeNull();
+  expect(within(screen.getByRole("region", { name: "Patterns" })).getByText("No text or number columns with values - no shapes to show.")).toBeInTheDocument();
+  await userEvent.click(within(chips).getByRole("button", { name: /^Dependencies/ }));
   // the strongest dependencies across the table, each with its bar
   const pairs = screen.getByRole("list", { name: "Strongest dependencies" });
   expect(within(pairs).getAllByRole("listitem")).toHaveLength(2);
   expect(pairs).toHaveTextContent("100.00%");
-  // the engine's note, a bullet per sentence
-  expect(screen.getByText("Found by measuring every column")).toBeInTheDocument();
-  // What stands out: the key and a column's list of values are said elsewhere, so nothing is left
-  expect(screen.getByText(NOTHING_STANDS_OUT)).toBeInTheDocument();
-  // Outliers, Patterns and Dependencies: always shown, each a region of its own
-  const outliers = screen.getByRole("region", { name: "Outliers" });
-  expect(within(outliers).getByText(/One row per number, date and timestamp column/)).toBeInTheDocument();
-  expect(within(outliers).getByText("41,000")).toBeInTheDocument();
-  expect(within(screen.getByRole("region", { name: "Patterns" })).getByText("No text or number columns with values - no shapes to show.")).toBeInTheDocument();
   const deps = screen.getByRole("region", { name: "Dependencies" });
   expect(within(deps).getByText("No column determines another.")).toBeInTheDocument();
   expect(within(deps).getByText("No correlated number columns.")).toBeInTheDocument();
@@ -201,4 +227,27 @@ test("a shape reads as runs of letters and digits", async () => {
   expect(readShape("A9-99 A")).toBe("1 letter · 1-2 digits · space · 1 letter");
   expect(readShape("99999999 99:99:99.999999A")).toBe("8 digits · space · 2:2:2 digits · point · 6 digits · 1 letter");
   expect(readShape("9999-99-99")).toBe("4-2-2 digits");
+});
+
+test("key candidates: the winner in its box, the others one line with a why fold; an all-zero matrix is one line", async () => {
+  const keys = { tone: "success" as const, text: "Key: **emp_id** - unique on every row.",
+    table: T(["Key columns", "Distinct", "Duplicate rows", "Null keys", "Unique", "Why"],
+      [["emp_id", 3000, 0, 0, "yes", "3,000 distinct of 3,000 · name says identifier"],
+       ["first_name + department", 2997, 3, 0, "no", "a name, not an identifier"]]) };
+  const matrix = T(["Column", "department", "salary"], [["department", null, 0], ["salary", 0.2, null]]);
+  stub([], (url) => (url === "/api/profiling" ? json(profiling({ profile: profile({ keys, matrix, matrix_note: "on every row" }) })) : undefined));
+  mount(<ProfilingPage />);
+  const list = await screen.findByRole("list", { name: "Key candidates" });
+  const [win, other] = within(list).getAllByRole("listitem").filter((li) => li.parentElement === list);
+  expect(win).toHaveClass("win");
+  expect(win).toHaveTextContent("· 0 duplicate rows · name says identifier");
+  expect(within(other).getByText("not unique")).toBeInTheDocument();
+  expect(within(win).queryByRole("button", { name: /^why/ })).toBeNull();
+  expect(within(other).queryByText("a name, not an identifier")).toBeNull();
+  await userEvent.click(within(other).getByRole("button", { name: "why - first_name + department" }));
+  expect(within(other).getByText("a name, not an identifier")).toBeInTheDocument();
+  expect(within(other).getByText("duplicates")).toBeInTheDocument();
+  await userEvent.click(within(screen.getByRole("group", { name: "Tables" })).getByRole("button", { name: /^Dependencies/ }));
+  expect(screen.getByText(/Dependency matrix: every cell is 0/)).toHaveTextContent("· on every row.");
+  expect(screen.queryByRole("table", { name: "Dependency matrix" })).toBeNull();
 });

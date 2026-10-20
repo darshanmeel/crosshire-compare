@@ -1,29 +1,32 @@
 /* web/src/profiling/overview.css - the Profile overview's v3 pieces: the findings row under the
-   verdict, the Columns table's read as / semantic / what stands out cells, the key summary and the
-   dependencies across the table. */
+   verdict, the Columns table's cells, the two-column split, the table chips and the dependencies
+   across the table. */
 
 /* the findings row across the table, under the verdict */
 .prof-verdict .findings { margin: 14px 0 0; }
 
-/* Columns table: read as · looks like, semantic, what stands out, the arrow */
-.prof-stats.prof-stats-wide { min-width: 1240px; }
-.prof-stats .readas { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 260px; }
+/* Columns table: read as · looks like, the semantic guess under the name, distinct with its bars, a dot */
+.prof-stats.prof-stats-wide { min-width: 760px; }
+.prof-stats td.col .sem-line { display: block; margin-top: -4px; font-family: var(--font-sans); font-size: 11.5px; font-weight: 400; color: var(--fs-text2); }
+.prof-stats .readas { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; max-width: 220px; }
 .prof-stats .readas svg { color: var(--fs-text3); flex: none; }
 .prof-stats .readas .from { font-size: 11.5px; color: var(--fs-text2); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .prof-stats .chip.looks { background: var(--fs-accent-subtle); color: var(--fs-accent); box-shadow: inset 0 0 0 1px var(--fs-accent-line); }
-.prof-stats .chip.sem { background: transparent; box-shadow: inset 0 0 0 1px var(--fs-border2); color: var(--fs-text2); font-family: inherit; font-size: 12px; }
 .prof-stats td.range { max-width: 200px; }
-.prof-stats td.stands-cell { min-width: 240px; max-width: 360px; white-space: normal; }
-.prof-stats .stands { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 12.5px; line-height: 1.45; color: var(--fs-text2); }
-.prof-stats td.go { width: 44px; text-align: right; }
-.prof-stats .row-go { width: 32px; height: 32px; }
+.prof-stats .dist { display: inline-flex; align-items: center; gap: 10px; }
+.prof-stats .dist .dn { min-width: 44px; text-align: right; }
+.prof-stats .dot-cell { width: 44px; position: relative; }
+.prof-stats .stand-dot { display: inline-flex; align-items: center; gap: 5px; font-family: var(--font-mono); font-size: 11.5px; color: var(--fs-text2); cursor: help; }
+.prof-stats .stand-dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--fs-warn); }
 
 /* key candidates: the one-line summary beside the verdict */
 .prof-keys .key-sum { font-size: 12.5px; color: var(--fs-text2); }
 
-/* key candidates beside the dependencies across the table - one above the other on a phone */
-.prof-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 20px; align-items: start; }
-.prof-one { display: contents; }
+/* the Columns table beside a rail of key candidates, what stands out and frequencies - one column below 1100 px */
+@media (max-width: 1100px) { .split.prof-split { flex-direction: column; align-items: stretch; } .split.prof-split > .main, .split.prof-split > .side { flex: 1 1 auto; width: 100%; } }
+.prof-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.prof-chips .fchip .c { font-family: var(--font-mono); font-size: 11px; color: var(--fs-text2); }
+.prof-chips .fchip[aria-expanded="true"] .c { color: var(--fs-panel); }
 .dep-pairs-list { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .dep-pairs-list li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(80px, 1fr) 64px; align-items: center; gap: 12px; min-height: 28px; }
 .dep-pairs-list .xy { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
@@ -33,3 +36,7 @@
 .dep-pairs-list .v { text-align: right; font-family: var(--font-mono); font-size: 12px; color: var(--fs-text); }
 .dep-pairs-list li.faint .xy code, .dep-pairs-list li.faint .v { color: var(--fs-text3); }
 .dep-pairs .caption { margin: 0; }
+.prof-stats-wide th.ra { white-space: normal; width: 96px; line-height: 1.4; padding-top: 4px; padding-bottom: 4px; }
+.prof-stats-wide .top .clip { max-width: 96px; }
+.prof-stats-wide .two .barcell .v { min-width: 50px; }
+.prof-stats-wide th, .prof-stats-wide td { padding-left: 6px; padding-right: 6px; }

@@ -39,7 +39,7 @@ function loadHint(tag: Tag, f: SideForm, meta: Meta): ReactNode {
   return kinds.length ? <>{kinds.join(", ")} under <strong>Database</strong></> : <>A database table under <strong>Database</strong></>;
 }
 
-export function SideCard({ tag, meta, compact = false }: { tag: Tag; meta: Meta; compact?: boolean }) {
+export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta: Meta; compact?: boolean; extra?: ReactNode }) {
   const id = useId();
   const single = tag === "P";
   const otherTag: Tag = tag === "A" ? "B" : "A";
@@ -182,7 +182,7 @@ export function SideCard({ tag, meta, compact = false }: { tag: Tag; meta: Meta;
         <LoadedLine tag={tag} view={view} box={f.name} otherBox={other.name} otherView={src?.sides?.[otherTag]}
                     preview={preview} onPreview={() => setPreview((p) => !p)} previewId={`${id}-preview`}
                     cols={compact && isCsv && f.how !== "database" ? `delimiter ${f.delimiter} · ${f.header ? "first row is a header" : "no header row"}` : undefined}>
-          {compact ? <>{toggles}{loadBtn(true)}</> : !dirty && loadBtn(true)}
+          {compact ? <>{toggles}{loadBtn(true)}{extra}</> : !dirty && loadBtn(true)}
         </LoadedLine>
       )}
       {compact && panels}

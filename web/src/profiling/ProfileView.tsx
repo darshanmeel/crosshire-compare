@@ -1,9 +1,12 @@
 // web/src/profiling/ProfileView.tsx - the profile of one table (screen 15): the verdict and a row of
-// findings across the table (GET /api/profiling/findings), the Columns panel across the page, then
-// what stands out folded into a few findings, the key candidates beside the strongest dependencies
-// - then the Outliers, Patterns and Dependencies tables across the page (the dependencies drawn as
-// a graph too), the value frequencies and the files.
-import { Bar, Callout, Chip, num, Panel, pctText, Pill } from "../ui/kit";
+// findings across the table (GET /api/profiling/findings), then two columns - the Columns panel and
+// Could be another type on the left; key candidates, what stands out and the value frequencies on
+// the right. Under What stands out, Outliers, Patterns and Dependencies are chips that open their
+// tables across the page below (the dependencies with their strongest pairs and graph). The files
+// are in the rail.
+import { useState } from "react";
+import { usePick } from "../results/pickStore";
+import { Bar, Button, Callout, Chip, LinkButton, MenuButton, num, Panel, pctText, Pill } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import { marks } from "../ui/marks";
 import { castsOf, castType } from "./casts";
@@ -14,11 +17,11 @@ import { keyColumns, madeAt, rowsOf } from "./frame";
 import { FrameTable } from "./FrameTable";
 import { FreqSection } from "./FreqSection";
 import { KeySearch } from "./KeySearch";
-import { SaveRow } from "./SaveRow";
+import { useKeySearch, useRunProfile } from "./actions";
 import { Findings } from "./column/Findings";
 import { standout, useFindings, type DepPair, type Finding, type FindingsBody } from "./standout";
 import type { Profile, ProfilingView } from "./types";
-import { useCasts, useSaveDefaults } from "./useProfiling";
+import { useCasts } from "./useProfiling";
 import "./profiling.css";
 import "./overview.css";
 
@@ -27,6 +30,9 @@ export const STALE = "This profile is from earlier settings - run it again to re
 
 type Fold = "Outliers" | "Patterns" | "Dependencies";
 const FOLDS: Fold[] = ["Outliers", "Patterns", "Dependencies"];
+const FOLD_SAYS: Record<Fold, string> = { Outliers: "columns measured", Patterns: "shapes", Dependencies: "dependencies and correlations" };
+const foldCount = (p: Profile, f: Fold) =>
+  f === "Outliers" ? p.outliers.rows.length : f === "Patterns" ? p.patterns.rows.length : p.deps.rows.length + p.corr.rows.length;
 
 function Verdict({ p, name, made, stale, f }: { p: Profile; name: string; made: string; stale: boolean; f?: FindingsBody }) {
   const stats = rowsOf(p.stats);
@@ -89,37 +95,69 @@ function KeyFigs({ r }: { r: Record<string, unknown> }) {
   );
 }
 
-function KeyCandidates({ p }: { p: Profile }) {
-  const rows = rowsOf(p.keys.table);
+/** One key candidate: its columns, whether they are unique and its counts on one line. The winner
+ *  says its reasons in its box; the others keep their figures and reasons a "why" click away. */
+function KeyRow({ r, win }: { r: Record<string, unknown>; win: boolean }) {
+  const [open, setOpen] = useState(false);
+  const unique = r.Unique === "yes";
+  const why = reasons(String(r.Why ?? ""));
+  const d = Number(r.Distinct ?? 0), dup = Number(r["Duplicate rows"] ?? 0), nk = Number(r["Null keys"] ?? 0);
+  const all = d + dup + nk;
+  const cols = String(r["Key columns"]);
   return (
-    <Panel title="Key candidates" sub={`single columns first, then combinations up to ${p.search.key_cols}`
-      + (p.search.key_sample ? ` found on a random sample, the best ${p.search.shortlist} checked on every row` : "")
-      + ` - the best ${p.search.top_keys}`}>
+    <li className={win ? "win" : undefined}>
+      <span className="head">
+        {cols.split(" + ").map((c) => <Chip key={c} tone={win ? "key" : undefined}>{c}</Chip>)}
+        <span className={unique ? "yes" : "no"}>{unique ? (cols.includes(" + ") ? "unique together" : "unique by itself") : "not unique"}</span>
+        <span className="key-sum">· {num(d)} distinct of {num(all)} · {nk ? `${num(nk)} null keys` : "no nulls"}</span>
+        {!win && <LinkButton className={open ? "why-btn open" : "why-btn"} iconAfter="chevron" aria-expanded={open}
+                             aria-label={`why - ${cols}`} onClick={() => setOpen(!open)}>why</LinkButton>}
+      </span>
+      {win && <span className="why-line">· {[`${num(dup)} duplicate rows`, ...why].map((w, k) => <span key={k}>{k > 0 && " · "}{marks(w)}</span>)}</span>}
+      {!win && open && <div className="why-body">
+        <KeyFigs r={r} />
+        {why.length > 0 && <ul className="why">{why.map((w, k) => <li key={k}>{marks(w)}</li>)}</ul>}
+      </div>}
+    </li>
+  );
+}
+
+/** The key: the winner in one box, every other candidate on one line; the engine's note, its first
+ *  sentence shown and the rest a click away; how far the search goes in a popover, with Profile
+ *  again beside the note when the settings changed. */
+function KeyCandidates({ p, name }: { p: Profile; name: string }) {
+  const rows = rowsOf(p.keys.table);
+  const [s] = useKeySearch();
+  const { go, busy } = useRunProfile(name);
+  const [more, setMore] = useState(false);
+  const done = p.search;
+  const differs = done.key_cols !== s.key_cols || done.top_keys !== s.top_keys || done.shortlist !== s.shortlist;
+  const said = sentences(p.keys.text);
+  return (
+    <Panel title="Key candidates" sub={`single columns first, then combinations up to ${done.key_cols}`}
+      actions={<MenuButton label="Search settings" group="Key search settings" wide>
+        <p className="caption">This profile: combinations up to {done.key_cols}
+          {done.key_sample ? <> found on a random sample of {num(done.key_sample)} rows, the best {done.shortlist} checked on every row</> : null}
+          {" "}- the best {done.top_keys} listed.</p>
+        <KeySearch />
+      </MenuButton>}>
       <div className="panel-body">
-        <KeySearch done={p.search} />
-        {p.keys.tone === "success"
-          ? <ul className="prof-said prof-keynote">{sentences(p.keys.text).map((x, i) => <li key={i}>{marks(x)}</li>)}</ul>
-          : <Callout tone="warn" icon="key"><ul className="prof-said">{sentences(p.keys.text).map((x, i) => <li key={i}>{marks(x)}</li>)}</ul></Callout>}
         {rows.length > 0 && (
           <ul className="prof-keys" aria-label="Key candidates">
-            {rows.map((r, i) => {
-              const unique = r.Unique === "yes";
-              const why = reasons(String(r.Why ?? ""));
-              const d = Number(r.Distinct ?? 0), nk = Number(r["Null keys"] ?? 0);
-              const all = d + Number(r["Duplicate rows"] ?? 0) + nk;
-              return (
-                <li key={i}>
-                  <span className="head">
-                    {String(r["Key columns"]).split(" + ").map((c) => <Chip key={c} tone={unique && i === 0 ? "key" : undefined}>{c}</Chip>)}
-                    <span className={unique ? "yes" : "no"}>{unique ? (String(r["Key columns"]).includes(" + ") ? "unique together" : "unique by itself") : "not unique"}</span>
-                    <span className="key-sum">· {num(d)} distinct of {num(all)} · {nk ? `${num(nk)} null keys` : "no nulls"}</span>
-                  </span>
-                  <KeyFigs r={r} />
-                  {why.length > 0 && <ul className="why">{why.map((w, k) => <li key={k}>{marks(w)}</li>)}</ul>}
-                </li>
-              );
-            })}
+            {rows.map((r, i) => <KeyRow key={i} r={r} win={r.Unique === "yes" && i === 0} />)}
           </ul>
+        )}
+        {p.keys.tone === "success"
+          ? <p className="caption prof-keynote">
+              {said.slice(0, more ? said.length : 1).map((x, i) => <span key={i}><span>{marks(x)}</span>. </span>)}
+              {said.length > 1 && <LinkButton aria-expanded={more} onClick={() => setMore(!more)}>{more ? "less" : "how it was found"}</LinkButton>}
+            </p>
+          : <Callout tone="warn" icon="key"><ul className="prof-said">{said.map((x, i) => <li key={i}>{marks(x)}</li>)}</ul></Callout>}
+        {differs && (
+          <div className="row key-differs">
+            <span className="caption">this profile used up to {done.key_cols} · the best {done.shortlist} checked · {done.top_keys} listed - the search settings differ</span>
+            <Button size="sm" icon="refresh" disabled={busy} onClick={go}>Profile again</Button>
+          </div>
         )}
       </div>
     </Panel>
@@ -229,53 +267,58 @@ function DepPairs({ p, pairs, keys }: { p: Profile; pairs: DepPair[]; keys: stri
   );
 }
 
-/** The verdict, the Columns table across the page, then the findings, frequencies and files -
- *  two to a row on a wide screen, one on a phone. */
+/** The verdict, then the Columns table beside the key, what stands out and the frequencies - one
+ *  column below 1100 px - and the table a chip opened, across the page. */
 export function ProfileView({ view, name }: { view: ProfilingView; name: string }) {
   const p = view.profile!;
-  const defaults = useSaveDefaults(name, view.made).data;
   const keys = keyColumns(p);
   const found = standout(p.notes);
   const casts = useCasts(view.made);
   const f = useFindings(view.made, casts.isSuccess).data;
   const pairs = f?.pairs ?? [];
+  const [fold, setFold] = usePick<string>("prof_fold", "");
+  const open = FOLDS.find((x) => x === fold);
   return (
     <>
       <Verdict p={p} name={name} made={view.made} stale={view.stale} f={f} />
-      <div className="prof-stack">
-        <ColumnsTable p={p} keyCols={keys} findings={f} />
-        <Panel title="What stands out" sub="each finding once, with the columns it is about">
-          <div className="panel-body">
-            {found.length
-              ? <ul className="prof-found">{found.map((f) => <FindingRow key={f.title} f={f} />)}</ul>
-              : <ul className="bullets"><li><i className="ok" /><span>{NOTHING_STANDS_OUT}</span></li></ul>}
-          </div>
-        </Panel>
-        <CouldBeTypes made={view.made} />
-        <div className={pairs.length ? "prof-duo" : "prof-one"}>
-          <KeyCandidates p={p} />
-          <DepPairs p={p} pairs={pairs} keys={keys} />
+      <div className="split prof-split">
+        <div className="main">
+          <ColumnsTable p={p} keyCols={keys} findings={f} />
+          <CouldBeTypes made={view.made} />
         </div>
-        {FOLDS.map((f) => (
-          <Panel key={f} className="prof-fold" title={<span id={`fold-${f}`}>{f}</span>}>
-            <div className="panel-body" id={`fold-${f}-body`} role="region" aria-labelledby={`fold-${f}`}>
-              <FoldBody p={p} fold={f} />
+        <div className="side">
+          <KeyCandidates p={p} name={name} />
+          <Panel title="What stands out" sub="each finding once, with the columns it is about">
+            <div className="panel-body">
+              {found.length
+                ? <ul className="prof-found">{found.map((f) => <FindingRow key={f.title} f={f} />)}</ul>
+                : <ul className="bullets"><li><i className="ok" /><span>{NOTHING_STANDS_OUT}</span></li></ul>}
+              <div className="prof-chips" role="group" aria-label="Tables">
+                {FOLDS.map((x) => {
+                  const n = foldCount(p, x);
+                  return (
+                    <button key={x} type="button" className="fchip" aria-expanded={open === x} aria-controls={`fold-${x}-body`}
+                            title={`${num(n)} ${FOLD_SAYS[x]}`} onClick={() => setFold(open === x ? "" : x)}>
+                      <span>{x}</span>{" "}<span className="c">{num(n)}</span><Icon name="chevron" size="sm" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </Panel>
-        ))}
-        <div className="prof-grid">
           <FreqSection p={p} made={view.made} />
-          <div id="profile-files"><Panel title="Files" sub="the statistics as a CSV, or all six tables into a folder">
-            <div className="panel-body">
-              <div className="row">
-                <a className="btn" href={`/api/profiling/profile.csv?name=${encodeURIComponent(name)}`} download={defaults?.csv_name}>
-                  <Icon name="download" />Download profile.csv</a>
-              </div>
-              {defaults && <SaveRow made={view.made} folder={defaults.save_folder} name={name} />}
-            </div>
-          </Panel></div>
         </div>
       </div>
+      {open && (
+        <div className="prof-stack prof-opened">
+          {open === "Dependencies" && <DepPairs p={p} pairs={pairs} keys={keys} />}
+          <Panel className="prof-fold" title={<span id={`fold-${open}`}>{open}</span>}>
+            <div className="panel-body" id={`fold-${open}-body`} role="region" aria-labelledby={`fold-${open}`}>
+              <FoldBody p={p} fold={open} />
+            </div>
+          </Panel>
+        </div>
+      )}
     </>
   );
 }

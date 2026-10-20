@@ -186,3 +186,17 @@
 .finding.warn { background: var(--fs-warn-bg); border-color: transparent; } .finding.warn > i { background: var(--fs-warn); }
 .finding.neg { background: var(--fs-neg-bg); border-color: transparent; } .finding.neg > i { background: var(--fs-neg); }
 .prof-sem { font-size: 12px; padding: 2px 8px; border: 1px solid var(--fs-line); border-radius: 999px; color: var(--fs-text2); }
+/* key candidates (15): the winner in a box, the others one line each with a "why" fold */
+.prof-keys li:not(.win) { padding: 6px 0; border: 0; border-top: 1px solid var(--fs-line); border-radius: 0; background: none; gap: 2px; }
+.prof-keys li.win + li:not(.win), .prof-keys li:not(.win):first-child { border-top: 0; }
+.prof-keys li.win { background: var(--fs-surface2); }
+.prof-keys .why-line { font-size: 12.5px; color: var(--fs-text2); }
+.prof-keys .why-btn { height: 32px; padding: 0 6px; margin-left: auto; font-size: 12.5px; }
+.prof-keys .why-btn.open svg { transform: rotate(180deg); }
+.prof-keys .why-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 6px; }
+p.prof-keynote { margin: 12px 0 0; }
+p.prof-keynote .link-btn { height: auto; min-height: 32px; padding: 0 4px; font-size: 12.5px; vertical-align: middle; }
+.prof-stats td.col { display: table-cell; }
+.key-differs { margin-top: 12px; gap: 8px 12px; }
+.dep-matrix-none { margin: 0 0 12px; }
+.panel-head .link-btn.open svg { transform: rotate(180deg); }

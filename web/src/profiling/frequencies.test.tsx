@@ -1,10 +1,11 @@
 // web/src/profiling/frequencies.test.tsx
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { json, mount, type Call } from "../sources/testkit";
 import { ProfileView } from "./ProfileView";
+import { ProfileFiles } from "./SaveRow";
 import { defaults, profile, profiling, T } from "./testkit";
 
 const freq = (column: string) => ({ column, title: "",
@@ -50,30 +51,33 @@ test("the pick survives the page going away, and a column the new profile lacks 
   expect(screen.queryByText("emp_id-top")).toBeNull();
 });
 
-test("Download profile.csv is a link; Save to folder writes the six files or says why not", async () => {
+test("in the rail, Download profile.csv is a link; Save to folder opens the folder box, which writes the six files or says why not", async () => {
   const calls: Call[] = [];
   let n = 0;
   stub(calls, (b) => (n++ === 0
     ? json({ detail: "Saves must stay under D:\\out" }, 400)
     : json({ text: `Saved 6 files to \`${b.folder}\`: HR__profile.csv, HR__keys.csv`, folder: b.folder })));
-  mount(<ProfileView view={profiling()} name="HR" />);
+  mount(<ProfileFiles name="HR" made="20261004-120000" />);
   const link = await screen.findByRole("link", { name: "Download profile.csv" });
   expect(link).toHaveAttribute("href", "/api/profiling/profile.csv?name=HR");
   await waitFor(() => expect(link).toHaveAttribute("download", "HR__profile.csv"));
-  const box = await screen.findByLabelText("Save to folder");
-  expect(box).toHaveValue("D:/out/HR__20261004-120000");
   await userEvent.click(screen.getByRole("button", { name: "Save to folder" }));
+  const files = screen.getByRole("group", { name: "Files" });
+  const save = () => within(files).getByRole("button", { name: "Save to folder" });
+  const box = await within(files).findByLabelText("Save to folder");
+  expect(box).toHaveValue("D:/out/HR__20261004-120000");
+  await userEvent.click(save());
   expect(await screen.findByText("Saves must stay under D:\\out")).toHaveClass("note", "error");
   expect(box).toHaveValue("D:/out/HR__20261004-120000");                     // what was typed stays
   await userEvent.clear(box);
   await userEvent.type(box, "D:/out/mine");
-  await userEvent.click(screen.getByRole("button", { name: "Save to folder" }));
+  await userEvent.click(save());
   expect(await screen.findByText(/Saved 6 files to/)).toHaveClass("note", "success");
   const sent = calls.filter(([u]) => u === "/api/profiling/save").map(([, i]) => JSON.parse(i!.body as string));
   expect(sent).toEqual([{ name: "HR", folder: "D:/out/HR__20261004-120000" }, { name: "HR", folder: "D:/out/mine" }]);
 });
 
-test("a Name edit moves the folder box with it, unless the user typed in the box; the profile stays drawn", async () => {
+test("a Name edit moves the folder box with it, unless the user typed in the box; the link stays drawn", async () => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.startsWith("/api/profiling/defaults?")) {
       const n = decodeURIComponent(url.split("=")[1]);
@@ -83,8 +87,9 @@ test("a Name edit moves the folder box with it, unless the user typed in the box
     return json({});
   }));
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const draw = (name: string) => <QueryClientProvider client={qc}><ProfileView view={profiling()} name={name} /></QueryClientProvider>;
+  const draw = (name: string) => <QueryClientProvider client={qc}><ProfileFiles name={name} made="20261004-120000" /></QueryClientProvider>;
   const r = render(draw("HR"));
+  await userEvent.click(screen.getByRole("button", { name: "Save to folder" }));
   expect(await screen.findByLabelText("Save to folder")).toHaveValue("D:/out/HR__20261004-120000");
   r.rerender(draw("Staff"));
   expect(screen.getByRole("link", { name: "Download profile.csv" })).toBeInTheDocument();   // not blanked while asking
