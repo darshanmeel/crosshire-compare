@@ -404,6 +404,14 @@ table.grid tr.side-b td:first-child { color: var(--fs-side-b); }
   .rail .actions { width: 100%; }
 }
 
+/* a command to paste (kit Command): one unbroken line that scrolls in its box, and its Copy command button */
+.cmdline { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
+.cmdline .icon-btn { flex: none; }
+pre.cmd { flex: 1 1 auto; min-width: 0; margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--fs-text); color: var(--fs-panel);
+  font-family: var(--font-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; }
+pre.cmd code { background: none; padding: 0; color: inherit; font-size: inherit; }
+pre.cmd:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px; }
+:root[data-fs-mode="dark"] pre.cmd { background: var(--fs-bg); color: var(--fs-text); border: 1px solid var(--fs-line); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 .ops button { color: var(--fs-text); }
 .engine-limits { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; padding-top: 12px; border-top: 1px solid var(--fs-line); }

@@ -57,7 +57,6 @@ export function Running({ job, title = "Working it out…" }: { job: LogEntry; t
             <span className="run-secs">{secs.toFixed(1)}s</span>
           </span>
         </div>
-        {lines.length === 0 && <div className="run-label">{job.label}</div>}
         <div className="progress indeterminate" aria-hidden="true"><i /></div>
         {lines.length > 0 && (
           <ol className="tasks" aria-label="Steps so far">

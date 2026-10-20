@@ -1,6 +1,7 @@
 // The redesign's shared pieces (design/COMPONENTS.md), on the classes in styles.css. Each is a thin
 // wrapper over a real control: buttons are <button>, toggles say aria-pressed, groups say role="group".
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { copyText } from "./copy";
 import { Icon, type IconName } from "./icons";
 
 const fmt = new Intl.NumberFormat("en-US");
@@ -267,4 +268,20 @@ export function Drawer({ title, label, onClose, children }: { title: ReactNode; 
 
 export function StatGrid({ stats }: { stats: { label: string; value: ReactNode; sub?: ReactNode }[] }) {
   return <div className="stat-grid">{stats.map((s) => <div key={s.label} className="stat"><span className="eyebrow">{s.label}</span><span className="v">{s.value}</span>{s.sub && <span className="caption">{s.sub}</span>}</div>)}</div>;
+}
+
+/** A command to paste, on one unbroken line that scrolls inside its box, and an icon button that copies it. */
+export function Command({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState<"" | "yes" | "no">("");
+  useEffect(() => { if (!copied) return; const t = setTimeout(() => setCopied(""), 2000); return () => clearTimeout(t); }, [copied]);
+  return (
+    <div className="cmdline">
+      <pre className="cmd" tabIndex={0} aria-label={label}><code>{text}</code></pre>
+      <button type="button" className="icon-btn" aria-label="Copy command" title="Copy command"
+              onClick={async () => setCopied((await copyText(text)) ? "yes" : "no")}>
+        <Icon name={copied === "yes" ? "check" : "copy"} />
+      </button>
+      <span className="sr-only" role="status">{copied === "yes" ? "Copied" : copied === "no" ? "Could not copy - select the text instead" : ""}</span>
+    </div>
+  );
 }

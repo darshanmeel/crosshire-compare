@@ -53,6 +53,19 @@ test("Downloads lists every file with what it is, the config among them, each a 
   expect(screen.getByText(/python -m tablecmp\.run X__config\.json/)).toHaveTextContent("--left <new HR file> --right <new Payroll file> --out results");
 });
 
+test("the rerun command has a Copy command button that copies it whole", async () => {
+  vi.stubGlobal("fetch", serve([], () => FILES));
+  const writeText = vi.fn(async () => undefined);
+  const user = userEvent.setup();
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  mount(<DownloadsTab run={RUN} limit={1000} />);
+  await screen.findByRole("region", { name: "Files in this run" });
+  await user.click(screen.getByRole("button", { name: "Copy command" }));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(screen.getByLabelText("Command to run it again").textContent));
+  expect(writeText.mock.calls[0]).toEqual([expect.stringContaining("--left <new HR file> --right <new Payroll file> --out results")]);
+  expect(await screen.findByText("Copied")).toBeInTheDocument();
+});
+
 test("Download selected takes the ticked files, and the count follows the ticks", async () => {
   vi.stubGlobal("fetch", serve([], () => FILES));
   const clicks: string[] = [];

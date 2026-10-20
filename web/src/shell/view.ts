@@ -32,6 +32,9 @@ export function toggleLog() {
   setView({ view: "log" });
 }
 
+/** The view the Log was opened from: the rail keeps its steps and actions while the Log is open. */
+export function logOrigin(): View { return beforeLog; }
+
 /** Back to the setup with one section in view: the rail's steps and the editors' Back buttons. */
 export function goToSection(anchor: "sources" | "columns" | "rows") { setView({ view: "setup", anchor }); }
 

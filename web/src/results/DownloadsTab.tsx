@@ -8,7 +8,7 @@ import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { goToSection, setView } from "../shell/view";
 import { Icon } from "../ui/icons";
-import { Button, LinkButton, num, plural } from "../ui/kit";
+import { Button, Command, LinkButton, num, plural } from "../ui/kit";
 import { download, fileUrl, filesKey, size, useRunFiles, type FilesView } from "./detailApi";
 import { Failed } from "./Failed";
 import { FolderSave } from "./FolderSave";
@@ -155,7 +155,7 @@ export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
           <div className="rd-col">
             <strong>Run it again without the UI</strong>
             <span>The config file reproduces this comparison headless - in CI, on a schedule, or for a batch of pairs with <code>--pairs pairs.csv</code>.</span>
-            <pre className="rd-cmd" tabIndex={0} aria-label="Command to run it again"><code>{command}</code></pre>
+            <Command text={command} label="Command to run it again" />
             {d.config && (
               <>
                 <span className="row">

@@ -14,7 +14,7 @@ import { Button, num } from "../ui/kit";
 import { activeFilters } from "../values/FiltersBox";
 import { useLog } from "./LogPanel";
 import type { Page } from "./usePage";
-import { goToSection, setView, useView } from "./view";
+import { goToSection, logOrigin, setView, useView } from "./view";
 
 export type StepState = "todo" | "now" | "done" | "run";
 export type RailStep = { title: string; sub: string; state: StepState; go?: () => void };
@@ -48,6 +48,7 @@ const rowsOf = (n: number | null | undefined) => (n == null ? "" : num(n));
 
 export function CompareRail() {
   const v = useView();
+  const view = v.view === "log" ? logOrigin() : v.view;     // over the Log, the rail of the view it was opened from
   const src = useSources().data;
   const [fa] = useSideForm("A");
   const [fb] = useSideForm("B");
@@ -64,7 +65,7 @@ export function CompareRail() {
   const busy = !!st?.busy || compare.isPending || auto.isPending;
   const run = st?.run;
   const [NA, NB] = sideLabels(sideName("A", fa.name, A), sideName("B", fb.name, B));
-  const cur = !loaded ? 1 : busy || v.view === "results" ? 4 : v.view === "rows" ? 3 : 2;
+  const cur = !loaded ? 1 : busy || view === "results" ? 4 : view === "rows" ? 3 : 2;
   const state = (i: number): StepState =>
     i === 4 && busy ? "run" : i === cur ? "now" : i < cur || (i === 4 && run) ? "done" : "todo";
   const sourcesSub = [A?.loaded && `${NA} ${rowsOf(A.rows)}`, B?.loaded && `${NB} ${rowsOf(B.rows)}`].filter(Boolean).join(" · ") || "nothing loaded yet";
@@ -81,7 +82,7 @@ export function CompareRail() {
   ];
   const actions = busy
     ? <Button variant="primary" disabled iconAfter="arrow">Comparing…</Button>
-    : v.view === "results" && run
+    : view === "results" && run
       ? <>
           <Button onClick={() => goToSection("columns")}>Edit setup</Button>
           <a className="btn primary" href={`/api/results/${run.id}/report?download=true`} download><Icon name="download" />Download report</a>

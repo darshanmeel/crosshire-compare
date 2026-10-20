@@ -36,10 +36,12 @@ export function CompareBar() {
   return (
     <div className="compare-bar">
       <div className="actions">
-        <Button variant="primary" size="lg" iconAfter="arrow" disabled={!!why || st.busy || go.isPending}
-                aria-describedby={why ? whyId : undefined} onClick={() => go.mutate()}>
-          {st.busy ? "Comparing…" : `Compare ${st.names[0]} against ${st.names[1]}`}
-        </Button>
+        {!st.busy && (     /* while a run is busy the rail's Comparing… is the one busy button */
+          <Button variant="primary" size="lg" iconAfter="arrow" disabled={!!why || go.isPending}
+                  aria-describedby={why ? whyId : undefined} onClick={() => go.mutate()}>
+            {`Compare ${st.names[0]} against ${st.names[1]}`}
+          </Button>
+        )}
         {why ? <span className="why" id={whyId}>{marks(why)}</span> : <span className="help">{help.join(" · ")}</span>}
       </div>
       {st.filter_error && <div className="note error">{marks(st.filter_error)}</div>}

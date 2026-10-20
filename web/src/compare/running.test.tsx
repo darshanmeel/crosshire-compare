@@ -5,8 +5,9 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import type { LogEntry } from "../api/client";
 import { compareState, setup } from "../setup/testkit";
-import { getView, resetView } from "../shell/view";
-import { body, json, mount, type Call } from "../sources/testkit";
+import { CompareRail } from "../shell/StepRail";
+import { getView, resetView, setView, toggleLog } from "../shell/view";
+import { body, json, mount, view, type Call } from "../sources/testkit";
 import { AutoRerun } from "./AutoRerun";
 import { CompareBar, NOTHING_PAIRED } from "./CompareBar";
 import { RunningPanel } from "./RunningPanel";
@@ -88,6 +89,7 @@ test("before the job says anything, its label stands in for the current line", a
   mount(<RunningPanel />);
   const panel = await screen.findByRole("region", { name: "Progress" });
   expect(within(panel).getByRole("status")).toHaveTextContent("Running config.json…");
+  expect(within(panel).getAllByText("Running config.json…")).toHaveLength(1);     // said once, in the head
   expect(within(panel).queryByRole("list")).toBeNull();
   expect(within(panel).queryByText(/step/)).toBeNull();
 });
@@ -159,10 +161,29 @@ test("nothing loaded: no bar; while a run is busy the button waits", async () =>
   expect(screen.queryByRole("button")).toBeNull();
 });
 
-test("busy: the button says Comparing and is disabled", async () => {
-  vi.stubGlobal("fetch", mock({ "/api/compare": () => compareState({ busy: true }) }));
+test("busy: the foot's button hides - the rail says Comparing - and its line and notes stay", async () => {
+  vi.stubGlobal("fetch", mock({ "/api/compare": () => compareState({ busy: true, said: [{ tone: "info", text: "A note" }] }) }));
   mount(<CompareBar />);
-  expect(await screen.findByRole("button", { name: "Comparing…" })).toBeDisabled();
+  expect(await screen.findByText("A note")).toBeInTheDocument();
+  expect(screen.getByText(/runs in DuckDB/)).toBeInTheDocument();
+  expect(screen.queryByRole("button")).toBeNull();
+});
+
+test("the Log opened from the results keeps the results' rail: Edit setup and Download report", async () => {
+  vi.stubGlobal("fetch", mock({
+    "/api/compare": () => compareState({ run: RUN }),
+    "/api/sources": () => body({ sides: { A: view("A", { loaded: true, rows: 3000 }), B: view("B", { loaded: true, rows: 2985 }), P: view("P") } }),
+    "/api/setup/filters": () => ({ rows: [] }),
+  }));
+  setView({ view: "results" });
+  toggleLog();
+  mount(<CompareRail />);
+  expect(await screen.findByRole("button", { name: "Edit setup" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Download report" })).toHaveAttribute("href", "/api/results/r1/report?download=true");
+  expect(screen.getByRole("button", { name: /Results/ })).toHaveAttribute("aria-current", "step");
+  toggleLog();
+  expect(getView().view).toBe("results");
+  resetView();
 });
 
 test("a refused press, a filter the engine refused and the engine's notes are shown under the button", async () => {

@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type LogEntry, type Meta } from "../api/client";
 import { useJobOfKind } from "../api/useJob";
 import { Icon } from "../ui/icons";
-import { Button, Dropzone, Panel, Pill, Seg } from "../ui/kit";
+import { Button, Command, Dropzone, Panel, Pill, Seg } from "../ui/kit";
 import { setView } from "../shell/view";
 import { arg, readConf, readPairs, summarise, type ConfSummary, type PairRow } from "./configRead";
 import { setForm, takeConfig } from "./formStore";
@@ -55,7 +55,7 @@ function Batch({ config }: { config: string }) {
         title={<span id="cfg-batch">Batch · many pairs, one config</span>}
         sub="a pairs.csv with one line per left / right file - each pair gets its own run folder"
         foot={<>
-          <code className="cmd">{cmd}</code>
+          <Command text={cmd} label="Command to run the batch" />
           <span className="grow" />
           <label className="btn cfg-pick">
             <Icon name="upload" />Load a pairs.csv
@@ -77,8 +77,7 @@ function Batch({ config }: { config: string }) {
           </div>
         ) : (
           <div className="panel-note">
-            <span>Columns <code>left</code>, <code>right</code> and, if you like, <code>name_left</code>, <code>name_right</code>. Load one to check it here;
-            the run itself is the command below.</span>
+            <span>Columns <code>left</code>, <code>right</code> and, if you like, <code>name_left</code>, <code>name_right</code>.</span>
           </div>
         )}
       </Panel>
@@ -167,9 +166,8 @@ export function ConfigPanel() {
             <span className="side-badge k" aria-hidden="true"><Icon name="refresh" /></span>
             <h3>This run</h3>
             <span className="grow" />
-            <span className="cfg-sub">reads the files the config names</span>
+            <span className="cfg-sub">opens the files it names, brings back every setting, then compares</span>
           </div>
-          <p className="cfg-text">Both sides open, the columns, steps, key and rows settings come back as they were, then it compares. Change anything after in the setup.</p>
           <div className="row">
             <Button variant="primary" icon="play" disabled={!ready || working} onClick={run}>{working ? "Loading the config…" : "Run this config"}</Button>
             <Button onClick={() => setView({ view: "setup" })}>Open in the setup instead</Button>
@@ -178,7 +176,7 @@ export function ConfigPanel() {
           {!working && src?.config?.said.map((n, i) => <NoteLine key={i} note={n} />)}
           <div className="cfg-other">
             <span className="lbl">Other files, same setup</span>
-            <code className="cmd">python -m tablecmp.run {arg(cfgName)} --left &lt;file A&gt; --right &lt;file B&gt; --out results</code>
+            <Command text={`python -m tablecmp.run ${arg(cfgName)} --left <file A> --right <file B> --out results`} label="Command for other files" />
           </div>
         </section>
       </div>

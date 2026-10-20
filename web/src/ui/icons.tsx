@@ -24,6 +24,7 @@ const PATHS = {
   zip: ["M6 2h8l4 4v16H6zM10 6h2M10 9h2M10 12h2M10 15h2", 1.8],
   sortdesc: ["M7 4v16M3 16l4 4 4-4M14 6h7M14 11h5M14 16h3", 1.8],
   external: ["M14 4h6v6M20 4l-9 9M18 14v6H4V6h6", 1.8],
+  copy: ["M9 9h11v11H9zM5 15H4V4h11v1", 1.8],
   refresh: ["M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16m0 4v-4h-4", 1.8],
 } as const satisfies Record<string, readonly [string, number] | readonly [string, number, string]>;
 

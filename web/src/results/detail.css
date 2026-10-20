@@ -67,9 +67,6 @@
 .rd-open svg { transform: rotate(180deg); }
 .rd-callout { height: 100%; }
 .rd-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; flex: 1 1 auto; }
-.rd-cmd { margin: 0; padding: 10px 12px; border-radius: var(--r-sm); background: var(--fs-text); color: var(--fs-panel);
-  font-family: var(--font-mono); font-size: 12px; line-height: 1.55; white-space: pre; overflow-x: auto; }
-.rd-cmd code { background: none; padding: 0; color: inherit; font-size: inherit; }
 
 @media (max-width: 760px) {
   .files.rd-files li { grid-template-columns: 28px 1fr; }

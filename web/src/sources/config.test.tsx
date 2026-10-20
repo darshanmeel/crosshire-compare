@@ -121,6 +121,23 @@ test("a pairs.csv is previewed in the batch table and named in the command", asy
   expect(screen.getByText(/--pairs months\.csv --out results/)).toBeInTheDocument();
 });
 
+test("each command sits on one line in its box, with a Copy command button that copies it", async () => {
+  vi.stubGlobal("fetch", server([]));
+  const writeText = vi.fn(async () => undefined);
+  const user = userEvent.setup();
+  Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+  mount(<ConfigView />);
+  const other = await screen.findByLabelText("Command for other files");
+  expect(other.tagName).toBe("PRE");
+  expect(other).toHaveTextContent("python -m tablecmp.run config.json --left <file A> --right <file B> --out results");
+  expect(screen.getByLabelText("Command to run the batch")).toHaveTextContent("--pairs pairs.csv --out results");
+  const buttons = screen.getAllByRole("button", { name: "Copy command" });
+  expect(buttons).toHaveLength(2);
+  await user.click(buttons[1]);
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith("python -m tablecmp.run config.json --pairs pairs.csv --out results"));
+  expect(await screen.findByText("Copied")).toBeInTheDocument();
+});
+
 test("a pairs file without left and right is refused", () => {
   expect(readPairs("a,b\n1,2").error).toMatch(/left and a right/);
   expect(readPairs("left,right\n,\nx,y").rows).toEqual([{ left: "x", right: "y", name_left: "", name_right: "" }]);

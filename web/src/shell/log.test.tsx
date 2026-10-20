@@ -7,7 +7,7 @@ import { logText } from "./LogPanel";
 import { getView, setView, toggleLog } from "./view";
 
 const E = (id: string, kind: string, label: string, lines: string[] = [], state = "done") =>
-  ({ id, at: "15:48:40", kind, label, state, seconds: 0.3, lines, page: "Compare" });
+  ({ id, at: "15:48:40", kind, label, state, seconds: 0.3 as number | null, lines, page: "Compare" });
 const ENTRIES = [
   E("1", "Load", "HR · hr_employees.csv · 3,000 rows × 7 columns", ["delimiter \",\" · header row"]),
   E("2", "Compare", "HR against Payroll · 2,960 rows differ", ["department 337", "salary 319"]),
@@ -28,11 +28,11 @@ function server(calls: Calls, entries = ENTRIES) {
 }
 const mount = () => render(<QueryClientProvider client={new QueryClient()}><LogView /></QueryClientProvider>);
 
-test("every entry shows its time, kind, line and grey sub-lines, with a count in the head", async () => {
+test("every entry shows its time, kind, line and grey sub-lines, oldest first, with a count in the head", async () => {
   vi.stubGlobal("fetch", server([]));
   mount();
   const list = await screen.findByRole("list", { name: "Log entries" });
-  const items = within(list).getAllByRole("listitem");
+  const items = within(list).getAllByRole("listitem").reverse();     // the server sends newest first; the page reads newest last
   expect(items).toHaveLength(4);
   expect(within(items[0]).getByText("15:48:40")).toBeInTheDocument();
   expect(within(items[0]).getByText("Load")).toBeInTheDocument();
@@ -40,8 +40,23 @@ test("every entry shows its time, kind, line and grey sub-lines, with a count in
   expect(within(items[1]).getByText("salary 319")).toHaveClass("sub");
   expect(within(items[2]).getByText("running")).toBeInTheDocument();
   expect(within(items[3]).getByText("error")).toBeInTheDocument();
-  expect(screen.getByText(/newest first · 4 entries/)).toBeInTheDocument();
+  expect(screen.getByText(/newest last · 4 entries/)).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Log" })).toHaveFocus();
+});
+
+test("a job's trace folds behind its step count once it is done; running, failed and note lines stay open", async () => {
+  const note = { ...E("5", "Auto decisions", "2 decisions", ["key: `emp_id`"]), seconds: null };
+  vi.stubGlobal("fetch", server([], [note, ...ENTRIES]));
+  mount();
+  const list = await screen.findByRole("list", { name: "Log entries" });
+  const [auto, load, compare, fetch, profile] = within(list).getAllByRole("listitem").reverse();     // as the server sends them
+  expect(within(compare).getByText("2 steps").closest("details")).not.toHaveAttribute("open");
+  expect(within(load).getByText("1 step")).toBeInTheDocument();
+  expect(within(profile).getByText("1 step").closest("details")).toHaveAttribute("open");
+  expect(within(fetch).queryByText(/step/)).toBeNull();                       // no lines yet - nothing to fold
+  expect(within(auto).queryByText(/step/)).toBeNull();                         // a note says its lines, unfolded
+  expect(within(auto).getByText("emp_id").tagName).toBe("CODE");              // the engine's markup renders
+  expect(within(compare).getByText(/HR against Payroll/).tagName).toBe("STRONG");
 });
 
 test("Clear empties the Log on the server and here", async () => {
@@ -65,7 +80,7 @@ test("Copy as text puts every entry and its sub-lines on the clipboard", async (
   mount();
   await screen.findByRole("list", { name: "Log entries" });
   await user.click(screen.getByRole("button", { name: "Copy as text" }));
-  await waitFor(() => expect(writeText).toHaveBeenCalledWith(logText(ENTRIES as never)));
+  await waitFor(() => expect(writeText).toHaveBeenCalledWith(logText([...ENTRIES].reverse() as never)));     // in the order shown
   expect(await screen.findByText("Copied")).toBeInTheDocument();
   expect(logText(ENTRIES as never)).toContain("15:48:40  Compare  HR against Payroll · 2,960 rows differ\n    department 337\n    salary 319");
 });
