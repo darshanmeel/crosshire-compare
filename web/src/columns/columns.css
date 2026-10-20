@@ -29,7 +29,7 @@
 .cols-add { height: 28px; padding: 0 8px; margin-left: -8px; }
 
 /* Case reads as text ("exact · default") until hovered or focused; a pair's own case keeps its border */
-.cols-tbl .sel.case { width: auto; height: 30px; margin-left: -9px; padding: 0 24px 0 8px; border-color: transparent; background-color: transparent;
+.cols-tbl .sel.case { width: auto; height: 32px; margin-left: -9px; padding: 0 24px 0 8px; border-color: transparent; background-color: transparent;
   background-image: none; color: var(--fs-text2); font-family: var(--font-sans); font-size: 13px; }
 .cols-tbl .sel.case:hover, .cols-tbl .sel.case:focus-visible, .cols-tbl .sel.case.set {
   border-color: var(--fs-border2); background-color: var(--fs-panel); color: var(--fs-text);
