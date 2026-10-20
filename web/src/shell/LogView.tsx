@@ -4,7 +4,7 @@ import type { LogEntry } from "../api/client";
 import { Icon } from "../ui/icons";
 import { Button, Callout, Pill, num } from "../ui/kit";
 import { logText, useClearLog, useLog } from "./LogPanel";
-import { setView } from "./view";
+import { toggleLog } from "./view";
 import "./log.css";
 
 /** navigator.clipboard where the page may use it (https or localhost), else a hidden textarea and execCommand. */
@@ -56,7 +56,7 @@ export function LogView() {
           <span className="copied" role="status">{copied === "yes" ? "Copied" : copied === "no" ? "Could not copy - select the text instead" : ""}</span>
           <Button disabled={n === 0} onClick={async () => setCopied((await copy(logText(entries))) ? "yes" : "no")}>Copy as text</Button>
           <Button disabled={n === 0 || clear.isPending} onClick={() => clear.mutate()}>Clear</Button>
-          <Button icon="x" onClick={() => setView({ view: "setup" })}>Close</Button>
+          <Button icon="x" onClick={toggleLog}>Close</Button>
         </div>
       </div>
       {error && <div className="note error">{String((error as Error).message)}</div>}

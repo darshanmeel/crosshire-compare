@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, vi } from "vitest";
 import { LogView } from "./LogView";
 import { logText } from "./LogPanel";
-import { getView, resetView, setView } from "./view";
+import { getView, resetView, setView, toggleLog } from "./view";
 
 const E = (id: string, kind: string, label: string, lines: string[] = [], state = "done") =>
   ({ id, at: "15:48:40", kind, label, state, seconds: 0.3, lines, page: "Compare" });
@@ -86,8 +86,17 @@ test("without a clipboard API the copy falls back to a hidden text area", async 
 
 test("Close goes back to the setup", async () => {
   vi.stubGlobal("fetch", server([]));
-  setView({ view: "log" });
+  toggleLog();
   mount();
   await userEvent.click(screen.getByRole("button", { name: "Close" }));
   expect(getView().view).toBe("setup");
+});
+
+test("Close goes back to the results the Log was opened from", async () => {
+  vi.stubGlobal("fetch", server([]));
+  setView({ view: "results", tab: "rows" });
+  toggleLog();
+  mount();
+  await userEvent.click(screen.getByRole("button", { name: "Close" }));
+  expect(getView()).toMatchObject({ view: "results", tab: "rows" });
 });

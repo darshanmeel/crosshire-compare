@@ -20,6 +20,14 @@ test("a job the server does not know ends with a sentence and is not polled agai
   expect(calls.filter((u) => u === "/api/jobs/gone1")).toHaveLength(1);
 });
 
+test("a first poll that fails ends with the server's sentence instead of staying busy", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => json({ detail: "The server could not read the job." }, 500)));
+  const ended: string[] = [];
+  mount(<Follow id="bad1" onEnd={(s) => ended.push(s)} />);
+  expect(await screen.findByText("error")).toBeInTheDocument();
+  await waitFor(() => expect(ended).toEqual(["The server could not read the job."]));
+});
+
 function Resume({ onEnd }: { onEnd: () => void }) {
   const { busy, running } = useJobOfKind("Profile", "Compare", "", onEnd);
   return <p>{busy ? `busy: ${running?.label ?? "…"}` : "idle"}</p>;

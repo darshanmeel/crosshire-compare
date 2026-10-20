@@ -2,15 +2,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLog } from "../shell/LogPanel";
+import { errorText } from "../setup/api";
 import { api, ApiError, type LogEntry } from "./client";
 
 export const JOB_GONE = "The job is no longer known - check the Log, or start it again.";
 
-const gone = (id: string): LogEntry =>
-  ({ id, at: "", kind: "", label: "Could not follow the job", state: "error", seconds: null, lines: [JOB_GONE], page: "" });
+const gone = (id: string, why: string): LogEntry =>
+  ({ id, at: "", kind: "", label: "Could not follow the job", state: "error", seconds: null, lines: [why], page: "" });
 
 /** Follow a job (phase 1's /api/jobs/{id}) until it ends; onEnd runs once with its last state.
- *  A job the server no longer knows (404) ends as an error that says so - it is not polled again. */
+ *  A job the server no longer knows (404) ends as an error that says so - it is not polled again;
+ *  so does a first poll that fails. A failed poll after data has arrived keeps that data. */
 export function useJob(id: string | null, onEnd: (e: LogEntry) => void): LogEntry | undefined {
   const qc = useQueryClient();
   const ended = useRef<string | null>(null);
@@ -24,7 +26,8 @@ export function useJob(id: string | null, onEnd: (e: LogEntry) => void): LogEntr
     },
   });
   const missing = q.error instanceof ApiError && q.error.status === 404;
-  const entry = useMemo(() => (missing && id ? gone(id) : q.data), [missing, id, q.data]);
+  const failed = missing || (!!q.error && !q.data);
+  const entry = useMemo(() => (failed && id ? gone(id, missing ? JOB_GONE : errorText(q.error)) : q.data), [failed, missing, id, q.data, q.error]);
   useEffect(() => {
     if (entry && entry.state !== "running" && ended.current !== entry.id) {
       ended.current = entry.id;

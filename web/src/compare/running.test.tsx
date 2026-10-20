@@ -1,15 +1,18 @@
 // web/src/compare/running.test.tsx - the running panel (SPEC §07), the Compare bar and Re-run on every change.
-import { screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import type { LogEntry } from "../api/client";
 import { setup } from "../setup/testkit";
+import { getView, resetView } from "../shell/view";
 import { resetForms } from "../sources/formStore";
 import { body, json, mount, type Call } from "../sources/testkit";
 import { AutoRerun } from "./AutoRerun";
 import { CompareBar, NOTHING_PAIRED } from "./CompareBar";
 import { RunningPanel } from "./RunningPanel";
 import type { CompareState, RunView } from "./types";
+import { useCompareFreshness } from "./useCompare";
 
 beforeEach(() => resetForms());
 
@@ -183,6 +186,36 @@ test("a refused press, a filter the engine refused and the engine's notes are sh
   expect(screen.getByText("2")).toBeInTheDocument();                       // the note's markup, as spans
   await userEvent.click(screen.getByRole("button", { name: "Compare HR against PR" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("That is running already - wait for it to finish.");
+});
+
+// ---- useCompareFreshness: the run's end opens the results (before AutoRerun, whose quiet re-run would keep the setup)
+
+function Fresh() { useCompareFreshness(); return null; }
+
+function mountFresh(states: CompareState[]) {
+  let i = 0;
+  vi.stubGlobal("fetch", mock({ "/api/compare": () => states[Math.min(i++, states.length - 1)] }));
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={qc}><Fresh /></QueryClientProvider>);
+  return { qc, read: () => waitFor(() => expect(qc.getQueryData(["compare"])).toBeDefined()) };
+}
+
+test("a fast run never seen busy still opens the results when its run id comes in", async () => {
+  resetView();
+  const { qc, read } = mountFresh([state(), state({ run: RUN })]);
+  await read();
+  await new Promise((r) => setTimeout(r, 20));
+  expect(getView().view).toBe("setup");
+  qc.invalidateQueries({ queryKey: ["compare"] });
+  await waitFor(() => expect(getView()).toMatchObject({ view: "results", tab: "summary" }));
+});
+
+test("a page load with a run already there stays on the setup", async () => {
+  resetView();
+  const { read } = mountFresh([state({ run: RUN })]);
+  await read();
+  await new Promise((r) => setTimeout(r, 50));
+  expect(getView().view).toBe("setup");
 });
 
 // ---- AutoRerun

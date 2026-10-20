@@ -5,7 +5,7 @@ import { Button } from "../ui/kit";
 import { useLog } from "./LogPanel";
 import { ModeToggle } from "./ModeToggle";
 import type { Page } from "./usePage";
-import { setView, useView } from "./view";
+import { setView, toggleLog, useView } from "./view";
 
 /** The 56 px header: the wordmark, the Compare / Profile switch (radiogroup "Page", as the e2e runs
  *  find it), and Connections, Run from config, Log and Light / Dark on the right. */
@@ -35,7 +35,7 @@ export function AppHeader({ meta, page, setPage }: { meta?: Meta; page: Page; se
         {page === "Compare" && (
           <Button aria-pressed={v.view === "config"} onClick={() => setView({ view: v.view === "config" ? "setup" : "config" })}>Run from config</Button>
         )}
-        <Button count={logs} aria-pressed={v.view === "log"} onClick={() => setView({ view: v.view === "log" ? "setup" : "log" })}>Log</Button>
+        <Button count={logs} aria-pressed={v.view === "log"} onClick={toggleLog}>Log</Button>
         <ModeToggle />
       </div>
     </header>

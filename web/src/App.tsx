@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type Meta } from "./api/client";
 import { AppHeader } from "./shell/AppHeader";
@@ -17,28 +17,15 @@ import { RowsEditor } from "./keys/RowsEditor";
 import { RowsSummary } from "./keys/RowsSummary";
 import { RunningPanel } from "./compare/RunningPanel";
 import { CompareBar } from "./compare/CompareBar";
-import { useCompareFreshness, useCompareNow } from "./compare/useCompare";
+import { useCompareFreshness } from "./compare/useCompare";
 import { ResultsPage } from "./results/ResultsPage";
 import { SetupSync } from "./setup/SetupPage";
 import { ConfigSync } from "./sources/ConfigPanel";
 import { AutoRerun } from "./compare/AutoRerun";
-import { startedQuietly } from "./compare/actions";
 import { ProfilingPage } from "./profiling/ProfilingPage";
 
 export function useMeta() {
   return useQuery({ queryKey: ["meta"], queryFn: () => api.get<Meta>("/api/meta"), staleTime: Infinity });
-}
-
-/** When a Compare, Auto or config run ends with a result, the results are what comes next - unless
- *  the person is in an editor or reading the results, or the run was a re-run on every change. */
-function useResultsWhenDone() {
-  const st = useCompareNow().data;
-  const { view } = useView();
-  const was = useRef(false);
-  useEffect(() => {
-    if (was.current && !st?.busy && st?.run && (view === "config" || (view === "setup" && !startedQuietly()))) setView({ view: "results", tab: "summary" });
-    was.current = !!st?.busy;
-  }, [st?.busy, st?.run?.id]);
 }
 
 /** A rail step or a Back button asked for one section of the setup: scroll to it once it is drawn. */
@@ -86,7 +73,6 @@ export default function App() {
   const [page, setPage] = usePage();
   const v = useView();
   useCompareFreshness();
-  useResultsWhenDone();
   useAnchor();
   return (
     <>

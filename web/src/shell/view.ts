@@ -24,6 +24,14 @@ export function setView(patch: Partial<ViewState>) {
 
 export function resetView() { setView(START); }
 
+let beforeLog: View = "setup";
+/** The header's Log button and the Log's Close: open the Log, or close it back to the view it was opened from. */
+export function toggleLog() {
+  if (state.view === "log") return setView({ view: beforeLog });
+  beforeLog = state.view;
+  setView({ view: "log" });
+}
+
 /** Back to the setup with one section in view: the rail's steps and the editors' Back buttons. */
 export function goToSection(anchor: "sources" | "columns" | "rows") { setView({ view: "setup", anchor }); }
 
