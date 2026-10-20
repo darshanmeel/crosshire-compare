@@ -8,7 +8,7 @@ import pandas as pd
 from tablecmp.sql import scratch
 from tablecmp.values import ColSpec
 from tablecmp.web import routes_overview as ov
-from tests.test_web_profiling import HR, c, load_p, profile  # noqa: F401 - c is the client fixture
+from tests.test_web_profiling import HR, load_p, profile
 
 PAYROLL = Path(HR).parent / "payroll_employees.csv"
 

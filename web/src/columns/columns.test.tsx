@@ -1,13 +1,11 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, vi } from "vitest";
+import { vi } from "vitest";
 import { ColumnsSection } from "./ColumnsSection";
 import { VIRTUAL_FROM } from "./ColumnTable";
-import { getView, resetView } from "../shell/view";
+import { getView } from "../shell/view";
 import { IDLE, json, mount, row, setup, type Call } from "../setup/testkit";
 import type { SetupView } from "../setup/api";
-
-afterEach(() => resetView());
 
 /** Every fetch answered: GET /api/setup with `view`, writes by `answer`, the rest idle. */
 function stub(view: SetupView, answer: (url: string, init?: RequestInit) => unknown = () => view,

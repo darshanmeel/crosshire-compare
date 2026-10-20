@@ -1,15 +1,13 @@
 // web/src/sources/config.test.tsx - Run from a saved config (SPEC §17).
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
+import { vi } from "vitest";
 import { ConfigSync } from "./ConfigPanel";
 import { ConfigView } from "./ConfigView";
 import { readPairs, summarise, readConf } from "./configRead";
-import { getView, resetView, setView } from "../shell/view";
-import { getForm, resetForms } from "./formStore";
+import { getView, setView } from "../shell/view";
+import { getForm } from "./formStore";
 import { body, json, META, mount, type Call } from "./testkit";
-
-beforeEach(() => { resetForms(); resetView(); });
 
 const entry = (id: string, state: string, label: string) => ({ id, at: "10:00:00", kind: "Config", label, state, seconds: null, lines: [], page: "Compare" });
 const CONFIG = { n: 1, said: [{ tone: "success", text: "Loaded - HR against PR, 1 pairs" }],

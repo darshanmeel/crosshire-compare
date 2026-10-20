@@ -1,6 +1,6 @@
 """GET /api/profiling/casts - text columns that could be read as a number, a date or a
 timestamp, and how many of their values would, in the form most of them take."""
-from tests.test_web_profiling import HR, c, load_p, profile  # noqa: F401 - c is the client fixture
+from tests.test_web_profiling import HR, load_p, profile
 
 
 def test_casts_ask_for_a_profile_first(c):

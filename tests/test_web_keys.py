@@ -1,29 +1,19 @@
 """The Key section and Profile both files over HTTP: Suggest keys and the profile as jobs, Use as
 key, Check key, a key written differently fixed or offered, the profile and its frequencies."""
-import os
 import time
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from tablecmp import connections as cx
 from tablecmp.values import steps_from_json
 from tablecmp.web.app import create_app
-from tablecmp.web.workspace import COOKIE
+from tests.conftest import EX, W, isolated_env, ws_of
 
-W = {"X-Compare": "1"}
-EX = Path(__file__).resolve().parent.parent / "examples"
 HR, PR = EX / "hr_employees.csv", EX / "payroll_employees.csv"
 
 
 def client(tmp_path, monkeypatch, a, b):
-    monkeypatch.setenv("COMPARE_WORK_DIR", str(tmp_path / "work"))
-    monkeypatch.setenv("COMPARE_CONNECTIONS", str(tmp_path / "connections.json"))
-    monkeypatch.delenv(cx.FILES_ENV, raising=False)
-    monkeypatch.delenv("COMPARE_DATA_DIR", raising=False)
-    for k in [k for k in os.environ if k.startswith(cx.ENV_PREFIX)]:
-        monkeypatch.delenv(k)
+    isolated_env(monkeypatch, tmp_path)
     c = TestClient(create_app())
     c.get("/api/workspace")
     for tag, path, name in (("A", a, "HR"), ("B", b, "PR")):
@@ -44,10 +34,6 @@ def codes(tmp_path, monkeypatch):
     a.write_text("emp_code,ref,salary\n" + "".join(f"AB {i},R-{i:03d}x,{i * 10}\n" for i in range(1, 41)))
     b.write_text("emp_code,ref,salary\n" + "".join(f"AB{i},{i:03d}x,{i * 10}\n" for i in range(1, 41)))
     return client(tmp_path, monkeypatch, a, b)
-
-
-def ws_of(c):
-    return c.app.state.workspaces.get(c.cookies.get(COOKIE))
 
 
 def wait(c, entry, seconds=120):

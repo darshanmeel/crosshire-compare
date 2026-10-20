@@ -1,6 +1,6 @@
 // web/src/profiling/column/NumberView.test.tsx - the number column's page on made-up quantities.
 import { fireEvent, screen, within } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { json, mount } from "../../sources/testkit";
 import { statsOf } from "../frame";
 import { profile, T } from "../testkit";
@@ -45,8 +45,6 @@ function stub(skewHist: boolean) {
   }));
   return urls;
 }
-
-afterEach(() => vi.unstubAllGlobals());
 
 function show(mean: number) {
   const p = prof(mean);

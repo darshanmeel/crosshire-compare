@@ -1,6 +1,6 @@
 """GET /api/profiling/keycheck - one column checked as a key: unique, nulls, blanks, case and
 space variants, width, shapes, prefix, the number part and its gaps, file order, the next id."""
-from tests.test_web_profiling import HR, W, c, load_p, profile, wait  # noqa: F401 - c is the client fixture
+from tests.test_web_profiling import HR, W, load_p, profile, wait
 
 
 def test_keycheck_asks_for_a_profile_first(c):

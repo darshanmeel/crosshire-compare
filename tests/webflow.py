@@ -9,7 +9,6 @@ the run on the page: Flow.call fills the id in from GET /api/compare."""
 from __future__ import annotations
 
 import json
-import os
 import time
 from pathlib import Path
 
@@ -19,13 +18,8 @@ from tablecmp import connections as cx
 from tablecmp.loading import DEFAULT_NAMES
 from tablecmp.web.app import create_app
 from tablecmp.web.workspace import COOKIE
+from tests.conftest import COUNTS, EX, FAKE_PW, W, isolated_env  # noqa: F401
 
-ROOT = Path(__file__).resolve().parent.parent
-EX = ROOT / "examples"
-W = {"X-Compare": "1"}
-FAKE_PW = "example-not-a-real-password"
-COUNTS = dict(t.split("=") for t in (ROOT / "tests/COUNTS.md").read_text(encoding="utf-8").split()
-              if "=" in t)            # matched=... only_left=... only_right=... diff_rows=... cells=... key=...
 COUNT_KEYS = ("matched", "only_left", "only_right", "diff_rows", "cells")
 OUTPUT_SUFFIXES = ("summary.json", "summary.csv", "columns.csv", "cell_diffs.csv", "left_only.csv",
                    "right_only.csv", "report.html", "diff.html", "profile.csv")
@@ -99,14 +93,7 @@ class Flow:
 def boot(monkeypatch, tmp_path) -> Flow:
     """A fresh page on temp folders: the sample DuckDB as SAMPLE, a connection whose URI holds the
     fake password as FAKE, and nothing of the user's own connections read or written."""
-    monkeypatch.setenv("COMPARE_WORK_DIR", str(tmp_path / "work"))
-    monkeypatch.setenv("COMPARE_OUT_DIR", str(tmp_path / "out"))
-    monkeypatch.setenv("COMPARE_CONNECTIONS", str(tmp_path / "connections.json"))
-    monkeypatch.delenv(cx.FILES_ENV, raising=False)
-    monkeypatch.delenv("COMPARE_DATA_DIR", raising=False)
-    monkeypatch.delenv("COMPARE_TABLE_FORMATS", raising=False)
-    for k in [k for k in os.environ if k.startswith(cx.ENV_PREFIX)]:
-        monkeypatch.delenv(k)
+    isolated_env(monkeypatch, tmp_path)
     monkeypatch.setenv(cx.ENV_PREFIX + "SAMPLE", "duckdb:///" + (EX / "sample.duckdb").as_posix())
     monkeypatch.setenv(cx.ENV_PREFIX + "FAKE", f"postgresql://u:{FAKE_PW}@nowhere:5432/db")
     f = Flow(TestClient(create_app()))

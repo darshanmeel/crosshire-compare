@@ -1,12 +1,10 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
+import { vi } from "vitest";
 import { SideCard } from "./SideCard";
-import { getForm, resetForms, setForm } from "./formStore";
+import { getForm, setForm } from "./formStore";
 import { nameHint, sideLabels, sideName } from "./names";
 import { body, json, META, mount, view, type Call } from "./testkit";
-
-beforeEach(() => resetForms());
 
 test("an upload sends the file itself, with the write header", async () => {
   const calls: Call[] = [];

@@ -1,13 +1,11 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { json, mount } from "../../sources/testkit";
-import { getView, resetView } from "../../shell/view";
+import { getView } from "../../shell/view";
 import { statsOf } from "../frame";
 import { profile } from "../testkit";
 import { KeyView, saysId, type KeyCheck, type KeyCompare } from "./KeyView";
-
-afterEach(() => { vi.unstubAllGlobals(); resetView(); location.hash = ""; });
 
 const CLEAN: KeyCheck = {
   column: "emp_id", rows: 3000, filled: 3000, nulls: 0, blanks: 0, distinct: 3000, duplicates: 0, case_variants: 0, spaces: 0,

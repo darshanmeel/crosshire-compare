@@ -11,5 +11,5 @@ export default defineConfig({
     port: 5173,
     proxy: { "/api": API, "/theme.css": API },
   },
-  test: { globals: true, environment: "jsdom", setupFiles: ["./src/test-setup.ts"] },
+  test: { globals: true, environment: "jsdom", setupFiles: ["./src/test-setup.ts"], unstubGlobals: true },
 });

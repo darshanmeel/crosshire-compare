@@ -1,12 +1,10 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { json, mount } from "../../sources/testkit";
 import type { Row } from "../frame";
 import { profile } from "../testkit";
 import { FlagView, flagForm, useFlagForm, type FlagBody } from "./FlagView";
-
-afterEach(() => { vi.unstubAllGlobals(); });
 
 const ACCEPTS: [string, string][] = [["True", "False"], ["true", "false"], ["Yes", "No"], ["Y", "N"], ["1", "0"]];
 const GROUPS: FlagBody["groups"] = [

@@ -2,9 +2,7 @@
 """What the compare, results and downloads API tests share - not a test file itself: a client on
 a fresh work folder, a job waited for, the sample pair loaded, a column table seeded, a run made
 by Auto."""
-import os
 import time
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,35 +12,19 @@ from tablecmp.runconfig import column_table
 from tablecmp.setup import seed_key
 from tablecmp.web.app import create_app
 from tablecmp.web.sides import side
-from tablecmp.web.workspace import COOKIE
+from tests.conftest import COUNTS, EX, FAKE_PW, W, isolated_env, ws_of  # noqa: F401
 
-ROOT = Path(__file__).resolve().parent.parent
-EX = ROOT / "examples"
-W = {"X-Compare": "1"}
 COLS = [{"a": "emp_id", "b": "EmployeeId", "name": "emp_id", "type": "text", "key": True, "compare": False},
         {"a": "department", "b": "Dept", "name": "department", "type": "text", "key": False, "compare": True}]
-COUNTS = dict(x.split("=") for x in (ROOT / "tests/COUNTS.md").read_text().split())
-FAKE_PW = "example-not-a-real-password"
 
 
 @pytest.fixture
 def c(tmp_path, monkeypatch):
-    monkeypatch.setenv("COMPARE_WORK_DIR", str(tmp_path / "work"))
-    monkeypatch.setenv("COMPARE_OUT_DIR", str(tmp_path / "out"))
-    monkeypatch.setenv("COMPARE_CONNECTIONS", str(tmp_path / "connections.json"))
-    monkeypatch.delenv("COMPARE_TABLE_FORMATS", raising=False)
-    monkeypatch.delenv(cx.FILES_ENV, raising=False)
-    monkeypatch.delenv("COMPARE_DATA_DIR", raising=False)
-    for k in [k for k in os.environ if k.startswith(cx.ENV_PREFIX)]:
-        monkeypatch.delenv(k)
+    isolated_env(monkeypatch, tmp_path)
     monkeypatch.setenv(cx.ENV_PREFIX + "FAKE", f"postgresql://u:{FAKE_PW}@nowhere:5432/db")
     client = TestClient(create_app())
     client.get("/api/workspace")
     return client
-
-
-def ws_of(c):
-    return c.app.state.workspaces.get(c.cookies.get(COOKIE))
 
 
 def wait(c, entry, seconds=180):

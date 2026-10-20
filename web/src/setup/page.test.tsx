@@ -1,12 +1,10 @@
 import { screen, waitFor } from "@testing-library/react";
-import { beforeEach, vi } from "vitest";
+import { vi } from "vitest";
 import { ColumnsSection } from "../columns/ColumnsSection";
-import { resetForms, setForm } from "../sources/formStore";
+import { setForm } from "../sources/formStore";
 import { body, view } from "../sources/testkit";
 import { SetupSync } from "./SetupPage";
 import { IDLE, json, mount, setup, type Call } from "./testkit";
-
-beforeEach(() => resetForms());
 
 function stub(s: unknown, loaded = true) {
   const calls: Call[] = [];

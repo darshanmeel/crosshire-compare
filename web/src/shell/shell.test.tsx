@@ -6,15 +6,14 @@ import App from "../App";
 import { marks } from "../ui/marks";
 import { Welcome } from "./Welcome";
 import type { Meta } from "../api/client";
+import { compareState } from "../setup/testkit";
+import { body } from "../sources/testkit";
 
 const META = { app_name: "CrossHire Compare", tagline: "Tables, side by side", theme: "aurora", kinds: {}, form: {}, filepick: false };
 const LOG = { entries: [{ id: "1", at: "10:00:00", kind: "Compare", label: "Compared in 1.2s", state: "done", seconds: 1.2, lines: ["Reading A…"], page: "Compare" }], last: {} };
 
-const side = (tag: string) => ({ tag, loaded: false, name: "", label: "", origin: "", kind: "", rows: null, columns: [], cut: "", is_database: false,
-  conn: "", fetched_at: "", snapshot: true, caption: "", notes: [], staged: "", fetched: null });
-const SOURCES = { sides: { A: side("A"), B: side("B"), P: side("P") }, defaults: {}, quick_ops: [], name_help: { side: "", table: "" }, upload_types: [], config: null };
-const COMPARE = { gate: "load", names: ["Left", "Right"], strip: null, settings: { display_rows: 1000, auto_rerun: false, out_fmt: "csv", auto_profile: false },
-  filter_error: "", sig: "", stale: false, busy: false, said: [], run: null };
+const SOURCES = body();
+const COMPARE = compareState({ gate: "load", names: ["Left", "Right"], sig: "" });
 
 function mockFetch() {
   return vi.fn(async (url: string, init?: RequestInit) => {

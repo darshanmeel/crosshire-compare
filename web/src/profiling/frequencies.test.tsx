@@ -2,15 +2,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
-import { resetView } from "../shell/view";
+import { vi } from "vitest";
 import { json, mount, type Call } from "../sources/testkit";
-import { resetPicks } from "../results/pickStore";
 import { ProfileView } from "./ProfileView";
-import { resetKept } from "./SaveRow";
 import { defaults, profile, profiling, T } from "./testkit";
-
-beforeEach(() => { resetPicks(); resetKept(); resetView(); });
 
 const freq = (column: string) => ({ column, title: "",
   top: T(["Value", "Count", "%"], [[`${column}-top`, 2, 66.67], [`${column}-2nd`, 1, 33.33]]),

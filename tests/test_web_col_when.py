@@ -1,6 +1,6 @@
 """GET /api/profiling/when - a date or timestamp column's page: range, span, precision,
 repeats, calendar checks and rows per bin, for a typed column and for text read as one."""
-from tests.test_web_profiling import HR, c, load_p, profile  # noqa: F401 - c is the client fixture
+from tests.test_web_profiling import HR, load_p, profile
 
 
 def test_when_asks_for_a_profile_first(c):

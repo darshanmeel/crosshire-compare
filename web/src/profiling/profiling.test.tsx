@@ -1,16 +1,11 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
-import { resetView, setView } from "../shell/view";
-import { resetForms } from "../sources/formStore";
+import { vi } from "vitest";
+import { setView } from "../shell/view";
 import { body, json, mount, view, type Call } from "../sources/testkit";
 import { ProfilingPage, STALE } from "./ProfilingPage";
 import { NOTHING_STANDS_OUT } from "./ProfileView";
-import { resetPicks } from "../results/pickStore";
-import { resetKept } from "./SaveRow";
 import { defaults, entry, profile, profiling, T } from "./testkit";
-
-beforeEach(() => { resetForms(); resetView(); resetPicks(); resetKept(); });
 
 const FREQ = { column: "emp_id", title: "", top: T(["Value", "Count", "%"], [["Support", 412, 13.73]]), bottom: T(["Value", "Count", "%"], [["Legal", 355, 11.83]]) };
 const CASTS = { columns: [{ column: "department", kind: "text", filled: 3000,

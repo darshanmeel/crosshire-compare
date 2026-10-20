@@ -1,18 +1,14 @@
 // web/src/sources/cards.test.tsx - the redesign's source cards: states, the radio-backed source choice,
 // the dropzone, Rows to read / Advanced, the Profile page's card and the one-line card of a run.
-import type { ReactElement } from "react";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
-import { getForm, resetForms, setForm } from "./formStore";
-import { resetLoadTimes, secs } from "./loadTime";
+import { vi } from "vitest";
+import { getForm, setForm } from "./formStore";
+import { secs } from "./loadTime";
 import { SideCard } from "./SideCard";
 import { SideLine } from "./SideLine";
 import { ProfileSource, SourcesSection } from "./SourcesSection";
 import { body, json, META, mount, view, type Call } from "./testkit";
-
-beforeEach(() => { resetForms(); resetLoadTimes(); });
 
 test("secs rounds before it splits off the minutes", () => {
   expect(secs(0.31)).toBe("0.3s");
@@ -130,7 +126,7 @@ test("the Profile page: one card 'File' with Load while empty, then a compact ca
     url === "/api/sources/folders" ? json([])
       : url === "/api/sources/P/schema" ? json(SCHEMA)
       : json(body({ sides: { A: view("A"), B: view("B"), P } }))));
-  const { unmount } = mountAndKeep(<ProfileSource meta={META} />);
+  const { unmount } = mount(<ProfileSource meta={META} />);
   const file = await screen.findByRole("region", { name: "File" });
   expect(screen.getByRole("region", { name: "Source" })).toBeInTheDocument();         // section 01 while empty
   expect(within(file).getByLabelText("Name")).toHaveValue("Table");
@@ -175,11 +171,6 @@ test("SideLine alone names a side that is not loaded yet", async () => {
   expect(await within(B).findByText("Not loaded")).toBeInTheDocument();
   expect(within(B).getByText("Right")).toBeInTheDocument();
 });
-
-// mount, but hand back unmount so a test can draw the same component again on new data
-function mountAndKeep(ui: ReactElement) {
-  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
-}
 
 test("a side the server already holds fills an untouched form: its name, its source, and no delimiter for Parquet", async () => {
   const PQ = view("A", { loaded: true, name: "HR", label: "hr_employees.parquet", kind: "parquet", rows: 3000, columns: ["emp_id"] });

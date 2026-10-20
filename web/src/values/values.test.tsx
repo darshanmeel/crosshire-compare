@@ -1,10 +1,10 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
+import { vi } from "vitest";
 import { FiltersBox } from "./FiltersBox";
 import { HowValuesRead } from "./HowValuesRead";
 import { ValuesEditor } from "./ValuesEditor";
-import { getView, resetView, setView } from "../shell/view";
+import { getView, setView } from "../shell/view";
 import { json, mount, setup, type Call } from "../setup/testkit";
 
 const META = { steps: { trim: [], "left N characters": ["n"], "replace text": ["a", "b"], "to date": ["fmt"], "custom expression": ["expr"] },
@@ -25,8 +25,6 @@ function stub(answer: (url: string, init?: RequestInit) => Response | unknown) {
 }
 const bodies = (calls: Call[], url: string) =>
   calls.filter(([u, i]) => u === url && i?.body).map(([, i]) => JSON.parse(i!.body as string));
-
-beforeEach(() => resetView());
 
 const SALARY = { ...setup().specs[1], b_steps: [{ op: "trim", params: {} as Record<string, string> }, { op: "left N characters", params: { n: "10" } }],
                  b_said: ["trim", "left N characters (N=10)"] };

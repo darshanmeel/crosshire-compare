@@ -2,11 +2,10 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
+import { vi } from "vitest";
 import type { LogEntry } from "../api/client";
-import { setup } from "../setup/testkit";
+import { compareState, setup } from "../setup/testkit";
 import { getView, resetView } from "../shell/view";
-import { resetForms } from "../sources/formStore";
 import { body, json, mount, type Call } from "../sources/testkit";
 import { AutoRerun } from "./AutoRerun";
 import { CompareBar, NOTHING_PAIRED } from "./CompareBar";
@@ -14,21 +13,11 @@ import { RunningPanel } from "./RunningPanel";
 import type { CompareState, RunView } from "./types";
 import { useCompareFreshness } from "./useCompare";
 
-beforeEach(() => resetForms());
-
 const RUN: RunView = {
   id: "r1", at: "10:00:00", pair: "HR_compare_PR", mode: "key", names: ["HR", "PR"], keys: ["emp_id"],
   columns: ["salary"], matched: 2960, diff_rows: 12, stale: false,
   verdict: { tone: "warn", word: "Small differences", when: "1.2s at 10:00:00", segments: [] },
 };
-
-function state(over: Partial<CompareState> = {}): CompareState {
-  return {
-    gate: "", names: ["HR", "PR"], filter_error: "", sig: "s1", stale: false, busy: false, said: [], run: null,
-    strip: { cells: { Files: "", Columns: "", Key: "", Compare: "", Result: "" }, tones: {} },
-    settings: { display_rows: 1000, auto_rerun: false, out_fmt: "csv", auto_profile: false }, ...over,
-  };
-}
 
 const entry = (over: Partial<LogEntry> = {}): LogEntry => ({
   id: "e1", at: "10:00:00", kind: "Auto", label: "Auto - figuring it all out…", state: "running", seconds: null,
@@ -61,7 +50,7 @@ const posts = (calls: Call[], url: string) => calls.filter(([u, i]) => u === url
 test("while Auto runs, the panel lists each reported line as done and the newest as running", async () => {
   const lines = ["Pairing columns by name…", "Pairing 2 × 2 leftover columns by their values…"];
   vi.stubGlobal("fetch", mock({
-    "/api/compare": () => state({ busy: true }),
+    "/api/compare": () => compareState({ busy: true }),
     "/api/log": () => ({ entries: [entry({ lines })], last: {} }),
   }));
   mount(<RunningPanel />);
@@ -82,7 +71,7 @@ test("while Auto runs, the panel lists each reported line as done and the newest
 
 test("the elapsed time counts up on the page", async () => {
   vi.stubGlobal("fetch", mock({
-    "/api/compare": () => state({ busy: true }),
+    "/api/compare": () => compareState({ busy: true }),
     "/api/log": () => ({ entries: [entry({ id: "tick", kind: "Compare", lines: ["Reading HR…"] })], last: {} }),
   }));
   mount(<RunningPanel />);
@@ -93,7 +82,7 @@ test("the elapsed time counts up on the page", async () => {
 
 test("before the job says anything, its label stands in for the current line", async () => {
   vi.stubGlobal("fetch", mock({
-    "/api/compare": () => state({ busy: true }),
+    "/api/compare": () => compareState({ busy: true }),
     "/api/log": () => ({ entries: [entry({ kind: "Config", label: "Running config.json…" })], last: {} }),
   }));
   mount(<RunningPanel />);
@@ -105,7 +94,7 @@ test("before the job says anything, its label stands in for the current line", a
 
 test("the panel is not shown when nothing runs, or only a Key search or Profile runs", async () => {
   vi.stubGlobal("fetch", mock({
-    "/api/compare": () => state({ busy: true }),
+    "/api/compare": () => compareState({ busy: true }),
     "/api/log": () => ({ entries: [entry({ kind: "Key", lines: ["Finding the key…"] })], last: {} }),
   }));
   mount(<RunningPanel />);
@@ -115,7 +104,7 @@ test("the panel is not shown when nothing runs, or only a Key search or Profile 
 
 test("the panel goes once the compare state is no longer busy", async () => {
   vi.stubGlobal("fetch", mock({
-    "/api/compare": () => state({ busy: false }),
+    "/api/compare": () => compareState({ busy: false }),
     "/api/log": () => ({ entries: [entry({ lines: ["x"] })], last: {} }),
   }));
   mount(<RunningPanel />);
@@ -128,7 +117,7 @@ test("the panel goes once the compare state is no longer busy", async () => {
 test("the Compare bar names both sides, says what it compares, and starts a run", async () => {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", mock({
-    "/api/compare": (_u, init) => (init?.method === "POST" ? { id: "j1", state: "running" } : state({ run: RUN })),
+    "/api/compare": (_u, init) => (init?.method === "POST" ? { id: "j1", state: "running" } : compareState({ run: RUN })),
     "/api/setup": () => setup({ keys: ["emp_id"] }),
   }, calls));
   mount(<CompareBar />);
@@ -142,13 +131,13 @@ test("the Compare bar names both sides, says what it compares, and starts a run"
 });
 
 test("a stale run's row count is not quoted, and with no key it says how rows pair", async () => {
-  vi.stubGlobal("fetch", mock({ "/api/compare": () => state({ stale: true, run: { ...RUN, stale: true } }) }));
+  vi.stubGlobal("fetch", mock({ "/api/compare": () => compareState({ stale: true, run: { ...RUN, stale: true } }) }));
   mount(<CompareBar />);
   expect(await screen.findByText("2 columns · no key - rows paired by hash · runs in DuckDB")).toBeInTheDocument();
 });
 
 test("nothing paired: the button is disabled and says why", async () => {
-  vi.stubGlobal("fetch", mock({ "/api/compare": () => state({ gate: "pair" }) }));
+  vi.stubGlobal("fetch", mock({ "/api/compare": () => compareState({ gate: "pair" }) }));
   mount(<CompareBar />);
   const go = await screen.findByRole("button", { name: "Compare HR against PR" });
   expect(go).toBeDisabled();
@@ -156,7 +145,7 @@ test("nothing paired: the button is disabled and says why", async () => {
 });
 
 test("no column ticked: the button is disabled and says to tick Compare", async () => {
-  vi.stubGlobal("fetch", mock({ "/api/compare": () => state({ gate: "tick" }) }));
+  vi.stubGlobal("fetch", mock({ "/api/compare": () => compareState({ gate: "tick" }) }));
   mount(<CompareBar />);
   const go = await screen.findByRole("button", { name: "Compare HR against PR" });
   expect(go).toBeDisabled();
@@ -164,14 +153,14 @@ test("no column ticked: the button is disabled and says to tick Compare", async 
 });
 
 test("nothing loaded: no bar; while a run is busy the button waits", async () => {
-  vi.stubGlobal("fetch", mock({ "/api/compare": () => state({ gate: "load" }) }));
+  vi.stubGlobal("fetch", mock({ "/api/compare": () => compareState({ gate: "load" }) }));
   mount(<CompareBar />);
   await new Promise((r) => setTimeout(r, 100));
   expect(screen.queryByRole("button")).toBeNull();
 });
 
 test("busy: the button says Comparing and is disabled", async () => {
-  vi.stubGlobal("fetch", mock({ "/api/compare": () => state({ busy: true }) }));
+  vi.stubGlobal("fetch", mock({ "/api/compare": () => compareState({ busy: true }) }));
   mount(<CompareBar />);
   expect(await screen.findByRole("button", { name: "Comparing…" })).toBeDisabled();
 });
@@ -179,7 +168,7 @@ test("busy: the button says Comparing and is disabled", async () => {
 test("a refused press, a filter the engine refused and the engine's notes are shown under the button", async () => {
   vi.stubGlobal("fetch", mock({
     "/api/compare": (_u, init) => (init?.method === "POST" ? { status: 409, body: { detail: "That is running already - wait for it to finish." } }
-      : state({ filter_error: "The filter on salary is not a number", said: [{ tone: "warning", text: "Read **2** columns as text" }] })),
+      : compareState({ filter_error: "The filter on salary is not a number", said: [{ tone: "warning", text: "Read **2** columns as text" }] })),
   }));
   mount(<CompareBar />);
   expect(await screen.findByText("The filter on salary is not a number")).toHaveClass("note", "error");
@@ -202,7 +191,7 @@ function mountFresh(states: CompareState[]) {
 
 test("a fast run never seen busy still opens the results when its run id comes in", async () => {
   resetView();
-  const { qc, read } = mountFresh([state(), state({ run: RUN })]);
+  const { qc, read } = mountFresh([compareState(), compareState({ run: RUN })]);
   await read();
   await new Promise((r) => setTimeout(r, 20));
   expect(getView().view).toBe("setup");
@@ -212,7 +201,7 @@ test("a fast run never seen busy still opens the results when its run id comes i
 
 test("a page load with a run already there stays on the setup", async () => {
   resetView();
-  const { read } = mountFresh([state({ run: RUN })]);
+  const { read } = mountFresh([compareState({ run: RUN })]);
   await read();
   await new Promise((r) => setTimeout(r, 50));
   expect(getView().view).toBe("setup");
@@ -229,7 +218,7 @@ test("with Re-run on every change, a stale run is compared again once per change
         if (posts(calls, "/api/compare").length === 1) sig = "s2";     // the table changed after the first run
         return { id: "j", state: "running" };
       }
-      return state({ sig, stale: true, run: { ...RUN, stale: true }, settings: { ...state().settings, auto_rerun: true } });
+      return compareState({ sig, stale: true, run: { ...RUN, stale: true }, settings: { ...compareState().settings, auto_rerun: true } });
     },
   }, calls));
   mount(<AutoRerun />);
@@ -239,11 +228,11 @@ test("with Re-run on every change, a stale run is compared again once per change
 });
 
 test("Re-run on every change waits while off, busy, gated or the filter is refused", async () => {
-  for (const over of [{ settings: { ...state().settings, auto_rerun: false } }, { busy: true }, { gate: "tick" as const },
+  for (const over of [{ settings: { ...compareState().settings, auto_rerun: false } }, { busy: true }, { gate: "tick" as const },
                       { filter_error: "bad filter" }]) {
     const calls: Call[] = [];
     vi.stubGlobal("fetch", mock({
-      "/api/compare": () => state({ stale: true, run: { ...RUN, stale: true }, settings: { ...state().settings, auto_rerun: true }, ...over }),
+      "/api/compare": () => compareState({ stale: true, run: { ...RUN, stale: true }, settings: { ...compareState().settings, auto_rerun: true }, ...over }),
     }, calls));
     mount(<AutoRerun />);
     await waitFor(() => expect(calls.some(([u]) => u === "/api/compare")).toBe(true));

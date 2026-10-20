@@ -10,14 +10,14 @@ import { RunSettingsCard } from "./RunSettingsCard";
 import { RowsSummary } from "./RowsSummary";
 import { RowsEditor } from "./RowsEditor";
 import type { KeysView, SetupReady } from "../setup/api";
-import { json, mount, row, setup, type Call } from "../setup/testkit";
-import { getForm, resetForms, setForm } from "../sources/formStore";
+import { compareState, json, mount, row, setup, type Call } from "../setup/testkit";
+import { getForm, setForm } from "../sources/formStore";
+import { body, view } from "../sources/testkit";
 import { blankForm, type SideView, type SourcesBody } from "../sources/types";
-import { resetPicks, usePick } from "../results/pickStore";
+import { usePick } from "../results/pickStore";
 import { getView, resetView } from "../shell/view";
-import type { CompareState } from "../compare/types";
 
-beforeEach(() => { setFreqPicks(null); resetForms(); resetPicks(); resetView(); });
+beforeEach(() => { setFreqPicks(null); });
 
 const KEYS: KeysView = {
   keys: [], mode: "hash", nokey_mode: "hash",
@@ -32,18 +32,12 @@ const KEYED: SetupReady = setup({
 });
 const entry = (id: string, state: string, label: string, kind = "Key search") =>
   ({ id, at: "10:00:00", kind, label, state, seconds: null, lines: ["Measuring every column of HR…"], page: "Compare" });
-const side = (tag: "A" | "B", over: Partial<SideView> = {}): SideView => ({
-  tag, loaded: true, name: tag === "A" ? "HR" : "PR", label: "", origin: "", kind: "csv", rows: tag === "A" ? 3000 : 2985,
-  columns: tag === "A" ? ["emp_id", "salary", "department"] : ["EmployeeId", "Salary", "Dept"], cut: "", is_database: false,
-  conn: "", fetched_at: "", snapshot: true, caption: "", notes: [], staged: "", fetched: null, ...over });
-const SOURCES = (over: Partial<SourcesBody["sides"]> = {}): SourcesBody => ({
+const side = (tag: "A" | "B", over: Partial<SideView> = {}): SideView => view(tag, {
+  loaded: true, name: tag === "A" ? "HR" : "PR", rows: tag === "A" ? 3000 : 2985,
+  columns: tag === "A" ? ["emp_id", "salary", "department"] : ["EmployeeId", "Salary", "Dept"], snapshot: true, ...over });
+const SOURCES = (over: Partial<SourcesBody["sides"]> = {}): SourcesBody => body({
   sides: { A: side("A"), B: side("B"), P: { ...side("A"), tag: "P", loaded: false }, ...over },
-  defaults: { A: "Left", B: "Right", P: "Table" }, quick_ops: ["=", "!=", "is null"], name_help: { side: "", table: "" },
-  upload_types: [], config: null });
-const COMPARE = (over: Partial<CompareState> = {}): CompareState => ({
-  gate: "", names: ["HR", "PR"], strip: { cells: { Files: "", Columns: "", Key: "", Compare: "", Result: "" }, tones: {} },
-  settings: { display_rows: 1000, auto_rerun: false, out_fmt: "csv", auto_profile: false },
-  filter_error: "", sig: "s", stale: false, busy: false, said: [], run: null, ...over });
+  quick_ops: ["=", "!=", "is null"], name_help: { side: "", table: "" }, upload_types: [] });
 const FILTERS = { rows: [], rev: "0", columns: ["emp_id", "salary"], apply_to: ["Both", "HR", "PR"], ops: ["="], types: ["auto"], error: "" };
 
 /** fetch answered per path (and method) - "PUT /api/x" before "/api/x"; anything else {}. */
@@ -234,7 +228,7 @@ test("Profile by bucket: the tick and the column go into every bucket's kept col
 });
 
 test("Run settings: Re-run on every change, Profile both sides first and Rows to display go to the compare settings", async () => {
-  const calls = stub({ "/api/compare": () => COMPARE(), "PUT /api/compare/settings": () => COMPARE().settings });
+  const calls = stub({ "/api/compare": () => compareState(), "PUT /api/compare/settings": () => compareState().settings });
   mount(<RunSettingsCard />);
   await userEvent.click(await screen.findByLabelText("Re-run on every change"));
   await userEvent.click(screen.getByLabelText("Profile both sides first"));
@@ -274,7 +268,7 @@ test("the Rows card without a key says how rows pair, and counts the filters and
 
 test("the rows page: its parts in order, Back to the setup, and Compare HR against PR starts the run", async () => {
   const calls = stub({ "/api/setup": () => KEYED, "/api/setup/keys": () => ({ ...KEYS, keys: ["emp_id"], mode: "key" }),
-                       "/api/setup/filters": () => FILTERS, "/api/sources": () => SOURCES(), "/api/compare": () => COMPARE(),
+                       "/api/setup/filters": () => FILTERS, "/api/sources": () => SOURCES(), "/api/compare": () => compareState(),
                        "/api/setup/profile": () => null, "POST /api/compare": () => entry("c1", "running", "Comparing…", "Compare") });
   mount(<RowsEditor />);
   expect(await screen.findByRole("region", { name: "Rows · how they pair up" })).toBeInTheDocument();

@@ -1,39 +1,17 @@
 """The side panels over HTTP: upload, path, folder, Browse, Load, preview, fetch, config."""
 import json
-import os
 import shutil
 import time
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from tablecmp import connections as cx
 from tablecmp import loading
-from tablecmp.web.app import create_app
 from tablecmp.web.sides import panel
-from tablecmp.web.workspace import COOKIE
+from tests.conftest import EX, FAKE_PW, W, ws_of
 
-W = {"X-Compare": "1"}
-EX = Path(__file__).resolve().parent.parent / "examples"
 HR = EX / "hr_employees.csv"
-
-
-@pytest.fixture
-def c(tmp_path, monkeypatch):
-    monkeypatch.setenv("COMPARE_WORK_DIR", str(tmp_path / "work"))
-    monkeypatch.setenv("COMPARE_CONNECTIONS", str(tmp_path / "connections.json"))
-    monkeypatch.delenv(cx.FILES_ENV, raising=False)
-    monkeypatch.delenv("COMPARE_DATA_DIR", raising=False)
-    for k in [k for k in os.environ if k.startswith(cx.ENV_PREFIX)]:
-        monkeypatch.delenv(k)
-    client = TestClient(create_app())
-    client.get("/api/workspace")
-    return client
-
-
-def ws_of(c):
-    return c.app.state.workspaces.get(c.cookies.get(COOKIE))
 
 
 def wait(c, entry, seconds=60):
@@ -208,7 +186,6 @@ def test_add_to_filter(c):
     assert bad.status_code == 400
 
 
-FAKE_PW = "example-not-a-real-password"
 TABLE = {"connection": "SAMPLE", "mode": "table", "table": "hr.employees", "cap": 0}
 
 

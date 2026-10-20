@@ -1,12 +1,10 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { json, mount } from "../../sources/testkit";
 import type { Row } from "../frame";
 import { profile, T } from "../testkit";
 import { TextView, textForm, type SimilarBody } from "./TextView";
-
-afterEach(() => { vi.unstubAllGlobals(); });
 
 const VALUES = [["Support", 406], ["Marketing", 385], ["People", 378], ["Operations", 368], ["Legal", 353], ["Engineering", 270],
   ["Finance", 255], ["Sales", 233], ["Sales EMEA", 130], ["Finance & Control", 109], ["Eng", 98]].map(([value, n]) => ({ value: String(value), n: Number(n) }));

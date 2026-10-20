@@ -4,7 +4,7 @@ and the plain functions behind them, run on a relation of their own."""
 import duckdb
 
 from tablecmp.web.routes_col_flag import flag_counts, flag_reads, group_options, true_rates
-from tests.test_web_profiling import HR, EX, c, load_p, profile  # noqa: F401 - c is the client fixture
+from tests.test_web_profiling import HR, EX, load_p, profile
 
 PAY = EX / "payroll_employees.csv"
 

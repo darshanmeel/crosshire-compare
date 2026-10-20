@@ -1,6 +1,6 @@
 """GET /api/profiling/numform - a number column's form: log bins, digits before the point,
 places after it, the DECIMAL it fits, round lots and values seen once."""
-from tests.test_web_profiling import HR, c, load_p, profile  # noqa: F401 - c is the client fixture
+from tests.test_web_profiling import HR, load_p, profile
 
 
 def test_numform_asks_for_a_profile_first(c):

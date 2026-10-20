@@ -1,40 +1,14 @@
 """The Profiling page over HTTP: Profile as a job, the profile as rows, frequencies, profile.csv, the save."""
-import os
 import time
 from pathlib import Path
 
-import pytest
-from fastapi.testclient import TestClient
-
-from tablecmp import connections as cx
 from tablecmp import profiling
 from tablecmp.keys import KEY_COLS
 from tablecmp.observe import CORR_COLS, DEP_COLS, OUTLIER_COLS, PATTERN_COLS
 from tablecmp.profile import STATS_COLS
-from tablecmp.web.app import create_app
-from tablecmp.web.workspace import COOKIE
+from tests.conftest import EX, W, ws_of
 
-W = {"X-Compare": "1"}
-EX = Path(__file__).resolve().parent.parent / "examples"
 HR = EX / "hr_employees.csv"
-
-
-@pytest.fixture
-def c(tmp_path, monkeypatch):
-    monkeypatch.setenv("COMPARE_WORK_DIR", str(tmp_path / "work"))
-    monkeypatch.setenv("COMPARE_OUT_DIR", str(tmp_path / "out"))
-    monkeypatch.setenv("COMPARE_CONNECTIONS", str(tmp_path / "connections.json"))
-    monkeypatch.delenv(cx.FILES_ENV, raising=False)
-    monkeypatch.delenv("COMPARE_DATA_DIR", raising=False)
-    for k in [k for k in os.environ if k.startswith(cx.ENV_PREFIX)]:
-        monkeypatch.delenv(k)
-    client = TestClient(create_app())
-    client.get("/api/workspace")
-    return client
-
-
-def ws_of(c):
-    return c.app.state.workspaces.get(c.cookies.get(COOKIE))
 
 
 def wait(c, entry, seconds=120):

@@ -1,14 +1,12 @@
 // web/src/sources/database.test.tsx
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, vi } from "vitest";
+import { vi } from "vitest";
 import { SideCard } from "./SideCard";
 import { SourcesSection } from "./SourcesSection";
-import { getView, resetView } from "../shell/view";
-import { getForm, resetForms, setForm } from "./formStore";
+import { getView } from "../shell/view";
+import { getForm, setForm } from "./formStore";
 import { body, json, META, mount, view, type Call } from "./testkit";
-
-beforeEach(() => { resetForms(); resetView(); try { localStorage.clear(); } catch { /* none */ } });
 
 const CONNS = [
   { name: "PG", kind: "postgresql", label: "Postgres", where: "db/hr", source: "file", origin_file: "", is_folder: false, editable: true, password: "asked" },

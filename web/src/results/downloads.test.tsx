@@ -1,16 +1,14 @@
 // web/src/results/downloads.test.tsx - the Report (SPEC §11) and Downloads (SPEC §12) tabs.
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, vi } from "vitest";
+import { afterEach, vi } from "vitest";
 import type { RunView } from "../compare/types";
-import { getView, resetView } from "../shell/view";
+import { getView } from "../shell/view";
 import { json, mount, type Call } from "../sources/testkit";
 import type { FilesView } from "./detailApi";
 import { DownloadsTab } from "./DownloadsTab";
-import { resetPicks } from "./pickStore";
 import { ReportTab } from "./ReportTab";
 
-beforeEach(() => { resetPicks(); resetView(); });
 afterEach(() => vi.restoreAllMocks());
 
 const RUN: RunView = {

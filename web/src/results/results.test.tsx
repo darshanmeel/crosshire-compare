@@ -4,14 +4,14 @@ import { cleanup, render, screen, waitFor, within } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { beforeEach, vi } from "vitest";
 import type { CompareState, RunView } from "../compare/types";
-import { getView, resetView, setView } from "../shell/view";
+import { getView, setView } from "../shell/view";
+import { compareState } from "../setup/testkit";
 import { body, json, mount, type Call } from "../sources/testkit";
 import { marks } from "../ui/marks";
-import { resetPicks } from "./pickStore";
 import { ResultsPage } from "./ResultsPage";
 import { ResultsView } from "./ResultsView";
 
-beforeEach(() => { resetPicks(); resetView(); setView({ view: "results" }); });
+beforeEach(() => setView({ view: "results" }));
 
 const RUN: RunView = {
   id: "r1", at: "10:00:00", pair: "HR_compare_Right", mode: "key", names: ["HR", "Right"], keys: ["emp_id"],
@@ -92,11 +92,7 @@ function oneSided(side: string, limit: number) {
   };
 }
 function state(over: Partial<CompareState> = {}): CompareState {
-  return {
-    gate: "", names: ["HR", "Right"], filter_error: "", sig: "s1", stale: false, busy: false, said: [], run: RUN,
-    strip: { cells: { Files: "", Columns: "", Key: "", Compare: "", Result: "" }, tones: {} },
-    settings: { display_rows: 1000, auto_rerun: false, out_fmt: "csv", auto_profile: false }, ...over,
-  };
+  return compareState({ names: ["HR", "Right"], run: RUN, ...over });
 }
 
 function serve(calls: Call[], st: () => CompareState = () => state()) {

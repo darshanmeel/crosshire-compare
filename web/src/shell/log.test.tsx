@@ -1,10 +1,10 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { beforeEach, vi } from "vitest";
+import { vi } from "vitest";
 import { LogView } from "./LogView";
 import { logText } from "./LogPanel";
-import { getView, resetView, setView, toggleLog } from "./view";
+import { getView, setView, toggleLog } from "./view";
 
 const E = (id: string, kind: string, label: string, lines: string[] = [], state = "done") =>
   ({ id, at: "15:48:40", kind, label, state, seconds: 0.3, lines, page: "Compare" });
@@ -27,8 +27,6 @@ function server(calls: Calls, entries = ENTRIES) {
   });
 }
 const mount = () => render(<QueryClientProvider client={new QueryClient()}><LogView /></QueryClientProvider>);
-
-beforeEach(() => { resetView(); });
 
 test("every entry shows its time, kind, line and grey sub-lines, with a count in the head", async () => {
   vi.stubGlobal("fetch", server([]));

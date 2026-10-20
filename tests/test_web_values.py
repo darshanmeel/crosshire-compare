@@ -1,42 +1,22 @@
 # tests/test_web_values.py
 """Values and Rows over HTTP: How values are read, Transform and convert with its preview and
 check, and the Rows filters."""
-import os
-from pathlib import Path
-
 import pandas as pd
 import pytest
-from fastapi.testclient import TestClient
 
-from tablecmp import connections as cx
 from tablecmp.values import NULL_TOKENS_DEFAULT
-from tablecmp.web.app import create_app
-from tablecmp.web.workspace import COOKIE
+from tests.conftest import EX, W, ws_of
 
-W = {"X-Compare": "1"}
-EX = Path(__file__).resolve().parent.parent / "examples"
 HR, PR = EX / "hr_employees.csv", EX / "payroll_employees.csv"
 COMMA = {"op": "remove thousands separators", "params": {}}
 
 
 @pytest.fixture
-def c(tmp_path, monkeypatch):
-    monkeypatch.setenv("COMPARE_WORK_DIR", str(tmp_path / "work"))
-    monkeypatch.setenv("COMPARE_CONNECTIONS", str(tmp_path / "connections.json"))
-    monkeypatch.delenv(cx.FILES_ENV, raising=False)
-    monkeypatch.delenv("COMPARE_DATA_DIR", raising=False)
-    for k in [k for k in os.environ if k.startswith(cx.ENV_PREFIX)]:
-        monkeypatch.delenv(k)
-    client = TestClient(create_app())
-    client.get("/api/workspace")
+def c(c):
     for tag, path, name in (("A", HR, "HR"), ("B", PR, "PR")):
-        r = client.post(f"/api/sources/{tag}/load", json={"how": "path", "path": str(path), "name": name}, headers=W)
+        r = c.post(f"/api/sources/{tag}/load", json={"how": "path", "path": str(path), "name": name}, headers=W)
         assert r.status_code == 200, r.text
-    return client
-
-
-def ws_of(c):
-    return c.app.state.workspaces.get(c.cookies.get(COOKIE))
+    return c
 
 
 def steps(c, canon, which, action, step=None):

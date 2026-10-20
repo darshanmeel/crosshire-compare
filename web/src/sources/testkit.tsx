@@ -23,6 +23,7 @@ export function body(over: Partial<SourcesBody> = {}): SourcesBody {
 export const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { "Content-Type": "application/json" } });
 
+// render()'s result, so a test can unmount and draw the same component again on new data
 export function mount(ui: ReactElement) {
-  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
+  return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
 }

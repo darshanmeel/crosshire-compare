@@ -1,11 +1,9 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { fireEvent, screen, within } from "@testing-library/react";
 import { json, mount } from "../../sources/testkit";
 import { profile, T } from "../testkit";
 import { rowsOf } from "../frame";
 import { batchOf, formText, spanText, WhenView, ymd, type WhenBody } from "./WhenView";
-
-afterEach(() => vi.unstubAllGlobals());
 
 const COLS = ["Column", "Type", "Rows", "Nulls", "Null %", "Distinct", "Distinct % of filled", "Distinct % of rows", "Top value", "Top %", "Min", "Max", "Mean"];
 const P = profile({ stats: T(COLS, [

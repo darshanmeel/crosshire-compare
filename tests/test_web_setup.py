@@ -2,37 +2,13 @@
 """The column table over HTTP: built for the loaded pair, changed a cell at a time, Match by
 data, Reset, Save and Load mapping, the names and the card."""
 import json
-import os
-from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
-from tablecmp import connections as cx
-from tablecmp.web.app import create_app
 from tablecmp.web.sides import side
-from tablecmp.web.workspace import COOKIE
+from tests.conftest import EX, W, ws_of
 
-W = {"X-Compare": "1"}
-EX = Path(__file__).resolve().parent.parent / "examples"
 HR, PR = EX / "hr_employees.csv", EX / "payroll_employees.csv"
-
-
-@pytest.fixture
-def c(tmp_path, monkeypatch):
-    monkeypatch.setenv("COMPARE_WORK_DIR", str(tmp_path / "work"))
-    monkeypatch.setenv("COMPARE_CONNECTIONS", str(tmp_path / "connections.json"))
-    monkeypatch.delenv(cx.FILES_ENV, raising=False)
-    monkeypatch.delenv("COMPARE_DATA_DIR", raising=False)
-    for k in [k for k in os.environ if k.startswith(cx.ENV_PREFIX)]:
-        monkeypatch.delenv(k)
-    client = TestClient(create_app())
-    client.get("/api/workspace")
-    return client
-
-
-def ws_of(c):
-    return c.app.state.workspaces.get(c.cookies.get(COOKIE))
 
 
 def load(c, tag, path, name):
