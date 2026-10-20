@@ -9,7 +9,7 @@ import { api, ApiError, type Meta } from "../api/client";
 import { Button, LinkButton, Pill, SideBadge, type Tone } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { DatabaseBox } from "./DatabaseBox";
-import { seedForm, useSideForm } from "./formStore";
+import { useSideForm } from "./formStore";
 import { LoadedLine } from "./LoadedLine";
 import { changedSinceLoad, loadTime, noteLoadTime, secs } from "./loadTime";
 import { PathBox } from "./PathBox";
@@ -48,10 +48,6 @@ export function SideCard({ tag, meta, compact = false }: { tag: Tag; meta: Meta;
   const [other] = useSideForm(otherTag);
   const { data: src } = useSources();
   const view = src?.sides?.[tag];
-  useEffect(() => {                                       // a side the server holds names the form and picks its source
-    if (view?.loaded) seedForm(tag, { name: view.name, how: view.is_database ? "database" : view.staged ? "upload" : "path",
-                                      ...(view.is_database ? { connection: view.conn } : {}) });
-  }, [tag, view?.loaded]);
   const pickNow = JSON.stringify(pickOf(f));
   const [keyPick, setKeyPick] = useState(pickNow);        // the schema is asked 300 ms after the last keystroke
   useEffect(() => { const t = setTimeout(() => setKeyPick(pickNow), 300); return () => clearTimeout(t); }, [pickNow]);

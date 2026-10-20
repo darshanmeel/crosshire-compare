@@ -207,6 +207,16 @@ test("Rows to read: Copy to the other side takes the cut, the order's columns be
   expect(getForm("B").path).toBe(blankForm("B").path);
 });
 
+test("Rows to read after a page reload, the setup never drawn: Apply keeps the side's name and source", async () => {
+  const calls = stub({ "/api/sources": () => SOURCES(), "/api/setup": () => KEYED,
+                       "/api/sources/A/load": () => ({ side: side("A"), warnings: [] }) });
+  mount(<RowsToReadCard tag="A" />);
+  const card = await screen.findByRole("region", { name: "Rows to read from HR" });
+  await userEvent.click(within(card).getByRole("button", { name: "Apply to HR" }));
+  await waitFor(() => expect(sent(calls, "/api/sources/A/load")).toHaveLength(1));
+  expect(sent(calls, "/api/sources/A/load")[0]).toMatchObject({ how: "path", name: "HR" });
+});
+
 // ---- Profile by bucket, Run settings ------------------------------------------------------
 function Held({ k }: { k: string }) { const [v] = usePick<string[]>(k, []); return <output aria-label={k}>{v.join(",")}</output>; }
 

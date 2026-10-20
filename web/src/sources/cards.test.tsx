@@ -207,3 +207,13 @@ test("typing a path asks for its schema once, 300 ms after the last keystroke", 
   expect(asked).toHaveLength(1);
   expect(JSON.parse(String(asked[0][1]!.body)).path).toBe("D:/x/hr.csv");
 });
+
+test("a database side the server already holds seeds Database and its connection", async () => {
+  const DB = view("A", { loaded: true, name: "hr.employees", kind: "parquet", is_database: true, conn: "sample", rows: 3000,
+                         fetched: { at: "10:00", rows: 3000, capped: false } });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+    url === "/api/connections" ? json([]) : json(body({ sides: { A: DB, B: view("B"), P: view("P") } }))));
+  mount(<SideCard tag="A" meta={META} />);
+  await waitFor(() => expect(getForm("A")).toMatchObject({ name: "hr.employees", how: "database", connection: "sample" }));
+  expect(screen.getByRole("radio", { name: "Database" })).toBeChecked();
+});
