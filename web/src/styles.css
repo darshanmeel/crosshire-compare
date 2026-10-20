@@ -336,7 +336,6 @@ button.chip { cursor: pointer; } button.chip:hover { color: var(--fs-accent); }
 /* drawer */
 .drawer-scrim { position: fixed; inset: 0; background: var(--fs-scrim); z-index: 40; }
 .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(420px, 100vw); z-index: 41; background: var(--fs-panel); border-left: 1px solid var(--fs-line); padding: 20px 24px 32px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; box-shadow: -8px 0 24px var(--fs-shadow); }
-.drawer.wide { width: min(760px, 100vw); }
 .drawer > header { display: flex; align-items: center; gap: 10px; }
 .drawer h2 { margin: 0; font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 10px; color: var(--fs-text); }
 .drawer > header .x { margin-left: auto; }
@@ -352,22 +351,15 @@ button.chip { cursor: pointer; } button.chip:hover { color: var(--fs-accent); }
 .report-frame iframe { display: block; width: 100%; border: 0; background: var(--fs-panel); }
 .hist { display: flex; align-items: flex-end; gap: 4px; height: 120px; padding-top: 8px; }
 .hist i { flex: 1 1 0; background: var(--fs-accent-fill); border: 1px solid var(--fs-accent-edge); border-bottom: 0; border-radius: 3px 3px 0 0; display: block; min-height: 1px; }
-.hist-x { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; color: var(--fs-text3); }
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(116px, 1fr)); gap: 10px; }
 .stat { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--fs-line); border-radius: var(--r-sm); background: var(--fs-surface); }
 .stat .v { font-family: var(--font-mono); font-size: 14px; font-weight: 500; color: var(--fs-text); overflow-wrap: anywhere; }
 
-/* popovers and the old expander, restyled until each section drops it */
-.popover { position: relative; }
-.popover > summary { list-style: none; display: inline-flex; }
-.popover > summary::-webkit-details-marker { display: none; }
-.popover-body { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; min-width: 320px; padding: 14px; background: var(--fs-panel); border: 1px solid var(--fs-line); border-radius: var(--r-md); box-shadow: 0 8px 24px var(--fs-shadow-lg); display: flex; flex-direction: column; gap: 10px; }
-.popover.right .popover-body { left: auto; right: 0; }
+/* the expander (ui/Expander.tsx): a <details> panel that opens in place */
 .expander { border: 1px solid var(--fs-line); border-radius: var(--r-md); background: var(--fs-panel); }
 .expander > summary { padding: 12px 16px; font-size: 14px; font-weight: 600; cursor: pointer; color: var(--fs-text); }
 .expander > summary:hover { color: var(--fs-accent); }
 .expander-body { padding: 0 16px 16px; display: flex; flex-direction: column; gap: 10px; }
-.form { display: flex; flex-direction: column; gap: 10px; }
 
 /* the generic data grid (previews, frames) */
 .table-wrap { overflow: auto; max-height: 390px; border: 1px solid var(--fs-line); border-radius: var(--r-sm); background: var(--fs-panel); }
@@ -378,14 +370,8 @@ table.grid th, table.grid td { padding: 0 12px; height: 36px; border-bottom: 1px
 table.grid td { font-family: var(--font-mono); color: var(--fs-text); }
 table.grid td.num { text-align: right; }
 table.grid td.null { color: var(--fs-text3); font-style: italic; }
-table.grid td.diff-a { background: var(--diff-left-bg); color: var(--diff-left-fg); font-weight: 600; }
-table.grid td.diff-b { background: var(--diff-right-bg); color: var(--diff-right-fg); font-weight: 600; }
 table.grid tr.side-a td:first-child { color: var(--fs-side-a); }
 table.grid tr.side-b td:first-child { color: var(--fs-side-b); }
-table.grid tr.tint-pos td { background: var(--fs-pos-bg); color: var(--fs-pos); }
-table.grid tr.tint-neg td { background: var(--fs-neg-bg); color: var(--fs-neg); }
-ul.notes { margin: .2rem 0; padding-left: 1.2rem; font-size: 13.5px; }
-ul.notes li::marker { color: var(--fs-accent); }
 
 @media (max-width: 760px) {
   .app-header, .rail { padding-left: 16px; padding-right: 16px; }

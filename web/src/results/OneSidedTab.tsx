@@ -11,7 +11,7 @@ import { Icon } from "../ui/icons";
 import { ColumnPick, notCompared } from "./ColumnPick";
 import { Failed } from "./Failed";
 import { usePick } from "./pickStore";
-import { fileUrl } from "./useFiles";
+import { fileUrl } from "./detailApi";
 import type { OneSided } from "./types";
 
 const FIRST = 6, MORE = 500, CAP = 10_000;

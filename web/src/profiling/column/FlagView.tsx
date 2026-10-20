@@ -1,8 +1,7 @@
 // web/src/profiling/column/FlagView.tsx - a boolean column's page (screen 29): the findings, how the
 // rows split between true and false, the spellings the values were written in and the pairs the
 // reader accepts, and the true rate across the groups of another column - all from
-// GET /api/profiling/flag. GET /api/profiling/flags names the text (and 1 / 0 number) columns
-// whose every value reads as a boolean, so the header can offer "read as boolean" for them.
+// GET /api/profiling/flag.
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../../api/client";
@@ -21,7 +20,6 @@ export type FlagBody = {
   spellings: FlagSpelling[]; accepts: [string, string][];
   groups: FlagGroup[]; by: string; how: FlagGroup["how"] | ""; rates: FlagRate[];
 };
-export type FlagReading = { column: string; filled: number; true: number; false: number };
 
 const FLAT = 10;          // points between the lowest and the highest true rate under which the rates read as flat
 const IMBALANCED = 25;    // % of the filled values under which the smaller side makes the flag imbalanced
@@ -35,20 +33,6 @@ export function useFlag(column: string, made: string, by = "", how = "", enabled
     queryFn: () => api.get<FlagBody>(`/api/profiling/flag?column=${encodeURIComponent(column)}`
       + (by ? `&by=${encodeURIComponent(by)}&how=${encodeURIComponent(how)}` : "")),
   });
-}
-
-/** The text (and 1 / 0 number) columns whose every filled value reads as a boolean. */
-export function useFlagReadings(made: string) {
-  return useQuery({
-    queryKey: ["profiling-flags", made], enabled: !!made, staleTime: Infinity,
-    queryFn: () => api.get<{ columns: FlagReading[] }>("/api/profiling/flags"),
-  });
-}
-
-/** True when `column` can be offered "read as boolean" (its own type is not boolean already). */
-export function useReadsAsFlag(column: string, made: string, kind: string) {
-  const q = useFlagReadings(made);
-  return kind !== "boolean" && !!q.data?.columns.some((c) => c.column === column);
 }
 
 type Pair = { t: string; f: string; n: number };

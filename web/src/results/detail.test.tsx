@@ -59,7 +59,7 @@ test("pivot turns the A/B pairs into one row per key", () => {
 
 test("one row per key: differing cells read A → B, matching cells stay plain, one-sided columns marked", async () => {
   vi.stubGlobal("fetch", serve([]));
-  mount(<DiffRowsTab run={RUN} limit={1000} />);
+  mount(<DiffRowsTab run={RUN} />);
   const table = await screen.findByRole("table", { name: "Rows that differ" });
   const rows = within(table).getAllByRole("row");
   expect(rows).toHaveLength(3);                                          // head + one per key
@@ -81,7 +81,7 @@ test("one row per key: differing cells read A → B, matching cells stay plain, 
 test("Load more fetches the next page and adds its rows", async () => {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", serve(calls));
-  mount(<DiffRowsTab run={RUN} limit={1000} />);
+  mount(<DiffRowsTab run={RUN} />);
   await userEvent.click(await screen.findByRole("button", { name: "Load 1 more" }));
   expect(await screen.findByText("E10500")).toBeInTheDocument();
   expect(calls.map(([u]) => u)).toContain("/api/results/r1/diff-rows?offset=2&limit=50");
@@ -92,7 +92,7 @@ test("Load more fetches the next page and adds its rows", async () => {
 test("a column chip keeps the rows where that column differs", async () => {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", serve(calls));
-  mount(<DiffRowsTab run={RUN} limit={1000} />);
+  mount(<DiffRowsTab run={RUN} />);
   const chips = within(await screen.findByRole("group", { name: "Filter by column" }));
   expect(chips.getByRole("button", { name: "All differing 3" })).toHaveAttribute("aria-pressed", "true");
   await userEvent.click(chips.getByRole("button", { name: "department 2" }));
@@ -106,7 +106,7 @@ test("a column chip keeps the rows where that column differs", async () => {
 
 test("search narrows the loaded rows by key or value", async () => {
   vi.stubGlobal("fetch", serve([]));
-  mount(<DiffRowsTab run={RUN} limit={1000} />);
+  mount(<DiffRowsTab run={RUN} />);
   await screen.findByText("E10402");
   await userEvent.type(screen.getByRole("searchbox", { name: "Find a key or value" }), "emea");
   expect(screen.queryByText("E10466")).toBeNull();
@@ -121,7 +121,7 @@ test("search finds a number as it is shown, with its thousands separator, and as
   const rows = [...pair("E10402", ["Moreau", "Sales", 10240.93, "2023-10-02", "Anna"], ["Moreau", "Sales", 10250, "2023-10-02", "CC-110"]),
                 ...pair("E10466", ["Ibrahim", "Legal", 8453, "2025-03-17", "Omar"], ["Ibrahim", "Legal", 8500, "2025-03-17", "CC-220"])];
   vi.stubGlobal("fetch", vi.fn(async () => json(page({ frame: { columns: COLS, rows } }))));
-  mount(<DiffRowsTab run={RUN} limit={1000} />);
+  mount(<DiffRowsTab run={RUN} />);
   const box = await screen.findByRole("searchbox", { name: "Find a key or value" });
   await screen.findByText("E10402");
   await userEvent.type(box, "10,240.93");
@@ -134,7 +134,7 @@ test("search finds a number as it is shown, with its thousands separator, and as
 
 test("the Show menu hides matching columns, or any column", async () => {
   vi.stubGlobal("fetch", serve([]));
-  mount(<DiffRowsTab run={RUN} limit={1000} />);
+  mount(<DiffRowsTab run={RUN} />);
   const table = await screen.findByRole("table", { name: "Rows that differ" });
   const menu = screen.getByRole("button", { name: /Show: all compared columns/ });
   await userEvent.click(menu);
@@ -153,7 +153,7 @@ test("the Show menu hides matching columns, or any column", async () => {
 test("near-match analysis opens a panel under the table", async () => {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", serve(calls));
-  mount(<DiffRowsTab run={RUN} limit={1000} />);
+  mount(<DiffRowsTab run={RUN} />);
   await userEvent.click(await screen.findByRole("button", { name: "Near-match analysis - formatting or real?" }));
   const panel = await screen.findByRole("region", { name: "Near-match analysis" });
   expect(await within(panel).findByText("88.9%")).toBeInTheDocument();
@@ -164,12 +164,12 @@ test("near-match analysis opens a panel under the table", async () => {
 
 test("hashing has no differing rows to show - the note says why", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => json(page({ note: "With hashing there are no matched-but-different rows.", total: 0, frame: { columns: [], rows: [] }, marks: [], cells: [] }))));
-  mount(<DiffRowsTab run={{ ...RUN, mode: "hash" }} limit={1000} />);
+  mount(<DiffRowsTab run={{ ...RUN, mode: "hash" }} />);
   expect(await screen.findByText("With hashing there are no matched-but-different rows.")).toBeInTheDocument();
 });
 
 test("no differing rows says so", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => json(page({ total: 0, by_column: [], frame: { columns: [], rows: [] }, marks: [], cells: [] }))));
-  mount(<DiffRowsTab run={{ ...RUN, diff_rows: 0 }} limit={1000} />);
+  mount(<DiffRowsTab run={{ ...RUN, diff_rows: 0 }} />);
   expect(await screen.findByText(/No rows differ/)).toBeInTheDocument();
 });

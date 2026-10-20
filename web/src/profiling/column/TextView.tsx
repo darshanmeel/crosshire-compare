@@ -287,7 +287,7 @@ export function TextView({ p, column, made, st, as, cast }: ColumnViewProps) {
     <Parts column={column} kind={kind} made={made} as={as} />
     <div className="prof-grid prof-col-grid">
       <Frequent column={column} made={made} st={st} />
-      <Shapes rows={shapes} kind={kind} st={st} />
+      <Shapes rows={shapes} kind={kind} />
       {deps}
     </div>
   </>);
@@ -302,7 +302,7 @@ export function TextView({ p, column, made, st, as, cast }: ColumnViewProps) {
         <SimilarPanel column={column} sim={sim} method={shown} setMethod={(m) => setMethod({ column, m })} picks={at} pick={pick} />
         <ValuesPanel column={column} sim={sim} method={shown} picks={at} shapes={shapes} made={made} category={category} />
         {!category && <Parts column={column} kind={kind} made={made} as={as} />}
-        {!category && <Shapes rows={shapes} kind={kind} st={st} />}
+        {!category && <Shapes rows={shapes} kind={kind} />}
       </div>
       <div className="prof-stack">
         {deps}

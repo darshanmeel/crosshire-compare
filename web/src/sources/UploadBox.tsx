@@ -2,12 +2,12 @@
 // at once and staged, and Load then reads the staged copy.
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type Meta } from "../api/client";
+import { api, ApiError } from "../api/client";
 import { Dropzone } from "../ui/kit";
 import type { SideView, Tag } from "./types";
 
 export function UploadBox({ tag, staged, types, onBusy }:
-  { tag: Tag; meta: Meta; staged: string; types: string[]; onBusy?: (busy: boolean) => void }) {
+  { tag: Tag; staged: string; types: string[]; onBusy?: (busy: boolean) => void }) {
   const qc = useQueryClient();
   const [err, setErr] = useState("");
   const up = useMutation({

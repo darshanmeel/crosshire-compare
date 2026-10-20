@@ -21,7 +21,7 @@ is the exact CSS to port.
 | `SideBadge` | `side: 'a'|'b'|'k'` | `.side-badge` | 28 px square: A blue, B clay, K ink (profile / config). |
 | `Card` | `title?`, `head?`, `foot?` | `.card .card-head .card-foot` | White, 10 px radius, 16/20 px padding, 14 px gap. |
 | `Panel` | `title`, `sub?`, `actions?`, `foot?` | `.panel .panel-head .panel-body .panel-foot` | Like Card but for tables: no inner padding around the table, `.tblwrap` scrolls horizontally. |
-| `DataTable` | `columns: {key, label, align?, width?, swatch?: 'a'|'b'}[]`, `rows`, `compact?`, `minWidth` | `.tbl .tbl.compact th td .num .m .dim tr.muted` | Native `<table>`; mono uppercase headers; 46 px rows (40 compact). Keep TanStack Table for the big grids (paired rows) and render into the same classes. |
+| `DataTable` | `columns: {key, label, align?, width?, swatch?: 'a'|'b'}[]`, `rows`, `compact?`, `minWidth` | `.tbl .tbl.compact th td .num .m .dim tr.muted` | Native `<table>`; mono uppercase headers; 46 px rows (40 compact). |
 | `Bar` | `pct`, `tone: 'accent'|'ok'|'good'|'warn'`, `label?` | `.bar .bar i .barcell .v` | 8 px track. Match %: ok at 100, good ≥ 95, warn below. Distinct %: accent. |
 | `Tabs` | `items: {label, href, count?, active}[]` | `.tabs .tabs a.on .count` | 44 px, 2 px accent underline. Results views. |
 | `Tile` | `label`, `value`, `small?` | `.tiles .tile .v` | Serif 28 px number under a mono label. |

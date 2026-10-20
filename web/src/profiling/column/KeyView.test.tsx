@@ -5,7 +5,7 @@ import { json, mount } from "../../sources/testkit";
 import { getView, resetView } from "../../shell/view";
 import { statsOf } from "../frame";
 import { profile } from "../testkit";
-import { KeyView, keyForm, saysId, type KeyCheck, type KeyCompare } from "./KeyView";
+import { KeyView, saysId, type KeyCheck, type KeyCompare } from "./KeyView";
 
 afterEach(() => { vi.unstubAllGlobals(); resetView(); location.hash = ""; });
 
@@ -146,9 +146,7 @@ test("a key with gaps, a duplicate and mixed case says so, and no comparison yet
   expect(await screen.findByText(/No comparison is set up yet/)).toBeInTheDocument();
 });
 
-test("names that say identifier, and the form beside read as", () => {
+test("names that say identifier", () => {
   for (const n of ["emp_id", "EmployeeId", "order_no", "CustomerKey", "id", "part-number"]) expect(saysId(n)).toBe(true);
   for (const n of ["salary", "valid", "kidney", "piano"]) expect(saysId(n)).toBe(false);
-  expect(keyForm("text")).toBe("keep leading zeros");
-  expect(keyForm("number")).toBe("whole");
 });

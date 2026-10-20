@@ -1,6 +1,6 @@
 // web/src/profiling/ColumnDetail.tsx - one column of the profile (screen 16): back to all columns,
-// previous / next, its statistics, its distribution (GET /api/profiling/hist), outliers, shapes,
-// most and least frequent values and what determines it - all from the profile held.
+// previous / next, its statistics, outliers, shapes, most and least frequent values and what
+// determines it - all from the profile held.
 import { Bar, Button, Chip, num, Panel, Seg } from "../ui/kit";
 import { useState, type ReactNode } from "react";
 import { setView } from "../shell/view";
@@ -9,8 +9,8 @@ import { openColumn } from "./ColumnsTable";
 import { SHOWN, strongest, TOP } from "./DepMatrix";
 import { fmt, keyColumns, pct, rowsOf, statsOf, type Row } from "./frame";
 import { FreqBars, splitFreq } from "./FreqSection";
-import type { CastRow, Frame, HistBin, Profile } from "./types";
-import { useCasts, useFreq, useHist, useParts, useSpelling } from "./useProfiling";
+import type { CastRow, Frame, Profile } from "./types";
+import { useCasts, useFreq, useParts, useSpelling } from "./useProfiling";
 import { semantic } from "./column/Findings";
 import { FlagView, useFlagForm } from "./column/FlagView";
 import { KeyView } from "./column/KeyView";
@@ -24,51 +24,6 @@ const NEAR_KEY = 10;     // distinct % of rows from which a column is a near-key
 const READS_AS = 0.9;    // of the filled values: a column that reads as a date or a timestamp from this share
 
 const C = ({ children }: { children: string }) => <code>{children}</code>;
-
-export function Distribution({ column, kind, made }: { column: string; kind: string; made: string }) {
-  const q = useHist(column, made);
-  const isNum = kind === "number";
-  const edge = (v: number | string) => (isNum ? fmt(Math.round(Number(v))) : String(v));
-  let body;
-  if (q.error) body = <div className="note error">{(q.error as Error).message}</div>;
-  else if (!q.data) body = <p className="caption">Counting…</p>;
-  else if (!q.data.bins.length) body = <p className="caption">No values to bin.</p>;
-  else {
-    const bins = q.data.bins;
-    const span = isNum ? Math.abs(Number(bins[bins.length - 1].hi) - Number(bins[0].lo)) : 0;
-    const whole = (v: number | string) => (span >= 100 ? fmt(Math.round(Number(v))) : fmt(v));
-    const range = (b: HistBin) => (isNum ? `${whole(b.lo)} – ${whole(b.hi)}` : `${b.lo} – ${b.hi}`);
-    const total = bins.reduce((s, b) => s + b.n, 0) || 1;
-    const top = Math.max(1, ...bins.map((b) => b.n));
-    const low = Math.min(...bins.map((b) => b.n));
-    const empty = bins.filter((b) => b.n === 0).length;
-    const half = Math.ceil(bins.length / 2);
-    const ticks = bins.length > 1 ? [...bins.filter((_, i) => i % 2 === 0).map((b) => b.lo), bins[bins.length - 1].hi] : [bins[0].lo];
-    const shape = empty ? `${empty} empty bin${empty > 1 ? "s" : ""} - the values leave a gap.`
-      : bins.length > 1 && top <= low * 1.25 ? "Flat across the range - no cluster, no gap."
-      : bins.length > 1 && top >= low * 4 ? `Clustered - the fullest bin holds ${num(top)} rows, the emptiest ${num(low)}.`
-      : null;
-    const cell = (b?: HistBin) => b
-      ? <><td className="m">{range(b)}</td><td className="num m">{num(b.n)}</td><td className="num m dim">{((100 * b.n) / total).toFixed(1)}%</td></>
-      : <><td /><td /><td /></>;
-    body = (
-      <>
-        <div className="hist" role="img" aria-label={`Histogram of ${column}: ${bins.map((b) => `${range(b)} ${num(b.n)}`).join(", ")}`}>
-          {bins.map((b, i) => <i key={i} style={{ height: `${(100 * b.n) / top}%` }} title={`${range(b)}: ${num(b.n)}`} />)}
-        </div>
-        <div className="hist-x">{ticks.map((t, i) => <span key={i}>{edge(t)}</span>)}</div>
-        <div className="tblwrap">
-          <table className="tbl compact prof-bins" aria-label={`Bins of ${column}`}>
-            <thead><tr><th>Bin</th><th className="num">Rows</th><th className="num">Share</th><th className="b2">Bin</th><th className="num">Rows</th><th className="num">Share</th></tr></thead>
-            <tbody>{bins.slice(0, half).map((b, i) => <tr key={i}>{cell(b)}{cell(bins[half + i])}</tr>)}</tbody>
-          </table>
-        </div>
-        {shape && <p className="prof-said">{shape}</p>}
-      </>
-    );
-  }
-  return <Panel title="Distribution" sub="10 equal bins · rows per bin"><div className="panel-body">{body}</div></Panel>;
-}
 
 export type Point = { label: string; value: ReactNode; note?: ReactNode; tone?: "ok" | "warn" | "info" };
 
@@ -187,25 +142,10 @@ export function Outliers({ o, kind, filled, st, made }: { o?: Row; kind: string;
   );
 }
 
-export function Shapes({ rows, kind, st }: { rows: Row[]; kind: string; st: Row }) {
+export function Shapes({ rows, kind }: { rows: Row[]; kind: string }) {
   const top = Math.max(1, ...rows.map((r) => Number(r.Count ?? 0)));
   const items: Point[] = [];
-  if (kind === "number" && rows.length) {
-    const parts = rows.map((r) => String(r.Pattern).replace(/^-/, "").split("."));
-    const places = parts.map((p) => (p[1] ?? "").length);
-    const most = parts[0][0].length;
-    const longest = Math.max(...[st.Min, st.Max].map(toNum).filter((x) => !Number.isNaN(x)).map(intDigits), ...parts.map((p) => p[0].length));
-    const scale = Math.max(...places);
-    items.push({ label: "Digits before the point", value: most === longest ? `${longest}` : `${most} mostly, up to ${longest}`,
-      tone: longest - most >= 3 ? "warn" : undefined,
-      note: longest - most >= 3 ? "a few far longer - a unit or entry error?" : undefined });
-    items.push({ label: "Places after the point", value: Math.min(...places) === scale ? `${scale}` : `${Math.min(...places)} to ${scale}`,
-      note: <>fits <code>DECIMAL({longest + scale}, {scale})</code></> });
-    const one = rows.filter((r) => /\.9$/.test(String(r.Pattern))).reduce((s, r) => s + Number(r.Count), 0);
-    if (one && scale > 1)
-      items.push({ label: "One decimal", value: <>{num(one)} <span className="pc">· {pct(share(one, Number(st.Rows) - Number(st.Nulls)))}</span></>,
-        note: "fine - a dropped trailing zero (10.10 → 10.1)" });
-  } else if (kind === "text" && rows.length) {
+  if (kind === "text" && rows.length) {
     const covered = rows.reduce((s, r) => s + Number(r["%"] ?? 0), 0);
     items.push(rows.length === 1 && covered >= 99.995
       ? { label: "One shape", value: "every value", tone: "ok", note: "a fixed format" }

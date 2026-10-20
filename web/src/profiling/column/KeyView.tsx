@@ -63,12 +63,6 @@ export function saysId(name: string) {
     || /^(id|key|uuid|guid)$/i.test(name);
 }
 
-/** The form the header shows next to "read as" on the key's page: a text key keeps its leading
- *  zeros, a number key is whole. */
-export function keyForm(kind: string) {
-  return kind === "number" ? "whole" : "keep leading zeros";
-}
-
 const M = ({ children }: { children: ReactNode }) => <code>{children}</code>;
 const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 const range = (a: string, b: string) => (a === b ? a : `${a} - ${b}`);

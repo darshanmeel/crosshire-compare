@@ -39,7 +39,7 @@ details.rtr-build[open] > summary { margin-bottom: 6px; }
 .rtr .rtr-order { align-items: flex-end; flex-wrap: wrap; }
 .rtr .rtr-order .grow { flex: 1 1 200px; }
 .rtr .rtr-order input[type=text] { width: 100%; }
-.rtr .rtr-top { width: 96px; text-align: right; font-variant-numeric: tabular-nums; }
+.rtr .rtr-top { width: 96px; text-align: right; }
 .rtr .rtr-desc { min-height: 36px; }
 .rtr .rtr-cut { margin: -6px 0 0; font-family: var(--font-mono); overflow-wrap: anywhere; }
 .rtr .rtr-build .row > select { flex: 0 1 auto; max-width: 100%; }
@@ -57,7 +57,7 @@ details.rtr-build[open] > summary { margin-bottom: 6px; }
 .bucket .bucket-col { width: 240px; max-width: 100%; }
 .bucket-say { font-size: 12.5px; color: var(--fs-text2); }
 .runset-rows { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; color: var(--fs-text2); }
-.runset-rows input { width: 96px; height: 32px; text-align: right; font-variant-numeric: tabular-nums; }
+.runset-rows input { width: 96px; height: 32px; text-align: right; }
 .runset-help { flex: 1 1 260px; }
 
 /* Profile both files */

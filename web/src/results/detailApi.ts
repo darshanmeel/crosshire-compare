@@ -38,7 +38,7 @@ export function useDiffRows(runId: string, column: string) {
   });
 }
 
-// The run's files - the same read and cache key as results/useFiles.ts, so the tabs share one fetch.
+// The run's files - one read and cache key per row limit, shared by every tab that lists them.
 export type Sized = { name: string; bytes: number };
 export type FileRow = { name: string; label: string; bytes: number };
 export type FilesView = {

@@ -112,7 +112,7 @@ function NearMatch({ runId, onClose }: { runId: string; onClose: () => void }) {
   );
 }
 
-export function DiffRowsTab({ run }: { run: RunView; limit: number }) {
+export function DiffRowsTab({ run }: { run: RunView }) {
   const [column, setColumn] = useState("");
   const [find, setFind] = useState("");
   const [hidden, setHidden] = useState<Set<string>>(new Set());

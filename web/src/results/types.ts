@@ -3,12 +3,12 @@ export type Metric = { label: string; value: number | string; help?: string };
 export type Summary = {
   mode: "key" | "hash" | "position"; keys: string[]; key_line: string; key_warning: { head: string; points: string[] } | null;
   counts: Metric[]; filter_note: string; unmatched: { lead: string; lines: string[] } | null; column_counts: Metric[];
-  one_sided: string; overall: Metric[] | null; overall_caption: string; hash_caption: string; ledger: Frame; tones: string[];
+  overall: Metric[] | null; overall_caption: string; hash_caption: string; ledger: Frame;
   buckets: { id: string; label: string }[]; default_bucket: string; sided_tip: string;
 };
 export type BucketBody = {
   bucket: string; by_key: { title: string; tables: { title: string; table: Frame }[]; after: string } | null;
-  others: { name: string; label: string }[]; others_title: string; profiles: { column: string; title: string; table: Frame }[];
+  profiles: { column: string; title: string; table: Frame }[];
   empty: string;
   shown: string[]; groups: { title: string; tone?: "nc"; items: { name: string; label: string }[] }[];   // the plan's own, every column by kind
 };
@@ -24,7 +24,6 @@ export type BucketFacts = { bucket: string; columns: { column: string; sides: Si
 export type Card = { column: string; head: string; warning: string; pairs: Frame | null };
 export type ColumnsBody = {
   hash_caption: string; tips?: string[]; differ_error?: string;
-  rows?: { title: string; table: Frame | null; marks: Record<string, string[]> } | null;
   rest?: string[]; rest_title?: string; cards?: Card[]; near_match?: boolean;
 };
 

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { json, mount } from "../../sources/testkit";
 import type { Row } from "../frame";
 import { profile } from "../testkit";
-import { FlagView, flagForm, useFlagForm, useReadsAsFlag, type FlagBody } from "./FlagView";
+import { FlagView, flagForm, useFlagForm, type FlagBody } from "./FlagView";
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
@@ -33,7 +33,6 @@ function stub(f: (url: string) => unknown, calls: string[] = []) {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     calls.push(url);
     if (url.startsWith("/api/profiling/flag?")) return json(f(url));
-    if (url.startsWith("/api/profiling/flags")) return json({ columns: [{ column: "IsActive", filled: 2985, true: 2518, false: 467 }] });
     return json({});
   }));
 }
@@ -101,16 +100,15 @@ test("mixed spellings and nulls: a finding names each pair with its rows", async
   expect(within(acc).getAllByText("- seen in this column", { exact: false })).toHaveLength(2);
 });
 
-test("flagForm gives the header its pair; the hooks tell the header what to offer", async () => {
+test("flagForm gives the header its pair, and useFlagForm reads it from the cached query", async () => {
   expect(flagForm(CLEAN)).toBe("Y / N");
   expect(flagForm(MIXED)).toBe("Y / N · true / false");
   expect(flagForm({ accepts: ACCEPTS, spellings: [{ value: "true", n: 3, reads: true }] })).toBe("true / false");
   stub(() => CLEAN);
-  function Head({ kind }: { kind: string }) {
+  function Head() {
     const form = useFlagForm("IsActive", "20261004-120000", true);
-    const offer = useReadsAsFlag("IsActive", "20261004-120000", kind);
-    return <p>{form}|{offer ? "offer" : "no"}</p>;
+    return <p>{form}|</p>;
   }
-  mount(<Head kind="text" />);
-  expect(await screen.findByText("Y / N|offer")).toBeInTheDocument();
+  mount(<Head />);
+  expect(await screen.findByText("Y / N|")).toBeInTheDocument();
 });

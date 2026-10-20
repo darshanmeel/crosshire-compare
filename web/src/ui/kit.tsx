@@ -35,8 +35,8 @@ export function LinkButton({ icon, iconAfter, className, children, type = "butto
 }
 
 export type Tone = "ok" | "warn" | "idle" | "run" | "neg";
-export function Pill({ tone = "idle", dot = true, children, ...rest }: { tone?: Tone; dot?: boolean; children: ReactNode; role?: string; "aria-live"?: "polite" }) {
-  return <span className={`pill ${tone}`} {...rest}>{dot && <i />}{children}</span>;
+export function Pill({ tone = "idle", children, ...rest }: { tone?: Tone; children: ReactNode; role?: string; "aria-live"?: "polite" }) {
+  return <span className={`pill ${tone}`} {...rest}><i />{children}</span>;
 }
 
 export function Chip({ tone, icon, children, title }: { tone?: "key" | "a" | "b" | "neg" | "pos" | "warn"; icon?: IconName; children: ReactNode; title?: string }) {
@@ -45,9 +45,9 @@ export function Chip({ tone, icon, children, title }: { tone?: "key" | "a" | "b"
 
 export type SegOption<T extends string> = { label: ReactNode; value: T; icon?: IconName; disabled?: boolean; title?: string };
 /** A segmented control: one <button aria-pressed> per option inside role="group". */
-export function Seg<T extends string>({ options, value, onChange, mini, label, className }: { options: SegOption<T>[]; value: T; onChange: (v: T) => void; mini?: boolean; label: string; className?: string }) {
+export function Seg<T extends string>({ options, value, onChange, mini, label }: { options: SegOption<T>[]; value: T; onChange: (v: T) => void; mini?: boolean; label: string }) {
   return (
-    <div className={["seg", mini && "mini", className].filter(Boolean).join(" ")} role="group" aria-label={label}>
+    <div className={mini ? "seg mini" : "seg"} role="group" aria-label={label}>
       {options.map((o) => (
         <button key={o.value} type="button" aria-pressed={o.value === value} className={o.value === value ? "on" : undefined}
           disabled={o.disabled} title={o.title} onClick={() => o.value !== value && onChange(o.value)}>
@@ -78,23 +78,12 @@ export function Section({ n, title, sub, actions, id, children }: { n?: string; 
   );
 }
 
-export function Card({ head, foot, children, className, ...rest }: { head?: ReactNode; foot?: ReactNode; children?: ReactNode; className?: string; role?: string; "aria-label"?: string }) {
-  return (
-    <div className={["card", className].filter(Boolean).join(" ")} {...rest}>
-      {head && <div className="card-head">{head}</div>}
-      {children}
-      {foot && <div className="card-foot">{foot}</div>}
-    </div>
-  );
-}
-
-export function Panel({ title, sub, actions, foot, note, children, className }: { title?: ReactNode; sub?: ReactNode; actions?: ReactNode; foot?: ReactNode; note?: ReactNode; children?: ReactNode; className?: string }) {
+export function Panel({ title, sub, actions, foot, children, className }: { title?: ReactNode; sub?: ReactNode; actions?: ReactNode; foot?: ReactNode; children?: ReactNode; className?: string }) {
   return (
     <div className={["panel", className].filter(Boolean).join(" ")}>
       {(title || actions) && (
         <div className="panel-head">{title && <h3>{title}</h3>}{sub && <span className="sub">{sub}</span>}{actions && <div className="actions">{actions}</div>}</div>
       )}
-      {note && <div className="panel-note">{note}</div>}
       {children}
       {foot && <div className="panel-foot">{foot}</div>}
     </div>
@@ -170,7 +159,7 @@ export function Dropzone({ accept, onFile, title, hint, label }: { accept?: stri
 
 /** A right-hand panel over the page: Esc and × close it, focus moves into it and back out, and
  *  the page behind is inert while it is open, so Tab and a screen reader stay inside. */
-export function Drawer({ title, onClose, wide, children }: { title: ReactNode; onClose: () => void; wide?: boolean; children: ReactNode }) {
+export function Drawer({ title, onClose, children }: { title: ReactNode; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;            // a caller's inline arrow must not refocus the drawer each render
@@ -187,7 +176,7 @@ export function Drawer({ title, onClose, wide, children }: { title: ReactNode; o
   return (
     <>
       <div className="drawer-scrim" aria-hidden="true" onClick={onClose} />
-      <div ref={ref} className={wide ? "drawer wide" : "drawer"} role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined} tabIndex={-1}>
+      <div ref={ref} className="drawer" role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined} tabIndex={-1}>
         <header><h2>{title}</h2><button type="button" className="icon-btn x" onClick={onClose} aria-label="Close"><Icon name="x" /></button></header>
         {children}
       </div>

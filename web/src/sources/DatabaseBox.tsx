@@ -2,7 +2,7 @@
 // query, the fetch cap. The fetch is a job that writes Parquet; Load then reads that Parquet.
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, type LogEntry, type Meta } from "../api/client";
+import { api, ApiError, type LogEntry } from "../api/client";
 import { useJobOfKind } from "../api/useJob";
 import { useConnections } from "../connections/ConnectionsManager";
 import { setView } from "../shell/view";
@@ -13,7 +13,7 @@ import { dbOf, type DbPlan, type Tag } from "./types";
 
 const manage = () => setView({ drawer: "connections" });
 
-export function DatabaseBox({ tag }: { tag: Tag; meta: Meta }) {
+export function DatabaseBox({ tag }: { tag: Tag }) {
   const id = useId();
   const qc = useQueryClient();
   const [f, set] = useSideForm(tag);

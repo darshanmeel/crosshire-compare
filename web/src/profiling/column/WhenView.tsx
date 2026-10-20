@@ -62,14 +62,6 @@ export function formText(w: Pick<WhenBody, "form" | "written"> | undefined): str
   return tail && !form.endsWith(tail) ? form + tail : form;
 }
 
-/** For ColumnDetail's header: the form a column read as a date or a timestamp is read in - the
- *  same (cached) query the page below makes, so it costs nothing more. */
-export function useWhenForm(column: string, made: string, as: string): string {
-  const when = as === "date" || as === "timestamp";
-  const q = useWhen(column, when ? made : "", as, "");
-  return when && q.data?.column === column ? formText(q.data) : "";
-}
-
 const pad = (n: number) => String(n).padStart(2, "0");
 const day = (s: string | null) => (s ?? "").slice(0, 10);
 const clock = (s: string | null) => (s ?? "").slice(11);

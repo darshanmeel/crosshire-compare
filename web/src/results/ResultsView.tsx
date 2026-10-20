@@ -12,7 +12,7 @@ export function ResultsView({ run, limit }: { run: RunView; limit: number }) {
   return (
     <div className="results-body" role="tabpanel">
       {tab === "summary" && <SummaryView run={run} />}
-      {tab === "rows" && <DiffRowsTab run={run} limit={limit} />}
+      {tab === "rows" && <DiffRowsTab run={run} />}
       {tab === "onesided" && <OneSidedTab run={run} />}
       {tab === "report" && <ReportTab run={run} limit={limit} />}
       {tab === "downloads" && <DownloadsTab run={run} limit={limit} />}

@@ -153,9 +153,9 @@ export function SideCard({ tag, meta, compact = false }: { tag: Tag; meta: Meta;
         <Pill tone={tone} role="status">{status}</Pill>
       </div>
       {!compact && choice}
-      {f.how === "upload" && <UploadBox tag={tag} meta={meta} staged={view?.staged ?? ""} types={src?.upload_types ?? []} onBusy={setUploading} />}
+      {f.how === "upload" && <UploadBox tag={tag} staged={view?.staged ?? ""} types={src?.upload_types ?? []} onBusy={setUploading} />}
       {f.how === "path" && <PathBox tag={tag} meta={meta} />}
-      {f.how === "database" && <DatabaseBox tag={tag} meta={meta} />}
+      {f.how === "database" && <DatabaseBox tag={tag} />}
       {schema.error && <div className="note error">{(schema.error as Error).message}</div>}
       {ready && schema.data?.error && <div className="note error">{schema.data.error}</div>}
       {newCols && (

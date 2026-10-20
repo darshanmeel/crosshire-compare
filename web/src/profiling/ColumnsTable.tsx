@@ -13,7 +13,6 @@ import type { Frame, Profile } from "./types";
 
 // the column opened last - its row stays marked when the detail goes back to the list
 let last: string | null = null;
-export const lastOpened = () => last;
 export function openColumn(c: string) { last = c; setView({ column: c }); }
 
 /** What the Profile page adds per column: read as · looks like, the semantic guess, what stands out. */

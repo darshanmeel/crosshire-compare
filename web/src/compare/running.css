@@ -4,7 +4,7 @@
 .run-body { flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .run-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; min-width: 0; }
 .run-head .run-now { min-width: 0; overflow-wrap: anywhere; }
-.run-head .run-meta { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.run-head .run-meta { white-space: nowrap; }
 .run-label { font-size: 13.5px; color: var(--fs-text2); }
 .run-panel .tasks li > span:nth-child(2) { min-width: 0; overflow-wrap: anywhere; }
 .run-panel .tasks code { font-family: var(--font-mono); font-size: 12px; background: var(--fs-surface2); padding: 1px 5px; border-radius: 4px; }
@@ -17,6 +17,6 @@
 
 .compare-bar { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
 .compare-bar .actions { gap: 14px; }
-.compare-bar .help { font-size: 13px; color: var(--fs-text3); font-variant-numeric: tabular-nums; }
+.compare-bar .help { font-size: 13px; color: var(--fs-text3); }
 .compare-bar .why { font-size: 13px; color: var(--fs-warn); }
 .compare-bar .btn.lg { max-width: 100%; white-space: normal; text-align: left; }

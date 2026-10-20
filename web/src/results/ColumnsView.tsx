@@ -34,7 +34,7 @@ function inOrder<T extends { column: string }>(cards: T[], open: string[]) {
   return [...cards.filter((c) => at(c.column) < 0), ...cards.filter((c) => at(c.column) >= 0).sort((a, b) => at(a.column) - at(b.column))];
 }
 
-export function ColumnsView({ run }: { run: RunView; limit?: number }) {
+export function ColumnsView({ run }: { run: RunView }) {
   const [open, setOpen] = usePick<string[]>("col_cards", NONE);
   const q = useQuery({
     staleTime: Infinity, placeholderData: (prev) => prev, queryKey: ["results", run.id, "columns", open],
