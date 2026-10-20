@@ -18,6 +18,7 @@
 /* How values are read, under the pairs */
 .vx-how { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid var(--fs-border); }
 .vx-how .field { width: 100%; }
+.vx-how-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
 .vx-how .tol { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .vx-how .tol input { width: 72px; height: 32px; text-align: center; font-family: var(--font-mono); }
 .vx-how .hint, .vx-hint { font-size: 12px; color: var(--fs-text3); }
@@ -43,7 +44,10 @@
 .pstep.draft { border-style: dashed; border-color: var(--fs-accent-line); background: var(--fs-panel); }
 .pstep.draft .n { background: var(--fs-accent-fill); color: var(--fs-on-fill); }
 .vx-empty { padding: 12px 14px; border: 1px dashed var(--fs-border2); border-radius: var(--r-sm); font-size: 13px; color: var(--fs-text3); }
-.vx-tools { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; }
+/* the side switch, with Copy to and Clear as links at its end */
+.vx-sides { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; }
+.vx-sides .seg { margin-right: 8px; }
+.vx-sides .link-btn { height: 36px; }
 
 /* Add a step chips */
 .vx .ops button { color: var(--fs-text); }
@@ -57,6 +61,8 @@
 .vx-preview .vx-h { font-size: 13.5px; }
 .vx-preview .tbl { min-width: 520px; }
 .vx-preview td.match { width: 70px; }
+.vx-preview th[title] { cursor: help; }
+.vx-preview td.ca { color: var(--fs-side-a); } .vx-preview td.cb { color: var(--fs-side-b); }
 .vx-preview .vx-cap { padding: 8px 14px 10px; font-size: 12px; color: var(--fs-text3); }
 .vx-check { padding: 0 14px 12px; display: flex; flex-direction: column; gap: 8px; }
 

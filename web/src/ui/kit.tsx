@@ -85,6 +85,18 @@ export function LinkButton({ icon, iconAfter, className, children, type = "butto
   return <button type={type} className={["link-btn", className].filter(Boolean).join(" ")} {...rest}>{icon && <Icon name={icon} size="sm" />}{children}{iconAfter && <Icon name={iconAfter} size="sm" />}</button>;
 }
 
+/** An "i" button whose text shows on hover (its title) and on a press, under the line it sits in;
+ *  a screen reader hears it as the button's description. */
+export function InfoTip({ label, text }: { label: string; text: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  return <>
+    <button type="button" className="info-btn" aria-label={label} title={text} aria-expanded={open} aria-describedby={id}
+            onClick={() => setOpen(!open)}><Icon name="info" /></button>
+    <span id={id} className={open ? "info-text" : "info-text sr-only"}>{text}</span>
+  </>;
+}
+
 export type Tone = "ok" | "warn" | "idle" | "run" | "neg";
 export function Pill({ tone = "idle", children, ...rest }: { tone?: Tone; children: ReactNode; role?: string; "aria-live"?: "polite" }) {
   return <span className={`pill ${tone}`} {...rest}><i />{children}</span>;

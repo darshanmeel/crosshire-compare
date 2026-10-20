@@ -64,6 +64,9 @@ test("the values editor: the pairs on the left, the chosen pair's steps, the pre
   expect(await screen.findByText("12,686.95")).toBeInTheDocument();
   await waitFor(() => expect(screen.getAllByRole("img", { name: "matches" })).toHaveLength(1));
   expect(screen.getAllByRole("img", { name: "differs" })).toHaveLength(1);
+  expect(screen.getByText("1 of 2 shown rows match after these steps")).toBeInTheDocument();
+  expect(screen.getByText("7713.6").closest("td")).toHaveClass("ca");                  // the other side in its colour
+  expect(screen.getByRole("columnheader", { name: /salary$/ })).toHaveAttribute("title", "HR as it is compared, the same row of its file");
   expect(calls.some(([u]) => u === "/api/setup/try?canon=salary&which=B")).toBe(true);
   expect(calls.some(([u]) => u === "/api/setup/try?canon=salary&which=A")).toBe(true);
   await userEvent.click(screen.getByRole("button", { name: "HR steps · 0" }));
@@ -88,6 +91,7 @@ test("Add a step: a chip with parameters opens the new step, one without adds at
   await waitFor(() => expect(screen.queryByRole("button", { name: "Add step" })).toBeNull());
   await userEvent.click(screen.getByRole("button", { name: "trim" }));
   await waitFor(() => expect(stepBodies(calls)[1]).toEqual({ canon: "salary", which: "B", action: "add", step: { op: "trim", params: {} } }));
+  expect(screen.getByRole("button", { name: "Copy to HR" }).closest(".vx-sides")).not.toBeNull();   // on the side switch's row
   await userEvent.click(screen.getByRole("button", { name: "Copy to HR" }));
   await waitFor(() => expect(stepBodies(calls)[2]).toMatchObject({ action: "copy", which: "B", step: null }));
   await userEvent.click(screen.getByRole("button", { name: "Clear" }));
@@ -154,7 +158,7 @@ test("the head changes the type, Check counts what converts, and the other conve
   expect(await screen.findByText("HR: 3,000 of 3,000 convert · PR: 2,980 of 2,985 convert")).toBeInTheDocument();
   expect(screen.getByRole("table", { name: "Conversion check" })).toBeInTheDocument();
   expect(bodies(calls, "/api/setup/check")[0]).toEqual({ canon: "emp_id" });
-  expect(screen.getByText("trim → left N characters (N=10) → number")).toBeInTheDocument();
+  expect(screen.getByText("trim → left 10 characters → number")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Edit salary and Salary" }));
   expect(getView().pair).toBe(1);
   expect(await screen.findByRole("region", { name: "Steps for salary and Salary" })).toBeInTheDocument();
@@ -249,4 +253,18 @@ test("the filters: a 409 shows the filters as they are now and says why", async 
   await userEvent.selectOptions(screen.getByLabelText("Operator, filter 1"), "between");
   expect(await screen.findByText(/The filters changed since/)).toBeInTheDocument();
   await waitFor(() => expect(screen.getByLabelText("Value, filter 1")).toHaveValue("elsewhere"));
+});
+
+test("How values are read: the null-token and order captions are info buttons whose text shows when pressed", async () => {
+  server();
+  mount(<HowValuesRead settings={S.settings} />);
+  const order = screen.getByRole("button", { name: "Order, per value" });
+  expect(order).toHaveAttribute("title", "Order, per value: transform steps → null folding → trim → type.");
+  expect(order).toHaveAccessibleDescription("Order, per value: transform steps → null folding → trim → type.");
+  await userEvent.click(order);
+  expect(order).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByText(/^Order, per value:/)).not.toHaveClass("sr-only");
+  const nulls = screen.getByRole("button", { name: "About null tokens" });
+  expect(nulls).toHaveAccessibleDescription("Comma separated, any case - read as null on both sides");
+  expect(screen.getByLabelText("Null tokens")).toHaveAttribute("title", "Comma separated, any case - read as null on both sides");
 });

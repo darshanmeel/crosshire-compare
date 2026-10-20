@@ -1,8 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { DERIVED_KEYS, errorText, SETUP_KEY, type Settings } from "../setup/api";
-import { CommitInput } from "../ui/kit";
+import { CommitInput, InfoTip } from "../ui/kit";
 import "./values.css";
+
+const NULLS = "Comma separated, any case - read as null on both sides";
+const ORDER = "Order, per value: transform steps → null folding → trim → type.";
 
 /** How values are read - the switches the run takes with it. They live on the server, so they
  *  survive a trip to the Profiling page as state.KEEP made them do. */
@@ -18,12 +21,17 @@ export function HowValuesRead({ settings }: { settings: Settings }) {
   );
   return (
     <div className="vx-how" role="group" aria-labelledby="vx-how-h">
-      <h4 className="vx-h" id="vx-how-h">How values are read</h4>
+      <div className="vx-how-head">
+        <h4 className="vx-h" id="vx-how-h">How values are read</h4>
+        <InfoTip label="Order, per value" text={ORDER} />
+      </div>
       <div className="field">
-        <label className="lbl" htmlFor="vx-nulls">Null tokens</label>
-        <CommitInput id="vx-nulls" className="in mono" aria-label="Null tokens" value={settings.null_tokens}
+        <span className="vx-how-head">
+          <label className="lbl" htmlFor="vx-nulls">Null tokens</label>
+          <InfoTip label="About null tokens" text={NULLS} />
+        </span>
+        <CommitInput id="vx-nulls" className="in mono" aria-label="Null tokens" value={settings.null_tokens} title={NULLS}
                      onDone={(v) => put.mutate({ null_tokens: v })} />
-        <span className="hint">comma separated, any case - read as null on both sides</span>
       </div>
       {tick("empty_as_null", "Empty string is null")}
       {tick("trim", "Trim whitespace")}
@@ -34,7 +42,6 @@ export function HowValuesRead({ settings }: { settings: Settings }) {
                      onDone={(v) => put.mutate({ tolerance: Math.max(0, Number(v) || 0) })} />
         <span className="hint">absolute · 0 = exact</span>
       </div>
-      <span className="hint">Order, per value: transform steps → null folding → trim → type.</span>
       {put.error && <div className="note error" role="alert">{errorText(put.error)}</div>}
     </div>
   );

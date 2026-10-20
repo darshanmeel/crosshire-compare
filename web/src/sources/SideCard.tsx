@@ -122,14 +122,17 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
              onChange={(e) => set({ snapshot: e.target.checked })} />{inline ? "Snapshot to Parquet (read once)" : "Snapshot the rows read to Parquet"}
     </label>
   );
-  const loadBtn = (small: boolean) => (
-    <Button variant={small ? "default" : "dark"} size={small ? "sm" : "md"} className={small ? "load-again" : undefined}
+  const loadBtn = (small: boolean, again = false) => (
+    <Button variant={small || again ? "default" : "dark"} size={small ? "sm" : "md"} className={small ? "load-again" : undefined}
+            aria-label={again ? (single ? "Load" : `Load ${tag}`) : undefined}
             disabled={needFetch ? !db.plan?.sql || db.fetching : !cols.length || load.isPending}
             onClick={() => (needFetch ? db.start.mutate() : load.mutate())}>
-      {db.fetching ? db.line : load.isPending ? "Reading the rows…" : single ? "Load" : `Load ${tag}`}
+      {db.fetching ? db.line : load.isPending ? "Reading the rows…" : single ? "Load" : `Load ${tag}`}{again && !db.fetching && !load.isPending && " again"}
     </Button>
   );
   const close = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
+  const newCols = cols.length > 0 && (!loaded || cols.join("\u0000") !== view!.columns.join("\u0000"));
+  const dirty = loaded && (newCols || changedSinceLoad(tag, view, askedNow));   // Load comes back to the fore
   const panels = <>
     {open === "rows" && (
       <div className="card-panel" id={`${id}-rows`} role="group" aria-label="Rows to read" onKeyDown={close}>
@@ -146,11 +149,10 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
         </label>
         {f.how === "database" && <FetchCap tag={tag} db={db} />}
         {!dbInline && snapshot(false)}
+        {!compact && loaded && !dirty && <div className="row">{loadBtn(false, true)}</div>}
       </div>
     )}
   </>;
-  const newCols = cols.length > 0 && (!loaded || cols.join("\u0000") !== view!.columns.join("\u0000"));
-  const dirty = loaded && (newCols || changedSinceLoad(tag, view, askedNow));   // Load comes back to the fore
 
   return (
     <section className={["card", "side-card", compact && "compact"].filter(Boolean).join(" ")} aria-label={title}>
@@ -194,7 +196,7 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
         <LoadedLine tag={tag} view={view} box={f.name} otherBox={other.name} otherView={src?.sides?.[otherTag]}
                     preview={preview} onPreview={() => setPreview((p) => !p)} previewId={`${id}-preview`}
                     cols={compact && isCsv && f.how !== "database" ? `delimiter ${f.delimiter} · ${f.header ? "first row is a header" : "no header row"}` : undefined}>
-          {compact ? <>{toggles}{loadBtn(true)}{extra}</> : !dirty && loadBtn(true)}
+          {compact && <>{toggles}{loadBtn(true)}{extra}</>}
         </LoadedLine>
       )}
       {compact && panels}

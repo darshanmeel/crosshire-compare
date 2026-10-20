@@ -99,7 +99,9 @@ test("once loaded, Load moves to the foot; a changed choice brings it back with 
   await userEvent.click(await screen.findByRole("button", { name: "Load A" }));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/^Loaded · /));
   expect(screen.queryByText("The choices above changed since the last Load")).toBeNull();
-  expect(screen.getByRole("button", { name: "Load A" }).closest(".card-foot")).not.toBeNull();
+  expect(screen.queryByRole("button", { name: "Load A" })).toBeNull();          // the foot is two quiet lines
+  await userEvent.click(screen.getByRole("button", { name: "Advanced" }));      // Load A again sits under Advanced
+  expect(within(screen.getByRole("group", { name: "Advanced" })).getByRole("button", { name: "Load A" })).toHaveTextContent("Load A again");
   await userEvent.clear(screen.getByLabelText("Delimiter"));
   await userEvent.type(screen.getByLabelText("Delimiter"), ";");
   expect(screen.getByText("The choices above changed since the last Load")).toBeInTheDocument();

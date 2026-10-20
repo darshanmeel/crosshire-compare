@@ -7,9 +7,9 @@
 .cols-tbl .w-role { width: 200px; }
 .cols-tbl .w-col { width: 196px; }
 .cols-tbl .w-swap { width: 36px; padding: 0; }
-.cols-tbl .w-type { width: 128px; }
+.cols-tbl .w-type { width: 108px; }
 .cols-tbl .w-origin { width: 132px; }
-.cols-tbl .w-case { width: 168px; }
+.cols-tbl .w-case { width: 150px; }
 .cols-tbl .w-more { width: 44px; padding: 0; }
 .cols-run .w-role { width: 120px; }
 .cols-tbl td { overflow: hidden; }
@@ -27,6 +27,13 @@
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cols-steps-link:hover { background: var(--fs-accent-subtle); color: var(--fs-accent); }
 .cols-add { height: 28px; padding: 0 8px; margin-left: -8px; }
+
+/* Case reads as text ("exact · default") until hovered or focused; a pair's own case keeps its border */
+.cols-tbl .sel.case { width: auto; height: 30px; margin-left: -9px; padding: 0 24px 0 8px; border-color: transparent; background-color: transparent;
+  background-image: none; color: var(--fs-text2); font-family: var(--font-sans); font-size: 13px; }
+.cols-tbl .sel.case:hover, .cols-tbl .sel.case:focus-visible, .cols-tbl .sel.case.set {
+  border-color: var(--fs-border2); background-color: var(--fs-panel); color: var(--fs-text);
+  background-image: linear-gradient(45deg, transparent 50%, var(--fs-text2) 50%), linear-gradient(135deg, var(--fs-text2) 50%, transparent 50%); }
 
 .cols-origin { font-size: 13px; white-space: nowrap; }
 .cols-origin.dim { color: var(--fs-text2); }
@@ -80,12 +87,15 @@
 /* Add a column: a ready-made expression or your own, per side. */
 .add-col-body { display: flex; flex-direction: column; gap: 12px; }
 .add-col-body > .field { max-width: 360px; }
+/* one row per side: its badge and name, the column it is made from, the expression in mono */
 .add-col-side { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 12px; }
-.add-col-side > .lbl { width: 100%; display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.add-col-who { display: inline-flex; align-items: center; gap: 8px; min-width: 120px; min-height: 36px; font-size: 13px; font-weight: 500; color: var(--fs-text); }
 .add-col-side .grow { flex: 1 1 260px; }
-.add-col-side input.m { font-family: var(--font-mono); font-size: 12px; }
+.add-col-side input.m { width: 100%; font-family: var(--font-mono); font-size: 12px; }
 .add-col-foot { display: flex; gap: 8px; }
 .added-cols { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; font-size: 13px; }
-.added-col { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 10px; border: 1px solid var(--fs-line); border-radius: var(--r-sm); }
+.added-col { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 2px 2px 2px 10px; border: 1px solid var(--fs-line); border-radius: var(--r-sm); }
 .added-col .m { font-family: var(--font-mono); font-size: 12px; color: var(--fs-text2); overflow-wrap: anywhere; }
-.added-col .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+.added-col .m { display: inline-flex; align-items: center; gap: 6px; }
+.added-col .side-badge { width: 20px; height: 20px; border-radius: 5px; font-size: 11px; }
+.added-col .btn.ico { width: 36px; padding: 0; justify-content: center; border-color: transparent; background: transparent; }

@@ -3,7 +3,8 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { marks } from "../ui/marks";
 import { Icon } from "../ui/icons";
-import { Button, Chip, CommitInput, num, Pill, plural, Seg, type Tone as PillTone } from "../ui/kit";
+import { Button, Chip, CommitInput, LinkButton, num, Pill, plural, Seg, type Tone as PillTone } from "../ui/kit";
+import { plainSteps } from "../columns/pairing";
 import { errorText, useSetupSend, useStepsRebuild, type CheckView, type Frame, type SetupReady, type Spec, type Step, type StepsMeta, type TryView } from "../setup/api";
 import { FrameTable } from "../setup/FrameTable";
 import { sideLabels } from "../sources/names";
@@ -63,8 +64,9 @@ function Say({ spec, labels }: { spec: Spec; labels: [string, string] }) {
     <p className="vx-say">
       {sides.map((w, i) => {
         const said = w === "A" ? spec.a_said : spec.b_said;
+        const words = plainSteps(w === "A" ? spec.a_steps : spec.b_steps, said);
         return (
-          <span key={w}>{i > 0 && "; "}{labels[w === "A" ? 0 : 1]} runs {plural(said.length, "step")} on <code>{w === "A" ? spec.a_src : spec.b_src}</code> ({said.join(" → ")})</span>
+          <span key={w}>{i > 0 && "; "}{labels[w === "A" ? 0 : 1]} runs {plural(said.length, "step")} on <code>{w === "A" ? spec.a_src : spec.b_src}</code> (<span title={said.join(" → ")}>{words.join(" → ")}</span>)</span>
         );
       })}
       {sides.length === 1 && <>, {labels[sides[0] === "A" ? 1 : 0]} reads it as it is</>}; then both are compared as <b>{spec.kind}</b>.
@@ -162,10 +164,17 @@ function Preview({ s, spec, which, check }: { s: SetupReady; spec: Spec; which: 
   const fold = caseOf(s, spec) === "ignore";
   const f = mine.data;
   const o = theirs.data;
+  const [me, them] = which === "A" ? labels : [labels[1], labels[0]];
+  /** Each shown row's match, as the run would read it; null where the other side has no such row. */
+  const oks = f && !f.error && o && !o.error
+    ? f.rows.map((_, r) => (r < o.rows.length ? same(cell(f, r, "Compared as"), cell(o, r, "Compared as"), spec.kind, fold, s.settings.tolerance) : null))
+    : [];
+  const shown = oks.filter((x) => x !== null).length;
   return (
     <section className="panel vx-preview" aria-label="Preview">
       <div className="panel-head">
         <h4 className="vx-h">Preview on the first rows</h4>
+        {shown > 0 && <span className="sub">{num(oks.filter((x) => x === true).length)} of {plural(shown, "shown row")} match after these steps</span>}
         {check}
       </div>
       {f?.error ? <div className="vx-check"><div className="note error" role="alert">{f.error}</div></div>
@@ -174,17 +183,16 @@ function Preview({ s, spec, which, check }: { s: SetupReady; spec: Spec; which: 
           <div className="tblwrap">
             <table className="tbl compact preview" aria-label="Preview on the first rows">
               <thead><tr>
-                <th><span className={`sw ${sw}`} />{src} · before</th>
-                <th>{steps ? `after step ${steps}` : "as read"}</th>
-                {typed && <th>as {spec.kind}</th>}
-                <th><span className={`sw ${sw === "a" ? "b" : "a"}`} />{osrc}</th>
+                <th title={`${me} as it sits in the file`}><span className={`sw ${sw}`} />{src} · before</th>
+                <th title={steps ? `${me} after its steps` : `${me} as it is read, with no steps`}>{steps ? `after step ${steps}` : "as read"}</th>
+                {typed && <th title={`${me} as it is compared`}>as {spec.kind}</th>}
+                <th title={`${them} as it is compared, the same row of its file`}><span className={`sw ${sw === "a" ? "b" : "a"}`} />{osrc}</th>
                 <th className="match">Match</th>
               </tr></thead>
               <tbody>{f.rows.map((_, r) => {
                 const conv = cell(f, r, "Converts");
                 const theirsVal = o && !o.error ? cell(o, r, "Compared as") : "";
-                const ok = o && !o.error && r < o.rows.length
-                  ? same(cell(f, r, "Compared as"), theirsVal, spec.kind, fold, s.settings.tolerance) : null;
+                const ok = oks[r] ?? null;
                 return (
                   <tr key={r}>
                     <td className="m before">{cell(f, r, "In the file")}</td>
@@ -199,7 +207,6 @@ function Preview({ s, spec, which, check }: { s: SetupReady; spec: Spec; which: 
               })}</tbody>
             </table>
           </div>
-          <div className="vx-cap">The first rows of each file, side by side as they sit in the file - {labels[which === "A" ? 0 : 1]} after its steps, {labels[which === "A" ? 1 : 0]} as it is compared.</div>
         </>
       ) : <div className="vx-cap">{mine.isLoading ? "Reading the first rows…" : "No rows to show."}</div>}
     </section>
@@ -272,10 +279,17 @@ export function TransformBox({ s }: { s: SetupReady }) {
     <>
       <div className="panel-body">
         <Say spec={spec} labels={labels} />
-        <Seg<Which> label="Which side" value={which} onChange={(w) => { setWhich({ canon, which: w }); setDraft(null); }}
-          options={(["A", "B"] as const).map((w, i) => ({
-            value: w, label: <span className="vx-side"><span className={`sw ${w.toLowerCase()}`} />{labels[i]} steps · {(w === "A" ? spec.a_steps : spec.b_steps).length}</span>,
-          }))} />
+        <div className="vx-sides">
+          <Seg<Which> label="Which side" value={which} onChange={(w) => { setWhich({ canon, which: w }); setDraft(null); }}
+            options={(["A", "B"] as const).map((w, i) => ({
+              value: w, label: <span className="vx-side"><span className={`sw ${w.toLowerCase()}`} />{labels[i]} steps · {(w === "A" ? spec.a_steps : spec.b_steps).length}</span>,
+            }))} />
+          {steps.length > 0 && <>
+            <span className="grow" />
+            <LinkButton disabled={pending} onClick={() => void run(() => stepsCall("copy"))}>Copy to {labels[1 - wi]}</LinkButton>
+            <LinkButton disabled={pending} onClick={() => void run(() => stepsCall("clear"))}>Clear</LinkButton>
+          </>}
+        </div>
 
         <div className="pipe" aria-label={`${labels[wi]} steps`} role="list">
           {!steps.length && !draft && <div className="vx-empty" role="listitem">No steps - {labels[wi]} reads <code>{which === "A" ? spec.a_src : spec.b_src}</code> as it is in the file.</div>}
@@ -313,12 +327,6 @@ export function TransformBox({ s }: { s: SetupReady }) {
           )}
         </div>
 
-        {steps.length > 0 && (
-          <div className="vx-tools">
-            <Button size="sm" disabled={pending} onClick={() => void run(() => stepsCall("copy"))}>Copy to {labels[1 - wi]}</Button>
-            <Button size="sm" disabled={pending} onClick={() => void run(() => stepsCall("clear"))}>Clear</Button>
-          </div>
-        )}
         {err && <div className="note error" role="alert">{marks(err)}</div>}
 
         <div className="field">
@@ -353,7 +361,9 @@ export function TransformBox({ s }: { s: SetupReady }) {
                       aria-label={`Edit ${x.a_src} and ${x.b_src}`}>
                 {w === "A" ? x.a_src : w === "B" ? x.b_src : x.canon}
               </button>
-              <span className="m">{w ? (w === "A" ? x.a_said : x.b_said).join(" → ") : ""}{x.kind !== "text" ? `${w ? " → " : "read as "}${x.kind}` : ""}</span>
+              <span className="m" title={w ? (w === "A" ? x.a_said : x.b_said).join(" → ") : undefined}>
+                {w ? (w === "A" ? plainSteps(x.a_steps, x.a_said) : plainSteps(x.b_steps, x.b_said)).join(" → ") : ""}{x.kind !== "text" ? `${w ? " → " : "read as "}${x.kind}` : ""}
+              </span>
             </span>
           ));
         })}

@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { errorText, useSetupSend, type SetupReady } from "../setup/api";
 import { sideLabels } from "../sources/names";
-import { Button, LinkButton } from "../ui/kit";
+import { Button, SideBadge } from "../ui/kit";
+import { Icon } from "../ui/icons";
 import { marks } from "../ui/marks";
 
 type Preset = { id: string; label: string; expr: string };
@@ -59,7 +60,7 @@ export function AddColumn({ s, onClose }: { s: SetupReady; onClose: () => void }
         </label>
         {(["A", "B"] as const).map((w, i) => (
           <div className="add-col-side" key={w}>
-            <span className="lbl"><span className={`sw ${w.toLowerCase()}`} aria-hidden="true" />{[NA, NB][i]}</span>
+            <span className="add-col-who"><SideBadge side={w} />{[NA, NB][i]}</span>
             {p && (
               <label className="field">
                 <span className="lbl">from</span>
@@ -101,11 +102,11 @@ export function AddedColumns({ s }: { s: SetupReady }) {
       {s.derived.map((d) => (
         <span className="added-col" role="listitem" key={d.name}>
           <strong>{d.name}</strong>
-          {d.a && <span className="m" title={`${NA}: ${d.a}`}><span className="sw a" aria-hidden="true" />{d.a}</span>}
-          {d.b && <span className="m" title={`${NB}: ${d.b}`}><span className="sw b" aria-hidden="true" />{d.b}</span>}
-          <LinkButton disabled={send.isPending} aria-label={`Remove ${d.name}`}
+          {d.a && <span className="m" title={`${NA}: ${d.a}`}><SideBadge side="a" /><span className="sr-only">{NA}: </span>{d.a}</span>}
+          {d.b && <span className="m" title={`${NB}: ${d.b}`}><SideBadge side="b" /><span className="sr-only">{NB}: </span>{d.b}</span>}
+          <Button className="ico" disabled={send.isPending} aria-label={`Remove ${d.name}`} title="Remove"
             onClick={() => send.mutate({ method: "DELETE", path: `/derived/${encodeURIComponent(d.name)}` },
-                                       { onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }) })}>remove</LinkButton>
+                                       { onSuccess: () => qc.invalidateQueries({ queryKey: ["sources"] }) })}><Icon name="x" size="sm" /></Button>
         </span>
       ))}
     </div>

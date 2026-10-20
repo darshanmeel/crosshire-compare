@@ -73,7 +73,8 @@ function PairRow({ row, i, s, busy, edit, setRole, open, toggle }: {
   const both = paired(row);
   const o = originOf(row, s.names);
   const si = specIndex(s, row);
-  const steps = stepsLine(s.specs[si]);
+  const steps = stepsLine(s.specs[si]);            // as the engine says them: the tooltip and the name
+  const words = stepsLine(s.specs[si], true);      // in plain words: what the cell shows
   const role = roleOf(row);
   return (
     <tr className={both ? (role === "key" ? "cols-key" : undefined) : "muted"}>
@@ -94,13 +95,13 @@ function PairRow({ row, i, s, busy, edit, setRole, open, toggle }: {
       <td className="cols-steps">
         {both && si >= 0 && (steps
           ? <button type="button" className="cols-steps-link" title={steps} onClick={() => setView({ view: "values", pair: si })}
-                    aria-label={`Steps for ${row["Common name"]}: ${steps}`}>{steps}</button>
+                    aria-label={`Steps for ${row["Common name"]}: ${steps}`}>{words}</button>
           : <LinkButton className="cols-add" onClick={() => setView({ view: "values", pair: si })} aria-label={`Add a step to ${row["Common name"]}`}>+ Add</LinkButton>)}
       </td>
       <td className={o.tone ? `cols-origin ${o.tone}` : "cols-origin dim"} title={o.title}>{o.text}</td>
       <td className="dim">
         {both && isText(row)
-          ? <select className="sel type" aria-label={`Case, row ${i + 1}`} value={row.Case} disabled={busy}
+          ? <select className={row.Case ? "sel case set" : "sel case"} aria-label={`Case, row ${i + 1}`} value={row.Case} disabled={busy}
                     onChange={(e) => edit(i, "Case", e.target.value)}>
               {s.cases.map((x) => <option key={x} value={x}>{caseText(x, s.settings.ignore_case)}</option>)}
             </select>

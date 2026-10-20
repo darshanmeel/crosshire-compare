@@ -38,6 +38,9 @@
 /* the foot once loaded */
 .side-card .card-foot.loaded { align-items: center; }
 .side-card .card-foot .what { overflow-wrap: anywhere; }
+/* two lines: what was read, then the column names with Preview 10 rows at their end */
+.side-card:not(.compact) .card-foot.loaded .what { flex-basis: 100%; }
+.side-card:not(.compact) .card-foot.loaded .cols { flex: 1 1 240px; min-width: 0; }
 .side-card .card-foot .link-btn { font-family: var(--font-sans); height: 30px; }
 .side-card .preview-wrap { min-width: 0; }
 .side-card .preview-wrap .table-wrap { max-height: 420px; }

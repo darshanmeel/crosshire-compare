@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { ColumnsSection } from "./ColumnsSection";
 import { VIRTUAL_FROM } from "./ColumnTable";
+import { plainStep } from "./pairing";
 import { getView } from "../shell/view";
 import { IDLE, json, mount, row, setup, type Call } from "../setup/testkit";
 import type { SetupView } from "../setup/api";
@@ -92,6 +93,24 @@ test("Case is offered on text pairs only; blank says what the switch makes it", 
   expect(screen.queryByLabelText("Case, row 2")).toBeNull();          // salary reads as a number
 });
 
+test("Case reads as text until a pair sets its own; then it keeps its border", async () => {
+  stub(setup({ rows: [row("emp_id", "EmployeeId"), row("last_name", "FullName", { Case: "ignore" })] }));
+  mount(<ColumnsSection />);
+  await board();
+  expect(screen.getByLabelText("Case, row 1")).toHaveClass("sel", "case");
+  expect(screen.getByLabelText("Case, row 1")).not.toHaveClass("set");
+  expect(screen.getByLabelText("Case, row 2")).toHaveClass("set");
+});
+
+test("a step in plain words: the op's letters take their values, other values follow it", () => {
+  expect(plainStep({ op: "part N split by S", params: { s: " ", n: "2" } })).toBe('part 2 split by " "');
+  expect(plainStep({ op: "to date", params: { fmt: "%d/%m/%Y" } })).toBe("to date %d/%m/%Y");
+  expect(plainStep({ op: "to date", params: { fmt: "" } })).toBe("to date");
+  expect(plainStep({ op: "characters from N, M long", params: { n: "3", m: "4" } })).toBe("characters from 3, 4 long");
+  expect(plainStep({ op: "replace text", params: { a: "-", b: "" } })).toBe('replace text "-" → ""');
+  expect(plainStep({ op: "trim", params: {} })).toBe("trim");
+});
+
 test("the role buttons write the Key and Compare ticks, the second with the version the first answered", async () => {
   const keyed = setup({ rows: [row("emp_id", "EmployeeId", { "Common name": "emp_id", Key: true, Role: "key", tone: "pos" }), ...setup().rows.slice(1)],
                         keys: ["emp_id"], compare: ["salary"] });
@@ -141,6 +160,17 @@ test("a pair's steps read in one line and open the values editor; none offers + 
   expect(getView()).toMatchObject({ view: "values", pair: 1 });
   await userEvent.click(screen.getByRole("button", { name: "Add a step to emp_id" }));
   expect(getView()).toMatchObject({ view: "values", pair: 0 });
+});
+
+test("the steps cell says them in plain words, with the engine's text in the tooltip", async () => {
+  const s = setup();
+  s.specs[1] = { ...s.specs[1], b_steps: [{ op: "part N split by S", params: { s: " ", n: "2" } }], b_said: ["part N split by S (separator=' ', N=2)"] };
+  stub(s);
+  mount(<ColumnsSection />);
+  await board();
+  const cell = screen.getByRole("button", { name: "Steps for salary: B · part N split by S (separator=' ', N=2)" });
+  expect(cell).toHaveTextContent('B · part 2 split by " "');
+  expect(cell).toHaveAttribute("title", "B · part N split by S (separator=' ', N=2)");
 });
 
 test("how each pair was made, and the guess line in the foot", async () => {

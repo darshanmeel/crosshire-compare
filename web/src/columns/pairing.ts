@@ -1,6 +1,6 @@
 // web/src/columns/pairing.ts - what the pairing board says about a row, worked out from the setup view
 // (no fetching here): its role, how the pair was made, its steps in a line, its case.
-import type { Row, SetupReady, Spec } from "../setup/api";
+import type { Row, SetupReady, Spec, Step } from "../setup/api";
 import { plural } from "../ui/kit";
 
 export type Role = "key" | "compare" | "skip";
@@ -37,11 +37,31 @@ export function originOf(r: Row, names: [string, string]): Origin {
 /** The pair's spec (its steps) - the specs are the pairs, named by their common name. */
 export const specIndex = (s: SetupReady, r: Row) => (paired(r) ? s.specs.findIndex((sp) => sp.canon === r["Common name"]) : -1);
 
-/** The steps of a pair in one line: `B · part 2, split by " "`, both sides when both have some. */
-export function stepsLine(sp: Spec | undefined): string {
+/** A step in plain words with its values in place: `part 2 split by " "`, `to date %d/%m/%Y`. A
+ *  parameter the op names by a capital letter (N, M, S, C) takes that letter's place; any other
+ *  follows the op, a lone one as it is (a format, an expression), two quoted with an arrow. */
+export function plainStep(st: Step): string {
+  const p = Object.entries(st.params ?? {}).map(([k, v]) => [k, String(v ?? "")] as const);
+  const q = (v: string) => (/^\d+$/.test(v) ? v : `"${v}"`);
+  const inName = (k: string) => k.length === 1 && st.op.split(" ").map((w) => w.replace(",", "")).includes(k.toUpperCase());
+  const words = st.op.replace(/\b[A-Z]\b/g, (c) => { const hit = p.find(([k]) => k === c.toLowerCase()); return hit ? q(hit[1]) : c; });
+  const rest = p.filter(([k]) => !inName(k)).map(([, v]) => v);
+  const tail = rest.length > 1 ? rest.map(q).join(" → ") : (rest[0] ?? "").trim();
+  return tail ? `${words} ${tail}` : words;
+}
+
+/** A side's steps in plain words, or as the engine said them when the two lists do not line up. */
+export const plainSteps = (steps: Step[] | undefined, said: string[] | undefined): string[] =>
+  steps?.length && steps.length === said?.length ? steps.map(plainStep) : said ?? [];
+
+/** The steps of a pair in one line, as the engine says them: `B · part N split by S (separator=' ', N=2)`,
+ *  both sides when both have some. `plain` says them in plain words instead: `B · part 2 split by " "`. */
+export function stepsLine(sp: Spec | undefined, plain = false): string {
   if (!sp) return "";
-  const side = (k: "A" | "B", said: string[]) => (said.length ? `${k} · ${said.join(", then ")}` : "");
-  return [side("A", sp.a_said ?? []), side("B", sp.b_said ?? [])].filter(Boolean).join("; ");
+  const said = (k: "A" | "B") => (k === "A" ? sp.a_said ?? [] : sp.b_said ?? []);
+  const words = (k: "A" | "B") => (plain ? plainSteps(k === "A" ? sp.a_steps : sp.b_steps, said(k)) : said(k));
+  const side = (k: "A" | "B") => (words(k).length ? `${k} · ${words(k).join(", then ")}` : "");
+  return [side("A"), side("B")].filter(Boolean).join("; ");
 }
 
 export const isText = (r: Row) => r.Type === "text";
