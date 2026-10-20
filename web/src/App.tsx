@@ -75,7 +75,7 @@ export default function App() {
   useCompareFreshness();
   useAnchor();
   return (
-    <>
+    <div className="app">
       <AppHeader meta={meta} page={page} setPage={setPage} />
       <Rail page={page} />
       <main className="page">
@@ -85,6 +85,6 @@ export default function App() {
           : meta && (page === "Compare" ? <ComparePage meta={meta} /> : <ProfilePage meta={meta} setPage={setPage} />)}
       </main>
       {v.drawer === "connections" && <ConnectionsDrawer meta={meta} onClose={() => setView({ drawer: null })} />}
-    </>
+    </div>
   );
 }

@@ -14,7 +14,7 @@ const CONNS = [
 ];
 const entry = (id: string, state: string, label: string) => ({ id, at: "10:00:00", kind: "Fetch", label, state, seconds: null, lines: [], page: "Compare" });
 
-test("a database side asks for the password, fetches as a job, then holds the fetch", async () => {
+test("a database side asks for the password, and its one Load fetches as a job, then loads what was fetched", async () => {
   const calls: Call[] = [];
   let fetched = false;
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
@@ -27,6 +27,7 @@ test("a database side asks for the password, fetches as a job, then holds the fe
     if (url === "/api/sources/A/fetch") return json(entry("j1", "running", "Fetching from PG…"));
     if (url === "/api/jobs/j1") { fetched = true; return json(entry("j1", "done", "Fetched 3,000 rows in 0.4s")); }
     if (url === "/api/sources/A/schema") return json({ label: "PG.parquet", kind: "parquet", columns: [], error: "" });
+    if (url === "/api/sources/A/load") return json({ side: view("A", { loaded: true, name: "PG", is_database: true, conn: "PG", origin: "Postgres · hr.employees" }), warnings: [] });
     return json(body());
   }));
   mount(<SideCard tag="A" meta={META} />);
@@ -35,11 +36,18 @@ test("a database side asks for the password, fetches as a job, then holds the fe
   expect(screen.queryByRole("option", { name: /DATA/ })).toBeNull();          // a folder is picked under Path on disk
   await userEvent.type(screen.getByLabelText("Table"), "hr.employees");
   await userEvent.type(await screen.findByLabelText("Password"), "typed");
+  expect(screen.queryByLabelText("Fetch at most (0 = all)")).toBeNull();          // the cap and its warning sit under Advanced
+  await userEvent.click(screen.getByRole("button", { name: "Advanced" }));
+  expect(screen.getByLabelText("Fetch at most (0 = all)")).toHaveValue(1000000);
   expect(screen.getByText(/A cap without an ORDER BY/)).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Fetch A" }));
+  expect(screen.queryByRole("button", { name: "Fetch A" })).toBeNull();           // one Load, no separate Fetch
+  await userEvent.click(screen.getByRole("button", { name: "Load A" }));
   await waitFor(() => expect(calls.some(([u]) => u === "/api/sources/A/fetch")).toBe(true));
   const sent = JSON.parse(calls.find(([u]) => u === "/api/sources/A/fetch")![1]!.body as string);
   expect(sent).toMatchObject({ connection: "PG", mode: "table", table: "hr.employees", cap: 1000000, password: "typed" });
+  await waitFor(() => expect(calls.some(([u]) => u === "/api/sources/A/load")).toBe(true));      // then the load, after the fetch
+  expect(calls.findIndex(([u]) => u === "/api/sources/A/load")).toBeGreaterThan(calls.findIndex(([u]) => u === "/api/jobs/j1"));
+  expect(getForm("A").name).toBe("PG");                                          // the box left at Left takes the loaded name
   expect(await screen.findByText("Fetched at 10:00:00 - 3,000 rows")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Fetch again" })).toBeInTheDocument();
 });
@@ -68,8 +76,8 @@ test("each card's foot says what was read, warns of two sides of one name, and p
   mount(<SourcesSection meta={META} />);
   const A = await screen.findByRole("region", { name: "File A" });
   const B = screen.getByRole("region", { name: "File B" });
-  expect(await within(A).findByText("DuckDB file · hr.employees")).toBeInTheDocument();
-  expect(within(A).getByText("· 3,000 rows × 2 columns")).toBeInTheDocument();
+  expect(await within(A).findByText("hr.employees")).toBeInTheDocument();           // the table first, the connection last
+  expect(within(A).getByText("· 3,000 rows × 2 columns · SAMPLE · DuckDB file")).toBeInTheDocument();
   expect(within(A).getByText("emp_id, first_name")).toBeInTheDocument();
   expect(within(A).getByText("Both sides are called SAMPLE")).toBeInTheDocument();
   expect(within(B).getByText("The fetch returned no rows.")).toBeInTheDocument();
@@ -143,7 +151,7 @@ test("a fetch that fails on the login says to type the password again", async ()
   }));
   setForm("A", { how: "database", connection: "PG", db_mode: "sql", sql: "SELECT 1" });
   mount(<SideCard tag="A" meta={META} />);
-  await userEvent.click(await screen.findByRole("button", { name: "Fetch A" }));
+  await userEvent.click(await screen.findByRole("button", { name: "Load A" }));
   expect(await screen.findByText(/password authentication failed/)).toBeInTheDocument();
   expect(screen.getByText(/Type the password again/)).toBeInTheDocument();
 });

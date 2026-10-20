@@ -68,7 +68,8 @@ test("each saved connection is a card with its kind, status, URI and where its p
   expect(within(pg).getByText("Not tested")).toBeInTheDocument();
   expect(within(pg).getByText(/password saved/)).toBeInTheDocument();
   const team = within(list).getByRole("listitem", { name: "TEAM" });
-  expect(within(team).getByText(/from team.yml · read-only/)).toBeInTheDocument();
+  expect(within(team).getByText("shared · read-only")).toBeInTheDocument();
+  expect(within(team).getByText(/In team.yml - change it there/)).toBeInTheDocument();
   expect(within(team).queryByRole("button", { name: /Edit/ })).toBeNull();
   expect(screen.getByText("COMPARE_CONNECTIONS")).toBeInTheDocument();
   expect(screen.getByText("COMPARE_DATA_DIR")).toBeInTheDocument();
@@ -174,6 +175,7 @@ test("a connections file is previewed, then added; mine can be downloaded withou
   vi.stubGlobal("fetch", server(calls));
   mount();
   await screen.findByRole("list", { name: "Saved connections" });
+  await userEvent.click(screen.getByText("Import or export"));                   // folded while there are connections
   const file = new File(["- {name: NEWDB, kind: postgresql}"], "team.yml", { type: "text/yaml" });
   await userEvent.upload(screen.getByLabelText("Connections file"), file);
   expect(await screen.findByText("NEWDB")).toBeInTheDocument();
@@ -181,4 +183,43 @@ test("a connections file is previewed, then added; mine can be downloaded withou
   expect(await screen.findByText("Saved NEWDB")).toBeInTheDocument();
   expect(sent(calls, "/api/connections/import", "POST")).toMatchObject({ filename: "team.yml", keep_passwords: false });
   expect(screen.getByRole("link", { name: /Download mine/ })).toHaveAttribute("href", "/api/connections/export");
+});
+
+test("the title carries the count; a new connection starts on Postgres with the timeout under More options", async () => {
+  vi.stubGlobal("fetch", server([]));
+  mount();
+  const dialog = screen.getByRole("dialog", { name: "Connections" });
+  await waitFor(() => expect(within(dialog).getByRole("heading", { level: 2 })).toHaveTextContent("Connections3"));
+  expect(screen.queryByText(/saved\./)).toBeNull();                               // the count lives in the title only
+  expect(within(form()).getByLabelText("Driver")).toHaveValue("postgresql");
+  expect(screen.queryByLabelText(/timeout/i)).toBeNull();
+  await userEvent.click(screen.getByText("More options"));
+  expect(screen.getByLabelText(/timeout/i)).toHaveValue(600);
+  expect(screen.queryByLabelText("Connections file")).toBeNull();                 // Import or export is folded
+});
+
+test("an env or shared card says where it lives; with no connection Import or export starts open", async () => {
+  vi.stubGlobal("fetch", server([]));
+  const { unmount } = render(<QueryClientProvider client={new QueryClient()}><ConnectionsDrawer meta={META} onClose={vi.fn()} /></QueryClientProvider>);
+  const team = await screen.findByRole("listitem", { name: "TEAM" });
+  expect(within(team).getByText("shared · read-only")).toBeInTheDocument();
+  expect(within(team).getByText(/In team.yml - change it there/)).toBeInTheDocument();
+  unmount();
+  vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { headers: { "Content-Type": "application/json" } })));
+  mount();
+  expect(await screen.findByLabelText("Connections file")).toBeInTheDocument();
+});
+
+test("from 1100 px the drawer docks: no scrim, not modal, and the page beside it stays usable", async () => {
+  vi.stubGlobal("fetch", server([]));
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: true, media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+  const { container } = render(<QueryClientProvider client={new QueryClient()}>
+    <div className="app"><main className="page"><button type="button">behind</button></main><ConnectionsDrawer meta={META} onClose={vi.fn()} /></div>
+  </QueryClientProvider>);
+  const dialog = screen.getByRole("dialog", { name: "Connections" });
+  expect(dialog).toHaveClass("docked");
+  expect(dialog).toHaveAttribute("aria-modal", "false");
+  expect(dialog).toHaveFocus();
+  expect(container.querySelector(".drawer-scrim")).toBeNull();
+  expect((container.querySelector("main") as HTMLElement).inert).toBeFalsy();     // made inert only below 1100 px
 });

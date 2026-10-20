@@ -14,7 +14,9 @@
 .side-card .opts .lbl { letter-spacing: .1em; }
 .side-card .opts .link-btn.open svg, .side-card .card-foot .link-btn.open svg { transform: rotate(180deg); }
 .side-card .pathbox, .side-card .dbbox, .side-card .upload, .side-card .rows-to-read { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.side-card .upload .caption .staged { color: var(--fs-text); font-family: var(--font-mono); font-weight: 500; }
+.side-card .upload .staged { color: var(--fs-text); font-family: var(--font-mono); font-weight: 500; overflow-wrap: anywhere; }
+.side-card .upload-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; font-size: 13px; color: var(--fs-text3); }
+.side-card .upload-line .link-btn { height: 36px; }
 .side-card .in.cap { width: 120px; height: 32px; }
 .side-card .db-empty { justify-content: space-between; }
 .side-card .cols-found { margin: 0; font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }

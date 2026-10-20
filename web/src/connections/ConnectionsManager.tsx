@@ -3,14 +3,15 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Meta } from "../api/client";
+import { Expander } from "../ui/Expander";
 import { Button, Chip, Pill } from "../ui/kit";
 import { ConnectionForm } from "./ConnectionForm";
 import { FilesBox } from "./FilesBox";
 import { NEW, passwordText, refreshConnections, savedBody, type ConnForm, type ConnRow, type Tested } from "./types";
 import "./connections.css";
 
-export function useConnections() {
-  return useQuery({ queryKey: ["connections"], queryFn: () => api.get<ConnRow[]>("/api/connections") });
+export function useConnections(enabled = true) {
+  return useQuery({ queryKey: ["connections"], queryFn: () => api.get<ConnRow[]>("/api/connections"), enabled });
 }
 
 function status(t: Tested | undefined, busy: boolean) {
@@ -41,10 +42,11 @@ function ConnCard({ r, tested, onTested, onEdit, editing }: {
       <div className="top">
         <span className="name">{r.name}</span>
         <Chip>{r.label}</Chip>
+        {r.source !== "file" && <Chip>{r.source} · read-only</Chip>}
         {status(tested, test.isPending)}
         <span className="grow" />
-        {r.editable && <Button size="sm" onClick={() => test.mutate()} disabled={test.isPending} aria-label={`Test ${r.name}`}>Test</Button>}
-        {r.editable && <Button size="sm" onClick={onEdit} aria-pressed={editing} aria-label={`Edit ${r.name}`}>Edit</Button>}
+        {r.editable && <Button onClick={() => test.mutate()} disabled={test.isPending} aria-label={`Test ${r.name}`}>Test</Button>}
+        {r.editable && <Button onClick={onEdit} aria-pressed={editing} aria-label={`Edit ${r.name}`}>Edit</Button>}
       </div>
       <div className="uri" title={r.where}>{r.where}</div>
       <div className="said">
@@ -74,7 +76,6 @@ export function ConnectionsManager({ meta }: { meta?: Meta }) {
   return (
     <div className="conns">
       <p className="conn-intro">
-        {rows.length > 0 ? <><strong>{rows.length}</strong> saved. </> : null}
         Pick one under <strong>Database</strong> on either side; a folder connection shows under <strong>Path on disk</strong>.
       </p>
       {error && <div className="note error">{String((error as Error).message)}</div>}
@@ -92,7 +93,9 @@ export function ConnectionsManager({ meta }: { meta?: Meta }) {
       <div ref={formRef} className="conn-add">
         <ConnectionForm key={pick} meta={meta} pick={pick} onDone={(name) => setPick(name ?? NEW)} onTested={record} />
       </div>
-      <FilesBox rows={rows} />
+      {!isLoading && (      /* open by itself while there is no connection yet */
+        <Expander title="Import or export" open={rows.length === 0}><FilesBox rows={rows} /></Expander>
+      )}
       <p className="conn-foot">
         Override the file location with <code>COMPARE_CONNECTIONS</code>. Restrict file paths to a folder with <code>COMPARE_DATA_DIR</code>.
       </p>

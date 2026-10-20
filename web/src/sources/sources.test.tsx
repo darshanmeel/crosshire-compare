@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import { SideCard } from "./SideCard";
 import { getForm, setForm } from "./formStore";
-import { nameHint, sideLabels, sideName } from "./names";
+import { boxAfterLoad, nameHint, sideLabels, sideName } from "./names";
 import { body, json, META, mount, view, type Call } from "./testkit";
 
 test("an upload sends the file itself, with the write header", async () => {
@@ -92,8 +92,10 @@ test("the names: the box wins, and two sides of one name are told apart", () => 
   expect(sideName("A", "Left", db)).toBe("SAMPLE");
   expect(sideName("A", " HR ", db)).toBe("HR");
   expect(sideLabels("SAMPLE", "SAMPLE")).toEqual(["A · SAMPLE", "B · SAMPLE"]);
-  expect(nameHint("A", "Left", db, "SAMPLE", "SAMPLE")).toMatch(/^:orange\[Both sides are called SAMPLE\]/);
-  expect(nameHint("A", "Left", view("A", { name: "Left" }), "Left", "Right")).toBe("Tip: name this side - it names the output files");
+  expect(nameHint("SAMPLE", "SAMPLE")).toMatch(/^:orange\[Both sides are called SAMPLE\]/);
+  expect(nameHint("Left", "Right")).toBe("");                          // no "Tip: name this side" line any more
+  expect(boxAfterLoad("A", "Left", db)).toBe("SAMPLE");                 // a default box takes the loaded name
+  expect(boxAfterLoad("A", "HR", db)).toBe("HR");                       // a typed one stays
 });
 
 test("a folder deleted after it was picked falls back to Any path with a sentence", async () => {

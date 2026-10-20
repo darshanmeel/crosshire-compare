@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Meta } from "../api/client";
+import { Expander } from "../ui/Expander";
 import { Button, LinkButton, Seg } from "../ui/kit";
 import { NEW, connBody, envName, refreshConnections, type ConnForm, type PwWhere, type Tested } from "./types";
 
@@ -17,7 +18,8 @@ export function ConnectionForm({ meta, pick, onDone, onTested }: {
   const editing = pick !== NEW;
   const qc = useQueryClient();
   const cur = useQuery({ queryKey: ["connection", pick], queryFn: () => api.get<ConnForm>(`/api/connections/${encodeURIComponent(pick)}`), enabled: editing });
-  const [v, setV] = useState<Record<string, string>>({ kind: kinds[0] ?? "postgresql", name: "", timeout: String(f.default_timeout) });
+  const first = kinds.includes("postgresql") ? "postgresql" : kinds[0] ?? "postgresql";   // a new connection starts on Postgres
+  const [v, setV] = useState<Record<string, string>>({ kind: first, name: "", timeout: String(f.default_timeout) });
   const [where, setWhere] = useState<PwWhere>("session");
   const [said, setSaid] = useState<Said>(null);
 
@@ -108,11 +110,13 @@ export function ConnectionForm({ meta, pick, onDone, onTested }: {
         </div>
       )}
       {secrets.map(field)}
-      {!isFolder && (
-        <div className="field narrow-ish">
-          <label className="lbl" htmlFor={`${id}-timeout`}>Query timeout, seconds</label>
-          <input id={`${id}-timeout`} className="in mono" type="number" min={10} max={86400} value={v.timeout ?? ""} onChange={(e) => set("timeout", e.target.value)} />
-        </div>
+      {!isFolder && (       /* open by itself when an edited connection's timeout is not the default */
+        <Expander key={`${pick}-${cur.data?.timeout ?? ""}`} title="More options" open={!!cur.data && cur.data.timeout !== f.default_timeout}>
+          <div className="field narrow-ish">
+            <label className="lbl" htmlFor={`${id}-timeout`}>Query timeout, seconds</label>
+            <input id={`${id}-timeout`} className="in mono" type="number" min={10} max={86400} value={v.timeout ?? ""} onChange={(e) => set("timeout", e.target.value)} />
+          </div>
+        </Expander>
       )}
       <div className="row">
         <Button onClick={() => test.mutate()} disabled={test.isPending}>{test.isPending ? "Testing…" : "Test connection"}</Button>

@@ -31,7 +31,6 @@ export function FilesBox({ rows }: { rows: ConnRow[] }) {
 
   return (
     <section className="conn-files" aria-label="Import or export">
-      <h3>Import or export</h3>
       <p className="conn-hint">{marks("JSON or YAML, one connection per name - the fields the form has (`kind`, `host`, `user`, `database`…) or a `uri`. `${NAME}` reads the environment, so a shared file need hold no password.")}</p>
       <div className="row">
         <label className="btn sm conn-pick">

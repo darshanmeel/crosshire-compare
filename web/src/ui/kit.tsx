@@ -193,40 +193,64 @@ export function OutcomeBar({ segments, sub }: { segments: { label: ReactNode; n:
   );
 }
 
-/** A dashed drop area with a "choose a file" link over a hidden file input. */
+/** A dashed drop area that is the file picker as a whole: a label round a hidden file input, so a
+ *  click or a tap anywhere on it opens the picker, and a focus ring shows when it is tabbed to. */
 export function Dropzone({ accept, onFile, title, hint, label }: { accept?: string; onFile: (f: File) => void; title: ReactNode; hint?: ReactNode; label: string }) {
   const [over, setOver] = useState(false);
   return (
-    <div className={over ? "drop over" : "drop"}
+    <label className={over ? "drop over" : "drop"}
       onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
       onDrop={(e) => { e.preventDefault(); setOver(false); const f = e.dataTransfer.files?.[0]; if (f) onFile(f); }}>
+      <input type="file" className="drop-input" accept={accept} aria-label={label} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onFile(f); }} />
       <Icon name="upload" />
-      <div>{title}</div>
-      <div className="or">or <label className="pick">choose a file<input type="file" accept={accept} aria-label={label} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) onFile(f); }} /></label>{hint && <> · {hint}</>}</div>
-    </div>
+      <span>{title}</span>
+      <span className="or">or <span className="pick">choose a file</span>{hint && <> · {hint}</>}</span>
+    </label>
   );
 }
 
-/** A right-hand panel over the page: Esc and × close it, focus moves into it and back out, and
- *  the page behind is inert while it is open, so Tab and a screen reader stay inside. */
-export function Drawer({ title, onClose, children }: { title: ReactNode; onClose: () => void; children: ReactNode }) {
+const DOCK = "(min-width: 1100px)";
+/** True while the window is at least 1100 px wide - false where there is no matchMedia (tests). */
+function useDocked(): boolean {
+  const mq = typeof matchMedia === "function" ? matchMedia(DOCK) : null;
+  const [on, setOn] = useState(!!mq?.matches);
+  useEffect(() => {
+    if (!mq) return;
+    const hear = () => setOn(mq.matches);
+    mq.addEventListener("change", hear);
+    return () => mq.removeEventListener("change", hear);
+  }, []);
+  return on;
+}
+
+/** A right-hand panel: Esc and × close it, focus moves into it and back out. From 1100 px up it docks
+ *  as a column beside the page, which stays readable and usable; narrower it is a modal over the
+ *  page, which is inert behind a scrim, so Tab and a screen reader stay inside. `label` names it
+ *  when the title is not plain text. */
+export function Drawer({ title, label, onClose, children }: { title: ReactNode; label?: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   close.current = onClose;            // a caller's inline arrow must not refocus the drawer each render
+  const docked = useDocked();
   useEffect(() => {
     const back = document.activeElement as HTMLElement | null;
     ref.current?.focus();
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") close.current(); };
+    addEventListener("keydown", key);
+    return () => { removeEventListener("keydown", key); back?.focus?.(); };
+  }, []);
+  useEffect(() => {
+    if (docked) return;
     const behind = [...(ref.current?.parentElement?.children ?? [])]
       .filter((el): el is HTMLElement => el instanceof HTMLElement && el !== ref.current && !el.classList.contains("drawer-scrim") && !el.inert);
     behind.forEach((el) => { el.inert = true; });
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") close.current(); };
-    addEventListener("keydown", key);
-    return () => { behind.forEach((el) => { el.inert = false; }); removeEventListener("keydown", key); back?.focus?.(); };
-  }, []);
+    return () => behind.forEach((el) => { el.inert = false; });
+  }, [docked]);
   return (
     <>
-      <div className="drawer-scrim" aria-hidden="true" onClick={onClose} />
-      <div ref={ref} className="drawer" role="dialog" aria-modal="true" aria-label={typeof title === "string" ? title : undefined} tabIndex={-1}>
+      {!docked && <div className="drawer-scrim" aria-hidden="true" onClick={onClose} />}
+      <div ref={ref} className={docked ? "drawer docked" : "drawer"} role="dialog" aria-modal={!docked}
+           aria-label={label ?? (typeof title === "string" ? title : undefined)} tabIndex={-1}>
         <header><h2>{title}</h2><button type="button" className="icon-btn x" onClick={onClose} aria-label="Close"><Icon name="x" /></button></header>
         {children}
       </div>

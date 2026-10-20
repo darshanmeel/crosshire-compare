@@ -14,7 +14,7 @@
 
 .conn-add { padding-top: 16px; border-top: 1px solid var(--fs-line); scroll-margin-top: 12px; }
 .conn-form { display: flex; flex-direction: column; gap: 12px; }
-.conn-form h3, .conn-files h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fs-text); }
+.conn-form h3 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fs-text); }
 .conn-form h3 .m { font-family: var(--font-mono); font-size: 14px; font-weight: 500; }
 .conn-form .in { width: 100%; }
 .conn-form .seg { align-self: flex-start; flex-wrap: wrap; }
@@ -22,7 +22,7 @@
 .conn-form .conn-del { color: var(--fs-neg); margin-left: auto; }
 .conn-form .conn-del:hover { color: var(--fs-neg); border-color: var(--fs-neg); }
 
-.conn-files { display: flex; flex-direction: column; gap: 10px; padding-top: 16px; border-top: 1px solid var(--fs-line); }
+.conn-files { display: flex; flex-direction: column; gap: 10px; }
 .conn-files .conn-hint { margin: 0; }
 .conn-pick { position: relative; }
 .conn-pick input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; clip: rect(0 0 0 0); }

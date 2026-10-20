@@ -10,9 +10,14 @@ export function sideLabels(a: string, b: string): [string, string] {
   return a !== b ? [a, b] : [`A · ${a}`, `B · ${b}`];
 }
 
-export function nameHint(tag: Tag, box: string, side: SideView, mine: string, other: string): string {
-  if (mine === other) return `:orange[Both sides are called ${other}] - name this one to tell them apart`;
+/** The word under a loaded A or B about its name: only when both sides share one. */
+export function nameHint(mine: string, other: string): string {
+  return mine === other ? `:orange[Both sides are called ${other}] - name this one to tell them apart` : "";
+}
+
+/** The Name box after a Load: a box left blank or at its default takes the name the side was loaded
+ *  with (a database side's connection); a typed name stays. */
+export function boxAfterLoad(tag: Tag, box: string, side: SideView): string {
   const b = (box ?? "").trim();
-  if (!side.is_database && (b === "" || b === DEFAULT_NAMES[tag])) return "Tip: name this side - it names the output files";
-  return "";
+  return (b === "" || b === DEFAULT_NAMES[tag]) && side.name ? side.name : box;
 }

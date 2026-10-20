@@ -236,3 +236,18 @@ test("a database side the server already holds seeds Database and its connection
   await waitFor(() => expect(getForm("A")).toMatchObject({ name: "hr.employees", how: "database", connection: "sample" }));
   expect(screen.getByRole("radio", { name: "Database" })).toBeChecked();
 });
+
+test("a side loaded from its upload shows one line - the file, uploaded, Replace file - and Replace file brings the zone back", async () => {
+  const up = view("A", { loaded: true, name: "HR", label: "hr_employees.csv", staged: "hr_employees.csv", rows: 3000, columns: ["emp_id"] });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+    url === "/api/sources/A/schema" ? json(SCHEMA) : json(body({ sides: { A: up, B: view("B"), P: view("P") } }))));
+  mount(<SideCard tag="A" meta={META} />);
+  const A = screen.getByRole("region", { name: "File A" });
+  const replace = await within(A).findByRole("button", { name: "Replace file" });
+  expect(within(A).getByText("uploaded")).toBeInTheDocument();
+  expect(within(A).queryByText("Drop a CSV, JSON or Parquet file")).toBeNull();
+  expect(within(A).getByRole("radio", { name: "Upload" })).toBeChecked();              // the source segment stays
+  await userEvent.click(replace);
+  expect(within(A).getByText("Drop a CSV, JSON or Parquet file")).toBeInTheDocument();
+  expect(within(A).getByLabelText("CSV, JSON or Parquet file").closest("label.drop")).not.toBeNull();   // the whole zone picks
+});

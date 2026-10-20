@@ -8,19 +8,23 @@ import { nameHint, sideName } from "./names";
 import { NoteLine } from "./NoteLine";
 import type { SideView, Tag } from "./types";
 
-/** "hr_employees.csv · 3,000 rows × 7 columns · Parquet snapshot", from the side the API reports. */
+/** "hr_employees.csv · 3,000 rows × 7 columns · Parquet snapshot", from the side the API reports. A
+ *  database side reads table first and its connection last: "payroll.employees · 2,985 rows × 7
+ *  columns · … · SAMPLE · DuckDB file" (its origin is "<kind> · <table or query>"). */
 export function loadedSummary(view: SideView): { what: string; rest: string } {
   const capped = /capped at [\d,]+/.exec(view.caption)?.[0];
+  const [kind, ...read] = view.is_database ? view.origin.split(" · ") : [];
+  const conn = view.is_database && [view.conn, kind].filter(Boolean).join(" · ");
   const rest = [`${num(view.rows ?? 0)} rows × ${view.columns.length} columns`, view.cut, view.fetched_at && `fetched ${view.fetched_at}`,
-                capped, view.snapshot && "Parquet snapshot"].filter(Boolean).join(" · ");
-  return { what: view.origin || view.label, rest };
+                capped, view.snapshot && "Parquet snapshot", conn].filter(Boolean).join(" · ");
+  return { what: (read.length ? read.join(" · ") : view.origin) || view.label, rest };
 }
 
 export function LoadedLine({ tag, view, box, otherBox, otherView, preview, onPreview, previewId, cols, children }:
   { tag: Tag; view: SideView; box: string; otherBox: string; otherView?: SideView; preview: boolean; onPreview: () => void;
     previewId: string; cols?: string; children?: ReactNode }) {
   const otherTag: Tag = tag === "A" ? "B" : "A";
-  const hint = tag === "P" ? "" : nameHint(tag, box, view, sideName(tag, box, view), sideName(otherTag, otherBox, otherView));
+  const hint = tag === "P" ? "" : nameHint(sideName(tag, box, view), sideName(otherTag, otherBox, otherView));
   const s = loadedSummary(view);
   return <>
     <div className="card-foot loaded">

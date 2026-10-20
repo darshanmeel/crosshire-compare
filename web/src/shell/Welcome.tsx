@@ -11,7 +11,7 @@ const COPY = {
   Compare: {
     eyebrow: "CSV, JSON, Parquet or a database table, either side",
     h: <>Two tables, <em>every difference.</em></>,
-    lede: <>Read by DuckDB, paired in one table, compared row by row on a key you choose - or let <strong>Auto</strong> work the whole thing out.</>,
+    lede: <>Read by DuckDB, paired in one table, compared row by row on a key you choose — or let <strong>Auto</strong> work the whole thing out.</>,
     how: [
       [<strong>Load A and B.</strong>, <> Upload a file, point at a path on this machine, or pick a database table. Big file? Cut it down under <em>Rows to read</em> first.</>],
       [<strong>Pair the columns.</strong>, " Auto matches by name, then by the values themselves, detects numbers, dates and booleans, and suggests a key."],

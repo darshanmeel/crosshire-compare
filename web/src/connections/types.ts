@@ -10,8 +10,8 @@ export const NEW = "New connection";
 
 export function passwordText(r: ConnRow): string {
   switch (r.password) {
-    case "env": return "env · read-only";
-    case "shared": return `from ${r.origin_file.split(/[\\/]/).pop()} · read-only`;
+    case "env": return "Set in the environment - change it there";
+    case "shared": return `In ${r.origin_file.split(/[\\/]/).pop()} - change it there`;
     case "folder": return "pick files under Path on disk";
     case "key file": return "private key file";
     case "saved": return "password saved";

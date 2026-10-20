@@ -3,14 +3,15 @@
 // upload, path or database box; delimiter, header, Rows to read and Advanced; Load; and once loaded a
 // foot that says what was read with its first 10 rows a click away. The region is "File A" / "File B"
 // / "File" - the e2e runs find the side by it.
-import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Meta } from "../api/client";
 import { Button, LinkButton, Pill, SideBadge, type Tone } from "../ui/kit";
 import { marks } from "../ui/marks";
-import { DatabaseBox } from "./DatabaseBox";
-import { useSideForm } from "./formStore";
+import { DatabaseBox, FetchCap, useDbSide } from "./DatabaseBox";
+import { getForm, setForm, useSideForm } from "./formStore";
 import { LoadedLine } from "./LoadedLine";
+import { boxAfterLoad } from "./names";
 import { changedSinceLoad, loadTime, noteLoadTime, secs } from "./loadTime";
 import { PathBox } from "./PathBox";
 import { PreviewTable } from "./PreviewTable";
@@ -33,7 +34,7 @@ type Open = "rows" | "advanced" | null;
 function loadHint(tag: Tag, f: SideForm, meta: Meta): ReactNode {
   if (tag === "P") return <>then <strong>Profile</strong> — single-column figures first; combinations only when no column is unique by itself</>;
   if (f.how === "path") return <>Read where it lies, never copied — any size</>;
-  if (f.how === "database") return <>Fetch first; Load then reads what was fetched</>;
+  if (f.how === "database") return <>Fetches the rows once, then reads them here</>;
   if (tag === "A") return <>A file on this machine reads in place from <strong>Path on disk{meta.filepick ? " → Browse…" : ""}</strong></>;
   const kinds = Object.entries(meta.kinds ?? {}).filter(([k]) => k !== "folder").map(([, label]) => label);
   return kinds.length ? <>{kinds.join(", ")} under <strong>Database</strong></> : <>A database table under <strong>Database</strong></>;
@@ -75,15 +76,23 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
     },
     onSuccess: (r) => {
       setSaid({ warnings: r.warnings, error: "" });
+      if (r.side) {                                       // a box left at Left / Right takes the loaded name
+        const box = boxAfterLoad(tag, getForm(tag).name, r.side);
+        if (box !== getForm(tag).name) setForm(tag, { name: box });
+      }
       qc.invalidateQueries({ queryKey: ["sources"] });
       qc.invalidateQueries({ queryKey: ["preview", tag] });
     },
     onError: (e) => setSaid({ warnings: [], error: errorText(e) }),
   });
+  const loadNow = useRef(() => load.mutate());
+  loadNow.current = () => load.mutate();
+  const db = useDbSide(tag, f.how === "database", () => loadNow.current());
+  const needFetch = f.how === "database" && !db.plan?.held;   // Load fetches first, then reads the fetch
 
   const loaded = !!view?.loaded;
   const took = loadTime(tag, view);
-  const [tone, status]: [Tone, string] = load.isPending || uploading ? ["run", "Loading"]
+  const [tone, status]: [Tone, string] = load.isPending || uploading || db.fetching ? ["run", "Loading"]
     : said.error ? ["neg", "Error"]
     : loaded ? ["ok", took != null ? `Loaded · ${secs(took)}` : "Loaded"]
     : ["idle", "Not loaded"];
@@ -115,8 +124,9 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
   );
   const loadBtn = (small: boolean) => (
     <Button variant={small ? "default" : "dark"} size={small ? "sm" : "md"} className={small ? "load-again" : undefined}
-            disabled={!cols.length || load.isPending} onClick={() => load.mutate()}>
-      {load.isPending ? "Reading the rows…" : single ? "Load" : `Load ${tag}`}
+            disabled={needFetch ? !db.plan?.sql || db.fetching : !cols.length || load.isPending}
+            onClick={() => (needFetch ? db.start.mutate() : load.mutate())}>
+      {db.fetching ? db.line : load.isPending ? "Reading the rows…" : single ? "Load" : `Load ${tag}`}
     </Button>
   );
   const close = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
@@ -134,6 +144,7 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
           <textarea className="in mono" aria-label="Column names" rows={2} placeholder="emp_id, first_name, dept_name, ..."
                     value={f.column_names} onChange={(e) => set({ column_names: e.target.value })} />
         </label>
+        {f.how === "database" && <FetchCap tag={tag} db={db} />}
         {!dbInline && snapshot(false)}
       </div>
     )}
@@ -153,9 +164,10 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
         <Pill tone={tone} role="status">{status}</Pill>
       </div>
       {!compact && choice}
-      {f.how === "upload" && <UploadBox tag={tag} staged={view?.staged ?? ""} types={src?.upload_types ?? []} onBusy={setUploading} />}
+      {f.how === "upload" && <UploadBox tag={tag} staged={view?.staged ?? ""} types={src?.upload_types ?? []} onBusy={setUploading}
+                                   uploaded={loaded && !view!.is_database && !!view!.staged && view!.label === view!.staged} />}
       {f.how === "path" && <PathBox tag={tag} meta={meta} />}
-      {f.how === "database" && <DatabaseBox tag={tag} />}
+      {f.how === "database" && <DatabaseBox tag={tag} db={db} />}
       {schema.error && <div className="note error">{(schema.error as Error).message}</div>}
       {ready && schema.data?.error && <div className="note error">{schema.data.error}</div>}
       {newCols && (
