@@ -403,7 +403,7 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
 <section class="sec" id="compare">
   <div class="sec-head"><div class="sec-num">08</div><div><h2 class="sec-h">Compare, and what <em>comes back.</em></h2><div class="sec-sub">a verdict · five tabs · the Log</div></div></div>
   <div class="body">
-    <p>Press <strong>Compare</strong>. The running panel lists each step as it goes, and the rail ends on <em>compared in 0.8s</em>.</p>
+    <p>Press <strong>Compare</strong>. The running panel lists each step as it goes, and the rail ends on <em>compared in 0.9s</em>.</p>
     <figure class="shot"><img src="docs/app-result.png" alt="Result head: headline sentence, row outcome bar, five tabs, the Summary tiles, then Columns with one match bar each beside Why they differ" loading="lazy"><figcaption>HR against Payroll - 2,960 matched, 649 differ, 40 only in HR, 25 only in Payroll</figcaption></figure>
     <ul class="pts">
       <li><b>Headline</b> - rows matched on the key, columns compared, rows and cells that differ, one-sided rows</li>
@@ -536,7 +536,7 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <li><b>Commands</b> - one unbroken line that scrolls in its box, with a <b>Copy command</b> button beside it</li>
       <li><b>Open in the setup instead</b> - goes back to the setup; nothing runs</li>
       <li><b>Database side</b> - uses the password typed this session, or asks for it</li>
-      <li><b>Load mapping</b> - under the column table, reads only the <code>columns</code> part</li>
+      <li><b>Load mapping</b> - above the column table, reads only the <code>columns</code> part</li>
     </ul>
     <p><strong>On the command line</strong> - the same comparison on other files, one pair or many:</p>
 <pre><code>python -m tablecmp.run HR_compare_Payroll__config.json                       # the config's own two sides
