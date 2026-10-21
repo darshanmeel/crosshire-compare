@@ -106,15 +106,18 @@ export function Chip({ tone, icon, children, title }: { tone?: "key" | "a" | "b"
   return <span className={tone ? `chip ${tone}` : "chip"} title={title}>{tone === "key" && !icon ? <Icon name="key" size="sm" /> : icon && <Icon name={icon} size="sm" />}{children}</span>;
 }
 
-export type SegOption<T extends string> = { label: ReactNode; value: T; icon?: IconName; disabled?: boolean; title?: string };
+/** `short` is the label a phone shows; the full label stays the button's name. */
+export type SegOption<T extends string> = { label: ReactNode; value: T; icon?: IconName; disabled?: boolean; title?: string; short?: string };
 /** A segmented control: one <button aria-pressed> per option inside role="group". */
 export function Seg<T extends string>({ options, value, onChange, mini, label }: { options: SegOption<T>[]; value: T; onChange: (v: T) => void; mini?: boolean; label: string }) {
   return (
     <div className={mini ? "seg mini" : "seg"} role="group" aria-label={label}>
       {options.map((o) => (
         <button key={o.value} type="button" aria-pressed={o.value === value} className={o.value === value ? "on" : undefined}
-          disabled={o.disabled} title={o.title} onClick={() => o.value !== value && onChange(o.value)}>
-          {o.icon && <Icon name={o.icon} size="sm" />}{o.label}
+          disabled={o.disabled} title={o.title} aria-label={o.short && typeof o.label === "string" ? o.label : undefined}
+          onClick={() => o.value !== value && onChange(o.value)}>
+          {o.icon && <Icon name={o.icon} size="sm" />}
+          {o.short ? <><span className="seg-long">{o.label}</span><span className="seg-short" aria-hidden="true">{o.short}</span></> : o.label}
         </button>
       ))}
     </div>

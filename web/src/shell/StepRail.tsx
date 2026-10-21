@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, type ReactNode } from "react";
 import { useRunAuto, useRunCompare, useRunError } from "../compare/actions";
 import { useCompareNow } from "../compare/useCompare";
 import { useFilters } from "../keys/summary";
@@ -21,9 +21,18 @@ export type RailStep = { title: string; sub: string; state: StepState; go?: () =
 
 /** The step rail under the header: each step's state and one mono line, the page's actions on the right. */
 export function StepRail({ steps, actions, note }: { steps: RailStep[]; actions: ReactNode; note?: string }) {
+  // On a phone the steps are one strip that scrolls sideways: keep the current step in view.
+  const strip = useRef<HTMLOListElement>(null);
+  const cur = steps.findIndex((s) => s.state === "now" || s.state === "run");
+  useEffect(() => {
+    const ol = strip.current, b = ol?.querySelector<HTMLElement>("[aria-current]");
+    if (!ol || !b || ol.scrollWidth <= ol.clientWidth) return;
+    const x = b.getBoundingClientRect().left - ol.getBoundingClientRect().left + ol.scrollLeft;
+    ol.scrollLeft = Math.max(0, x - 16);
+  }, [cur]);
   return (
     <nav className="rail" aria-label="Steps">
-      <ol className="steps">
+      <ol className="steps" ref={strip}>
         {steps.map((s, i) => (
           <Fragment key={s.title}>
             {i > 0 && <li className="line" aria-hidden="true" />}
@@ -88,7 +97,7 @@ export function CompareRail() {
           <a className="btn primary" href={`/api/results/${run.id}/report?download=true`} download><Icon name="download" />Download report</a>
         </>
       : <>
-          <Button icon="sparkle" aria-label="Figure it all out and compare" disabled={!loaded} onClick={() => auto.mutate()}>Auto · figure it all out</Button>
+          <Button icon="sparkle" aria-label="Figure it all out and compare" disabled={!loaded} onClick={() => auto.mutate()}>Auto<span className="ph-hide"> · figure it all out</span></Button>
           <Button variant="primary" iconAfter="arrow" disabled={!loaded || st?.gate !== ""} onClick={() => compare.mutate()}>Compare</Button>
         </>;
   // The setup, rows and results views say why a press was refused themselves; the others have only the rail.

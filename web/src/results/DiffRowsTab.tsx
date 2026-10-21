@@ -199,8 +199,8 @@ export function DiffRowsTab({ run }: { run: RunView }) {
             </Button>
           )}
           {first.file && (
-            <Button size="sm" icon="sparkle" aria-expanded={near} onClick={() => setNear(!near)}>
-              Near-match analysis - formatting or real?
+            <Button size="sm" icon="sparkle" aria-expanded={near} aria-label="Near-match analysis - formatting or real?" onClick={() => setNear(!near)}>
+              Near-match analysis<span className="ph-hide"> - formatting or real?</span>
             </Button>
           )}
         </div>

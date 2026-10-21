@@ -27,6 +27,8 @@ const PATHS = {
   copy: ["M9 9h11v11H9zM5 15H4V4h11v1", 1.8],
   info: ["M12 11v6M12 7.6v.01", 2, "<circle cx='12' cy='12' r='9'/>"],
   alert: ["M12 3l10 18H2zM12 10v5M12 18v.01", 2],
+  sun: ["M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4", 1.8, "<circle cx='12' cy='12' r='4'/>"],
+  moon: ["M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z", 1.8],
   refresh: ["M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16m0 4v-4h-4", 1.8],
 } as const satisfies Record<string, readonly [string, number] | readonly [string, number, string]>;
 

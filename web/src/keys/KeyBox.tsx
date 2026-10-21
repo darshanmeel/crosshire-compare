@@ -114,9 +114,9 @@ export function KeyBox() {
         <div className="field">
           <span className="lbl">Match rows</span>
           <Seg<Mode> label="Match mode" value={mode} onChange={pickMode}
-            options={[{ value: "key", label: "On a key", icon: "key", disabled: pending },
-                      { value: "position", label: "By position", disabled: pending, title: k.nokey_modes.position },
-                      { value: "hash", label: "By hash of compared columns", disabled: pending, title: k.nokey_modes.hash }]} />
+            options={[{ value: "key", label: "On a key", short: "Key", icon: "key", disabled: pending },
+                      { value: "position", label: "By position", short: "Position", disabled: pending, title: k.nokey_modes.position },
+                      { value: "hash", label: "By hash of compared columns", short: "Hash", disabled: pending, title: k.nokey_modes.hash }]} />
         </div>
         <div className="field pairup-keys">
           <span className="lbl">Key columns</span>

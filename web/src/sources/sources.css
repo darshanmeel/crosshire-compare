@@ -67,6 +67,17 @@
   .side-card .lbl.w { width: auto; flex-basis: 100%; }
   .src-seg label { padding: 0 11px; }
 }
+/* phone (decisions 10, 47): the card's name row keeps its pill, "Name" is said to a screen reader only;
+   a side collapsed to one line wraps its file · rows × columns instead of cutting it */
+@media (max-width: 600px) {
+  .side-card:not(.compact) .card-head { flex-wrap: nowrap; gap: 10px; }
+  .side-card:not(.compact) .card-head .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .side-card:not(.compact) .card-head .in.name { flex: 1 1 auto; width: auto; min-width: 0; }
+  .side-card:not(.compact) .card-head .grow { display: none; }
+  .side-card .card-head .pill { flex: none; white-space: nowrap; }
+  .side-line .card-head { flex-wrap: wrap; }
+  .side-line .what { white-space: normal; overflow: visible; overflow-wrap: anywhere; order: 3; flex-basis: 100%; }
+}
 
 /* the foot's actions sit at its right end: Preview 10 rows, then Load to read the side again */
 .side-card .card-foot .foot-end { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-left: auto; }

@@ -8,7 +8,7 @@
 @media (max-width: 600px) {
   .results-head .verdict p { font-size: 22px; }
   .results-head .verdict p code { font-size: 16px; }
-  .results-head .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; }
+  .results-head .tabs { column-gap: 0; }
   .results-head .tabs button { flex: none; padding: 0 10px; }
 }
 .summary > .caption { margin: -8px 0 0; }

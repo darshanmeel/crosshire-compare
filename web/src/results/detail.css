@@ -74,3 +74,12 @@
   .rd .search { max-width: none; }
   .rd .panel-foot .btn { white-space: normal; height: auto; min-height: 32px; padding-top: 6px; padding-bottom: 6px; text-align: left; }
 }
+
+/* phone (decision 56): the column chips are one strip that scrolls sideways, at 36 px */
+@media (max-width: 600px) {
+  .rd .toolbar { gap: 8px; }
+  .rd-filters { flex: 1 1 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; min-width: 0; padding-bottom: 2px; }
+  .rd-filters::-webkit-scrollbar { display: none; }
+  .rd-filters .fchip { flex: none; height: 36px; }
+  .rd .toolbar .grow { display: none; }
+}

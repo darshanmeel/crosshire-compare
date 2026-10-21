@@ -54,7 +54,7 @@ export function Welcome({ page, meta, setPage }: { page: Page; meta?: Meta; setP
   const tryIt = () => ex.mutate(page === "Compare" ? [["A", "HR", "A"], ["B", "Payroll", "B"]] : [["P", "HR", "A"]],
     { onSuccess: () => setErr(""), onError: (e) => setErr(errorText(e)) });
   return (
-    <section className="hero" aria-label="Welcome">
+    <section className={page === "Profiling" ? "hero hero-profile" : "hero"} aria-label="Welcome">
       <div>
         <span className="eyebrow accent">{meta?.app_name} · {c.eyebrow}</span>
         <h1>{c.h}</h1>
