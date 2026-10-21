@@ -440,8 +440,9 @@ pre.cmd:focus-visible { outline: 2px solid var(--fs-accent); outline-offset: 2px
   .app-header { gap: 8px 12px; padding-top: 10px; padding-bottom: 10px; }
   .brand .logo { display: none; }
   .app-header .grow { display: none; }
-  .app-header .actions { flex: 1 1 100%; flex-wrap: nowrap; gap: 6px; min-width: 0; }
-  .app-header .actions .btn { padding: 0 9px; font-size: 11px; letter-spacing: .02em; gap: 5px; }
+  /* one row up to two-digit counts; past that the look toggle wraps rather than leave the screen */
+  .app-header .actions { flex: 1 1 100%; flex-wrap: wrap; gap: 6px 5px; min-width: 0; }
+  .app-header .actions .btn { padding: 0 7px; font-size: 11px; letter-spacing: .02em; gap: 5px; }
   .app-header .actions .btn > .icon { display: none; }
   .app-header .mode-toggle { width: 36px; padding: 0; flex: none; }
   .rail { gap: 10px; padding-top: 8px; padding-bottom: 10px; }
