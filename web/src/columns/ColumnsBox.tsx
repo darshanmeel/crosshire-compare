@@ -2,7 +2,7 @@
 // preview, the pairing board in its panel with the summary foot, and the setup card behind "Summary".
 import { useState } from "react";
 import { marks } from "../ui/marks";
-import { Button, ErrorNote, ToneNote } from "../ui/kit";
+import { Button, ErrorNote, MenuButton, ToneNote, usePhone } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import type { SetupReady } from "../setup/api";
 import { FrameTable } from "../setup/FrameTable";
@@ -25,9 +25,20 @@ export function SetupCard({ s }: { s: SetupReady }) {
   );
 }
 
-/** Match by data, header buttons: pair the leftovers by their values, reset, save and load the mapping. */
+/** Match by data, header buttons: pair the leftovers by their values, reset, save and load the mapping.
+ *  On a phone the three mapping buttons sit under one Mapping menu, so the toolbar stays one row. */
 export function ColumnsActions({ s, c }: { s: SetupReady; c: ColumnCalls }) {
   const matching = c.pending === "/match";
+  const phone = usePhone();
+  const mapping = <>
+    <Button disabled={c.busy} onClick={() => c.call("/reset")}>Reset to name matches</Button>
+    <a className="btn" href="/api/setup/mapping" download="mapping.json">Save mapping</a>
+    <label className="btn cols-file">
+      Load mapping…
+      <input type="file" aria-label="Load mapping" accept=".json,application/json" disabled={c.busy}
+             onChange={async (e) => { const f = e.target.files?.[0]; if (f) c.call("/mapping", "POST", { text: await f.text() }); e.target.value = ""; }} />
+    </label>
+  </>;
   return (
     <>
       <Button variant="dark" disabled={!s.can_match || c.busy} onClick={() => c.call("/match")}
@@ -35,13 +46,7 @@ export function ColumnsActions({ s, c }: { s: SetupReady; c: ColumnCalls }) {
                                  : "Every column has a partner on the other side, or one side has none left over."}>
         {matching ? "Comparing the values…" : "Match by data"}
       </Button>
-      <Button disabled={c.busy} onClick={() => c.call("/reset")}>Reset to name matches</Button>
-      <a className="btn" href="/api/setup/mapping" download="mapping.json">Save mapping</a>
-      <label className="btn cols-file">
-        Load mapping…
-        <input type="file" aria-label="Load mapping" accept=".json,application/json" disabled={c.busy}
-               onChange={async (e) => { const f = e.target.files?.[0]; if (f) c.call("/mapping", "POST", { text: await f.text() }); e.target.value = ""; }} />
-      </label>
+      {phone ? <MenuButton className="btn" label="Mapping" group="Mapping">{mapping}</MenuButton> : mapping}
     </>
   );
 }

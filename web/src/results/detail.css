@@ -83,3 +83,23 @@
   .rd-filters .fchip { flex: none; height: 36px; }
   .rd .toolbar .grow { display: none; }
 }
+
+/* phone (decision 65): the Report toolbar a clean stack from the left, the frame's note hidden (the
+   file name stays), and the frame at most 70% of the screen high, whichever viewer height is picked */
+@media (max-width: 600px) {
+  .rd-report-bar, .rd-run-row { justify-content: flex-start; }
+  .rd-report-bar .rd-explain { flex-basis: 100%; }
+  .report-frame iframe, .report-frame iframe.rd-fit { max-height: 70vh; min-height: 0; }
+}
+
+/* phone (decision 63): a file is one line - its tick, its name without the run's prefix, the rows and
+   the size, and an info button for what it is; "Everything as one zip" comes first */
+@media (max-width: 600px) {
+  .files.rd-files li { grid-template-columns: 28px minmax(0, 1fr) auto 36px; gap: 4px 10px; padding: 6px 16px; min-height: 48px; }
+  .files.rd-files li > .r { grid-column: 3; text-align: right; }
+  .files.rd-files li > .info-btn { grid-column: 4; margin: 0; }
+  .files.rd-files li > .info-text { grid-column: 2 / -1; }
+  .files.rd-files li > .btn { grid-column: 2 / -1; justify-self: start; margin: 0 0 4px; }
+  .rd-files .f { overflow-wrap: normal; }
+  .rd-files .f > a, .rd-files .f > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}

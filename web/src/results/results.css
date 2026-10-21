@@ -133,3 +133,9 @@ fieldset.col-pick { margin: 0; }
 .match-bars .bar i { flex: 0 1 auto; border-radius: 0; }
 .match-bars .bar i.miss { flex: none; background: var(--fs-neg); }
 .match-bars .v { min-width: 72px; }
+
+/* phone (decision 8): a compared column is a card - the two names, read as, the counts and the bar */
+@media (max-width: 600px) {
+  .tbl.cards td .barcell { flex: 1 1 0; min-width: 0; }
+  .tbl.cards td .read-as { flex: 1 1 0; min-width: 0; }
+}

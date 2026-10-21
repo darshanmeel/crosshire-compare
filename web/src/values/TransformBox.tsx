@@ -170,6 +170,7 @@ function Preview({ s, spec, which, check }: { s: SetupReady; spec: Spec; which: 
     ? f.rows.map((_, r) => (r < o.rows.length ? same(cell(f, r, "Compared as"), cell(o, r, "Compared as"), spec.kind, fold, s.settings.tolerance) : null))
     : [];
   const shown = oks.filter((x) => x !== null).length;
+  const heads = [`${src} · before`, steps ? `after step ${steps}` : "as read", `as ${spec.kind}`];   // a phone card labels its values with them
   return (
     <section className="panel vx-preview" aria-label="Preview">
       <div className="panel-head">
@@ -181,11 +182,11 @@ function Preview({ s, spec, which, check }: { s: SetupReady; spec: Spec; which: 
         : f && f.columns.length ? (
         <>
           <div className="tblwrap">
-            <table className="tbl compact preview" aria-label="Preview on the first rows">
+            <table className="tbl compact preview cards" aria-label="Preview on the first rows">
               <thead><tr>
-                <th title={`${me} as it sits in the file`}><span className={`sw ${sw}`} />{src} · before</th>
-                <th title={steps ? `${me} after its steps` : `${me} as it is read, with no steps`}>{steps ? `after step ${steps}` : "as read"}</th>
-                {typed && <th title={`${me} as it is compared`}>as {spec.kind}</th>}
+                <th title={`${me} as it sits in the file`}><span className={`sw ${sw}`} />{heads[0]}</th>
+                <th title={steps ? `${me} after its steps` : `${me} as it is read, with no steps`}>{heads[1]}</th>
+                {typed && <th title={`${me} as it is compared`}>{heads[2]}</th>}
                 <th title={`${them} as it is compared, the same row of its file`}><span className={`sw ${sw === "a" ? "b" : "a"}`} />{osrc}</th>
                 <th className="match">Match</th>
               </tr></thead>
@@ -195,11 +196,11 @@ function Preview({ s, spec, which, check }: { s: SetupReady; spec: Spec; which: 
                 const ok = oks[r] ?? null;
                 return (
                   <tr key={r}>
-                    <td className="m before">{cell(f, r, "In the file")}</td>
-                    <td className="m after">{cell(f, r, "After the steps")}</td>
-                    {typed && <td className={conv === "no" ? "m neg" : "m"}>{cell(f, r, "Compared as")}{conv === "no" && " · does not convert"}</td>}
-                    <td className={`m ${sw === "a" ? "cb" : "ca"}`}>{theirsVal}</td>
-                    <td className="match">{ok === null ? <span className="dim">—</span>
+                    <td className="m before" data-label={heads[0]}>{cell(f, r, "In the file")}</td>
+                    <td className="m after" data-label={heads[1]}>{cell(f, r, "After the steps")}</td>
+                    {typed && <td className={conv === "no" ? "m neg" : "m"} data-label={heads[2]}>{cell(f, r, "Compared as")}{conv === "no" && " · does not convert"}</td>}
+                    <td className={`m ${sw === "a" ? "cb" : "ca"}`} data-label={osrc}>{theirsVal}</td>
+                    <td className="match" data-label="Match">{ok === null ? <span className="dim">—</span>
                       : ok ? <Chip tone="pos"><Icon name="check" size="sm" label="matches" /></Chip>
                            : <Chip tone="neg"><Icon name="x" size="sm" label="differs" /></Chip>}</td>
                   </tr>

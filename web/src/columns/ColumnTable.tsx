@@ -83,23 +83,23 @@ function PairRow({ row, i, s, busy, edit, setRole, open, toggle }: {
              options={[{ label: "Key", value: "key", disabled: busy || !both }, { label: "Compare", value: "compare", disabled: busy || !both },
                        { label: "Skip", value: "skip", disabled: busy || !both }]} />
       </td>
-      <td><ColumnPick side="A" row={row} i={i} s={s} busy={busy} edit={edit} /></td>
-      <td className="swap"><Icon name="swap" size="sm" /></td>
-      <td><ColumnPick side="B" row={row} i={i} s={s} busy={busy} edit={edit} /></td>
-      <td>
+      <td data-label={`${s.names[0]} column`}><ColumnPick side="A" row={row} i={i} s={s} busy={busy} edit={edit} /></td>
+      <td className="swap ph-gone"><Icon name="swap" size="sm" /></td>
+      <td data-label={`${s.names[1]} column`}><ColumnPick side="B" row={row} i={i} s={s} busy={busy} edit={edit} /></td>
+      <td data-label="Read as">
         <select className="sel type" aria-label={`Type, row ${i + 1}`} value={row.Type} disabled={busy}
                 onChange={(e) => edit(i, "Type", e.target.value)}>
           {s.types.map((t) => <option key={t}>{t}</option>)}
         </select>
       </td>
-      <td className="cols-steps">
+      <td className="cols-steps" data-label="Transform">
         {both && si >= 0 && (steps
           ? <button type="button" className="cols-steps-link" title={steps} onClick={() => setView({ view: "values", pair: si })}
                     aria-label={`Steps for ${row["Common name"]}: ${steps}`}>{words}</button>
           : <LinkButton className="cols-add" onClick={() => setView({ view: "values", pair: si })} aria-label={`Add a step to ${row["Common name"]}`}>+ Add</LinkButton>)}
       </td>
-      <td className={o.tone ? `cols-origin ${o.tone}` : "cols-origin dim"} title={o.title}>{o.text}</td>
-      <td className="dim">
+      <td className={o.tone ? `cols-origin ${o.tone}` : "cols-origin dim"} title={o.title} data-label="Matched by">{o.text}</td>
+      <td className="dim" data-label="Case">
         {both && isText(row)
           ? <select className={row.Case ? "sel case set" : "sel case"} aria-label={`Case, row ${i + 1}`} value={row.Case} disabled={busy}
                     onChange={(e) => edit(i, "Case", e.target.value)}>
@@ -133,7 +133,7 @@ export function ColumnTable({ s, busy, edit, setRole }: { s: SetupReady; busy: b
   const tall = s.rows.length > 13;
   return (
     <div className={tall ? "tblwrap cols-wrap tall" : "tblwrap cols-wrap"} ref={box} aria-busy={busy}>
-      <table className="tbl cols-tbl" aria-label="Column table">
+      <table className="tbl cols-tbl cards" aria-label="Column table">
         <thead><tr>
           <th className="w-role" title={HELP.role}>Role</th>
           <th className="w-col"><span className="sw a" />{NA} column</th>

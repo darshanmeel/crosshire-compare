@@ -53,6 +53,22 @@ test("Downloads lists every file with what it is, the config among them, each a 
   expect(screen.getByText(/python -m tablecmp\.run X__config\.json/)).toHaveTextContent("--left <new HR file> --right <new Payroll file> --out results");
 });
 
+test("on a phone a file is one line: no shared prefix, what it is behind an info button, the zip first", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width: 600px"), media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+  vi.stubGlobal("fetch", serve([], () => FILES));
+  mount(<DownloadsTab run={RUN} limit={1000} />);
+  const list = within(await screen.findByRole("region", { name: "Files in this run" }));
+  const link = list.getByRole("link", { name: "X__cell_diffs.csv" });                  // the full name stays its name and title
+  expect(link).toHaveTextContent(/^cell_diffs\.csv$/);
+  expect(link).toHaveAttribute("title", "X__cell_diffs.csv");
+  expect(list.getByRole("checkbox", { name: "Select X__cell_diffs.csv" })).toBeInTheDocument();
+  expect(list.getByRole("button", { name: "About X__cell_diffs.csv" })).toHaveAccessibleDescription("Every differing cell - key, column, HR value, Payroll value");
+  expect(list.getByRole("button", { name: "About X__config.json" })).toHaveAccessibleDescription(/never a password or the data · re-runnable$/);
+  expect(list.getByRole("button", { name: "Write the paired rows" })).toBeInTheDocument();
+  const bar = screen.getByRole("button", { name: "Everything as one zip" }).parentElement!;
+  expect(bar.firstElementChild).toHaveTextContent("Everything as one zip");
+});
+
 test("the rerun command has a Copy command button that copies it whole", async () => {
   vi.stubGlobal("fetch", serve([], () => FILES));
   const writeText = vi.fn(async () => undefined);

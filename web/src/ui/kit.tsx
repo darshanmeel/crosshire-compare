@@ -87,11 +87,11 @@ export function LinkButton({ icon, iconAfter, className, children, type = "butto
 
 /** An "i" button whose text shows on hover (its title) and on a press, under the line it sits in;
  *  a screen reader hears it as the button's description. */
-export function InfoTip({ label, text }: { label: string; text: string }) {
+export function InfoTip({ label, text }: { label: string; text: ReactNode }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   return <>
-    <button type="button" className="info-btn" aria-label={label} title={text} aria-expanded={open} aria-describedby={id}
+    <button type="button" className="info-btn" aria-label={label} title={typeof text === "string" ? text : undefined} aria-expanded={open} aria-describedby={id}
             onClick={() => setOpen(!open)}><Icon name="info" /></button>
     <span id={id} className={open ? "info-text" : "info-text sr-only"}>{text}</span>
   </>;
@@ -245,10 +245,9 @@ export function Dropzone({ accept, onFile, title, hint, label }: { accept?: stri
   );
 }
 
-const DOCK = "(min-width: 1100px)";
-/** True while the window is at least 1100 px wide - false where there is no matchMedia (tests). */
-function useDocked(): boolean {
-  const mq = typeof matchMedia === "function" ? matchMedia(DOCK) : null;
+/** True while the media query holds - false where there is no matchMedia (tests). */
+function useMedia(query: string): boolean {
+  const mq = typeof matchMedia === "function" ? matchMedia(query) : null;
   const [on, setOn] = useState(!!mq?.matches);
   useEffect(() => {
     if (!mq) return;
@@ -258,6 +257,11 @@ function useDocked(): boolean {
   }, []);
   return on;
 }
+/** At least 1100 px wide: a drawer docks beside the page. */
+const useDocked = () => useMedia("(min-width: 1100px)");
+/** A phone, the width where styles.css switches to its phone layout - for the few places where the
+ *  order or the shape of the markup changes, not only its look. */
+export const usePhone = () => useMedia("(max-width: 600px)");
 
 /** A right-hand panel: Esc and × close it, focus moves into it and back out. From 1100 px up it docks
  *  as a column beside the page, which stays readable and usable; narrower it is a modal over the

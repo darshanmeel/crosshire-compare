@@ -11,3 +11,9 @@
 .num-once.m { font-family: var(--font-mono); font-size: 12.5px; color: var(--fs-text); overflow-wrap: anywhere; }
 .kv.prof-kv li.dim .m { color: var(--fs-text2); }
 .num-even strong { color: var(--fs-text); font-weight: 600; }
+/* phone (decision 85): every other axis label, each starting at its bar, so none collide (the tiles go two a row in styles.css) */
+@media (max-width: 600px) {
+  .num-hist-x { overflow: hidden; }
+  .num-hist-x span { overflow: visible; text-overflow: clip; text-align: left; }
+  .num-hist-x span:nth-child(even) { visibility: hidden; }
+}

@@ -97,3 +97,10 @@ details.rows-more[open] > summary .icon { transform: rotate(180deg); }
 .card.rows-sum { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 12px 28px; padding: 14px 20px; }
 .rows-sum .v { font-size: 13.5px; color: var(--fs-text); }
 .rows-sum code { font-family: var(--font-mono); font-size: 12.5px; }
+/* phone (decision 8): a filter is a card, a labelled line per field, Remove in its corner */
+@media (max-width: 600px) {
+  .atcompare .filters-tbl.cards tr { position: relative; padding-right: 52px; }
+  .atcompare .filters-tbl.cards td > select, .atcompare .filters-tbl.cards td > input { flex: 1 1 0; min-width: 0; height: 36px; }
+  .atcompare .filters-tbl.cards td.filters-x { position: absolute; top: 12px; right: 12px; }
+  .atcompare .filters-tbl.cards .icon-btn { width: 36px; height: 36px; }
+}

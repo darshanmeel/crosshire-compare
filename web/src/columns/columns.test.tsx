@@ -226,6 +226,20 @@ test("Reset, Save mapping and Load mapping; a refusal is said", async () => {
   expect(sent(calls, "/api/setup/mapping")).toEqual({ text: '{"columns": []}' });
 });
 
+test("on a phone the three mapping buttons sit under one Mapping menu", async () => {
+  vi.stubGlobal("matchMedia", (q: string) => ({ matches: q.includes("max-width: 600px"), media: q, addEventListener: () => undefined, removeEventListener: () => undefined }));
+  const calls = stub(setup());
+  mount(<ColumnsSection />);
+  await board();
+  expect(screen.queryByRole("button", { name: "Reset to name matches" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Mapping" }));
+  const menu = within(screen.getByRole("group", { name: "Mapping" }));
+  expect(menu.getByRole("link", { name: "Save mapping" })).toHaveAttribute("href", "/api/setup/mapping");
+  expect(menu.getByLabelText("Load mapping")).toBeInTheDocument();
+  await userEvent.click(menu.getByRole("button", { name: "Reset to name matches" }));
+  await waitFor(() => expect(writes(calls, "/api/setup/reset")).toHaveLength(1));
+});
+
 test("a table changed since is said, and fetched again", async () => {
   const calls = stub(setup(), () => json({ detail: "The column table changed since - it is shown again as it is now." }, 409));
   mount(<ColumnsSection />);

@@ -99,3 +99,18 @@
 .added-col .m { display: inline-flex; align-items: center; gap: 6px; }
 .added-col .side-badge { width: 20px; height: 20px; border-radius: 5px; font-size: 11px; }
 .added-col .btn.ico { width: 36px; padding: 0; justify-content: center; border-color: transparent; background: transparent; }
+
+/* phone (decisions 8, 34): a pair is a card - its role on top, the More chevron in its corner, then a
+   labelled line per column; the mapping buttons sit in the Mapping menu, one under the other */
+@media (max-width: 600px) {
+  .cols-tbl.cards tr { position: relative; }
+  .cols-tbl.cards td:first-child { padding-right: 40px; }
+  .cols-tbl.cards td.cols-more-cell { position: absolute; top: 12px; right: 12px; }
+  .cols-tbl.cards td > .sel:not(.case) { flex: 1 1 0; min-width: 0; }
+  .cols-tbl.cards .sel.case { margin-left: 0; }
+  .cols-tbl.cards .cols-steps-link, .cols-tbl.cards .cols-add { margin-left: 0; padding: 0; flex: 1 1 0; min-width: 0; }
+  .cols-tbl.cards tr.cols-detail td { display: block; }
+  .menu-pop > .btn { justify-content: flex-start; }
+  #columns > .sec-head .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 0; }
+  #columns > .sec-head .actions .btn { padding: 0 9px; gap: 6px; font-size: 11px; letter-spacing: .04em; }
+}

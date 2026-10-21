@@ -40,3 +40,19 @@
 .prof-stats-wide .top .clip { max-width: 96px; }
 .prof-stats-wide .two .barcell .v { min-width: 50px; }
 .prof-stats-wide th, .prof-stats-wide td { padding-left: 6px; padding-right: 6px; }
+
+/* phone (decision 8): a column is a card - its name and guess on top, what stands out in the corner,
+   then a labelled line per figure */
+@media (max-width: 600px) {
+  .prof-stats.cards, .prof-stats.prof-stats-wide.cards { min-width: 0; }
+  .prof-stats.cards tr { position: relative; }
+  .prof-stats.cards tr.sel { background: var(--fs-accent-subtle); box-shadow: inset 3px 0 0 var(--fs-accent); }
+  .prof-stats.cards tr.sel td { background: transparent; }
+  .prof-stats.cards tr.sel td:first-child { box-shadow: none; }
+  .prof-stats.cards td.col { flex-direction: column; align-items: flex-start; gap: 2px; padding-right: 44px; }
+  .prof-stats.cards td.col .sem-line { margin-top: 0; }
+  .prof-stats.cards td.dot-cell { position: absolute; top: 12px; right: 16px; width: auto; }
+  .prof-stats.cards .clip, .prof-stats.cards td.range { max-width: none; }
+  .prof-stats.cards .readas { max-width: none; flex: 1 1 0; min-width: 0; }
+  .prof-stats.cards td.nulls .pair { justify-content: flex-start; }
+}

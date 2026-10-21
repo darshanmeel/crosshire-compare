@@ -83,17 +83,17 @@ export function FiltersBox() {
         <InfoTip label="About these filters" text="Values match exactly: Ignore case does not apply. To shrink a big file before it is read, use Rows to read above." />
       </div>
       <div className="tblwrap">
-        <table className="tbl compact filters-tbl" aria-label="Filters">
+        <table className="tbl compact filters-tbl cards" aria-label="Filters">
           <thead><tr><th>Apply to</th><th>Column</th><th>Operator</th><th>Value</th><th>Type</th><th aria-label="Remove" /></tr></thead>
           <tbody>{f.rows.map((r, i) => (
             <tr key={i}>
-              <td>{select(i, "Apply to", f.apply_to)}</td>
-              <td>{select(i, "Column", ["", ...f.columns], true)}</td>
-              <td>{select(i, "Operator", f.ops)}</td>
-              <td><CommitInput className="in mono" aria-label={`Value, filter ${i + 1}`} value={r.Value} title="in / not in: comma separated. between: two values."
+              <td data-label="Apply to">{select(i, "Apply to", f.apply_to)}</td>
+              <td data-label="Column">{select(i, "Column", ["", ...f.columns], true)}</td>
+              <td data-label="Operator">{select(i, "Operator", f.ops)}</td>
+              <td data-label="Value"><CommitInput className="in mono" aria-label={`Value, filter ${i + 1}`} value={r.Value} title="in / not in: comma separated. between: two values."
                                onDone={(v) => change(i, { Value: v })} /></td>
-              <td>{select(i, "Type", f.types)}</td>
-              <td><button type="button" className="icon-btn" aria-label={`Remove filter ${i + 1}`}
+              <td data-label="Type">{select(i, "Type", f.types)}</td>
+              <td className="filters-x"><button type="button" className="icon-btn" aria-label={`Remove filter ${i + 1}`}
                           onClick={() => save((rows) => rows.filter((_, j) => j !== i))}><Icon name="x" size="sm" /></button></td>
             </tr>
           ))}</tbody>

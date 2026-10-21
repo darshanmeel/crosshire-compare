@@ -84,3 +84,10 @@ table.grid td select, table.grid td input[type=text] { padding: .2rem .35rem; fo
 .vx-pairs .tbl td.m { white-space: nowrap; }
 
 .vx-add-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+
+/* phone (decision 8): a preview row is a card, its match tick in the corner (the tick says matches or differs) */
+@media (max-width: 600px) {
+  .vx-preview .tbl.cards tr { position: relative; padding-right: 60px; gap: 4px; }
+  .vx-preview .tbl.cards td.match { position: absolute; top: 10px; right: 16px; }
+  .vx-preview .tbl.cards td.match::before { display: none; }
+}

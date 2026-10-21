@@ -8,7 +8,7 @@ import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { goToSection, setView } from "../shell/view";
 import { Icon } from "../ui/icons";
-import { Button, Command, LinkButton, Loading, num, plural } from "../ui/kit";
+import { Button, Command, InfoTip, LinkButton, Loading, num, plural, usePhone } from "../ui/kit";
 import { download, fileUrl, filesKey, size, useRunFiles, type FilesView } from "./detailApi";
 import { Failed } from "./Failed";
 import { FolderSave } from "./FolderSave";
@@ -61,6 +61,7 @@ export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
   const f = useRunFiles(run.id, limit);
   const summary = useSummary(run.id).data;
   const [saving, setSaving] = useState(false);
+  const phone = usePhone();
   const put = (d: FilesView) => qc.setQueryData(filesKey(run.id, limit), d);
   const act = useMutation({
     mutationFn: (what: "paired" | "zip" | "parquet") => api.send<FilesView>("POST", `/api/results/${run.id}/${what}`),
@@ -102,16 +103,21 @@ export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
   const getSelected = () => sel.forEach((n, i) => setTimeout(() => download(fileUrl(run.id, n), n), i * 250));
   const command = `python -m tablecmp.run ${d.config?.name ?? `${pair}__config.json`} \\\n  --left <new ${NA} file> --right <new ${NB} file> --out results`;
 
+  const zip = d.zip
+    ? <a className="btn primary" href={fileUrl(run.id, d.zip.name)} download><Icon name="zip" />Download {d.zip.name} · {size(d.zip.bytes)}</a>
+    : <Button variant="primary" icon="zip" title={ZIP_HELP} disabled={!!busy} onClick={() => act.mutate("zip")}>
+        {busy === "zip" ? (d.paired ? "Zipping the run folder…" : "Writing the paired rows and zipping…") : "Everything as one zip"}
+      </Button>;
+  // a file's name without the run's shared prefix - what a phone shows; the full name stays its name and title
+  const short = (name: string) => (phone ? suffix(name) : name);
+
   return (
     <div className="rd">
       <div className="toolbar rd-dl-bar">
+        {phone && zip}
         <FolderSave runId={run.id} what="all" field="Run folder" label="Save everything to folder" folder={d.save_folder} onSaved={put} />
         <Button disabled={sel.length === 0} onClick={getSelected}>Download selected · {num(sel.length)}</Button>
-        {d.zip
-          ? <a className="btn primary" href={fileUrl(run.id, d.zip.name)} download><Icon name="zip" />Download {d.zip.name} · {size(d.zip.bytes)}</a>
-          : <Button variant="primary" icon="zip" title={ZIP_HELP} disabled={!!busy} onClick={() => act.mutate("zip")}>
-              {busy === "zip" ? (d.paired ? "Zipping the run folder…" : "Writing the paired rows and zipping…") : "Everything as one zip"}
-            </Button>}
+        {!phone && zip}
       </div>
       {act.error && <Failed error={act.error} />}
 
@@ -121,22 +127,32 @@ export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
           <span className="sub">{num(ready.length)} on disk · complete results, not just the rows displayed · tick what you want, or take the zip</span>
         </div>
         <ul className="files rd-files">
-          {rows.map((r) => (
-            <li key={r.name} className={r.off ? "off" : undefined}>
-              <input type="checkbox" aria-label={`Select ${r.name}`} disabled={r.off} checked={!r.off && chosen.has(r.name)}
-                     onChange={(e) => toggle(r.name, e.target.checked)} />
-              <span className="f">
-                <Icon name="file" size="sm" />
-                {r.off ? <span>{r.name}</span> : <a href={fileUrl(run.id, r.name)} download>{r.name}</a>}
-              </span>
-              <span className="d">{r.what}{r.action}</span>
-              <span className="r">
-                {r.fact && <span className="fact">{r.fact}</span>}
-                {r.fact && r.bytes != null && " · "}
-                {r.bytes != null && <span>{size(r.bytes)}</span>}
-              </span>
-            </li>
-          ))}
+          {rows.map((r) => {
+            // a phone keeps the row count beside the size; a fact in words joins what the file is, behind its info button
+            const inLine = !phone || !r.fact || /\d rows?$/.test(r.fact);
+            const fact = inLine ? r.fact : undefined;
+            return (
+              <li key={r.name} className={r.off ? "off" : undefined}>
+                <input type="checkbox" aria-label={`Select ${r.name}`} disabled={r.off} checked={!r.off && chosen.has(r.name)}
+                       onChange={(e) => toggle(r.name, e.target.checked)} />
+                <span className="f">
+                  <Icon name="file" size="sm" />
+                  {r.off ? <span title={phone ? r.name : undefined}>{short(r.name)}</span>
+                    : <a href={fileUrl(run.id, r.name)} download title={phone ? r.name : undefined} aria-label={phone ? r.name : undefined}>{short(r.name)}</a>}
+                </span>
+                {!phone && <span className="d">{r.what}{r.action}</span>}
+                <span className="r">
+                  {fact && <span className="fact">{fact}</span>}
+                  {fact && r.bytes != null && " · "}
+                  {r.bytes != null && <span>{size(r.bytes)}</span>}
+                </span>
+                {phone && <>
+                  {(r.what || r.fact) && <InfoTip label={`About ${r.name}`} text={<>{r.what}{!inLine && <> · {r.fact}</>}</>} />}
+                  {r.action}
+                </>}
+              </li>
+            );
+          })}
         </ul>
         <div className="panel-foot">
           <span className="caption">Tables as {FORMATS[d.out_fmt]} for the next run - set in{" "}

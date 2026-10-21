@@ -87,7 +87,7 @@ export function StatsTable({ stats, keyCols = [], sel = null, onOpen, label = "C
   { stats: Frame; keyCols?: string[]; sel?: string | null; onOpen?: (c: string) => void; label?: string; info?: Record<string, ColInfo> }) {
   return (
     <div className="tblwrap">
-      <table className={`tbl prof-stats${info ? " prof-stats-wide" : ""}`} aria-label={label}>
+      <table className={`tbl prof-stats cards${info ? " prof-stats-wide" : ""}`} aria-label={label}>
         <thead><tr>
           <th>Column</th>
           {info ? <th className="ra">Read as · looks like</th> : <th>Type</th>}
@@ -114,10 +114,10 @@ function StatsRow({ r, keyCols, sel, onOpen, info }: { r: Row; keyCols: string[]
         {onOpen ? <button type="button" className="col-open" onClick={() => onOpen(c)} title={`Open ${c}`}>{c}</button> : c}
         {keyCols.includes(c) && <span className="key-ico" title="key"><Icon name="key" size="sm" label="key" /></span>}
       </span>{info && <span className="sem-line" title="a guess from the name, shape and values">{info.semantic}</span>}</td>
-      {info ? <td>{info.readAs}</td> : <td><span className="chip">{String(r.Type)}</span></td>}
-      <td className="num m dim nulls">{nulls ? <span className="pair">{num(r.Nulls as number)}<Share v={r["Null %"]} tone="warn" /></span> : "0"}</td>
-      {!info && <td className="num m">{num(r.Distinct as number)}</td>}
-      <td className="mini"><span className={info ? "dist" : undefined}>
+      {info ? <td data-label="Read as · looks like">{info.readAs}</td> : <td data-label="Type"><span className="chip">{String(r.Type)}</span></td>}
+      <td className="num m dim nulls" data-label="Nulls">{nulls ? <span className="pair">{num(r.Nulls as number)}<Share v={r["Null %"]} tone="warn" /></span> : "0"}</td>
+      {!info && <td className="num m" data-label="Distinct">{num(r.Distinct as number)}</td>}
+      <td className="mini" data-label={info ? "Distinct" : "Distinct %"}><span className={info ? "dist" : undefined}>
         {info && <span className="m dn">{num(r.Distinct as number)}</span>}
         <span className="two">
           <span className="one" title="distinct of all rows"><Share v={r["Distinct % of rows"]} />{nulls && <span className="pc">rows</span>}</span>
@@ -125,9 +125,9 @@ function StatsRow({ r, keyCols, sel, onOpen, info }: { r: Row; keyCols: string[]
         </span>
       </span></td>
       {info
-        ? <td className="m dim clip range" title={lo || hi ? `${lo} … ${hi}` : ""}>{lo || hi ? <>{lo} <span className="pc">…</span> {hi}</> : <span className="pc">-</span>}</td>
-        : <><td className="m dim clip" title={lo}>{lo}</td><td className="m dim clip" title={hi}>{hi}</td></>}
-      <td className="m">{r["Top value"] === "" || r["Top value"] == null ? <span className="pc">-</span>
+        ? <td className="m dim clip range" title={lo || hi ? `${lo} … ${hi}` : ""} data-label="Min … max">{lo || hi ? <>{lo} <span className="pc">…</span> {hi}</> : <span className="pc">-</span>}</td>
+        : <><td className="m dim clip" title={lo} data-label="Min">{lo}</td><td className="m dim clip" title={hi} data-label="Max">{hi}</td></>}
+      <td className="m" data-label="Top value">{r["Top value"] === "" || r["Top value"] == null ? <span className="pc">-</span>
         : <span className="top"><span className="clip" title={fmt(r["Top value"], isNum)}>{fmt(r["Top value"], isNum)}</span>{info ? <span className="pc">{pct(Number(r["Top %"] ?? 0))}</span> : <Share v={r["Top %"]} />}</span>}</td>
       {info && <td className="dot-cell"><Stands facts={info.stands} /></td>}
     </tr>

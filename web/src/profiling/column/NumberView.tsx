@@ -5,7 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { api } from "../../api/client";
-import { Bar, Callout, ErrorNote, LinkButton, Loading, num, Panel, plural, Seg, StatGrid } from "../../ui/kit";
+import { Bar, Callout, ErrorNote, LinkButton, Loading, num, Panel, plural, Seg, StatGrid, usePhone } from "../../ui/kit";
 import { CouldBe, Dependencies, NotShown, Outliers, Points, READS_AS, share, toNum, type Point } from "../ColumnDetail";
 import { FreqBars, splitFreq } from "../FreqSection";
 import { fmt, pct, rowsOf, type Row } from "../frame";
@@ -84,6 +84,7 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
   const oneBin = bins.length > 1 && binTotal > 0 && fullest >= ONE_BIN * binTotal;
   const mostEmpty = bins.length > 1 && binTotal > 0 && empty > bins.length / 2;
   const skewed = times > 0 || oneBin;
+  const phone = usePhone();
   const [pick, setPick] = useState<Mode | null>(null);
   const mode: Mode = pick ?? (skewed || mostEmpty ? "log" : "equal");
 
@@ -169,7 +170,8 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
     caption = "The P1 … P99 strip as bins - each holds a fixed share of the rows; the narrower its range, the denser the values.";
   }
   const barTop = Math.max(1e-9, ...(shown ?? []).map((b) => b.share));
-  const half = shown ? Math.ceil(shown.length / 2) : 0;
+  // two bins a row; a phone has room for one, so its list reads in order
+  const half = shown ? (phone ? shown.length : Math.ceil(shown.length / 2)) : 0;
   const cell = (b?: Shown) => b
     ? <><td className="m">{b.label}</td><td className="num m">{b.n === undefined ? "" : num(b.n)}</td><td className="num m dim">{pct(b.share)}</td></>
     : <><td /><td /><td /></>;
@@ -202,8 +204,9 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
             )}
             <div className="tblwrap">
               <table className="tbl compact prof-bins" aria-label={`Bins of ${column}`}>
-                <thead><tr><th>Bin</th><th className="num">Rows</th><th className="num">Share</th><th className="b2">Bin</th><th className="num">Rows</th><th className="num">Share</th></tr></thead>
-                <tbody>{shown.slice(0, half).map((b, i) => <tr key={i}>{cell(b)}{cell(shown![half + i])}</tr>)}</tbody>
+                <thead><tr><th>Bin</th><th className="num">Rows</th><th className="num">Share</th>
+                  {!phone && <><th className="b2">Bin</th><th className="num">Rows</th><th className="num">Share</th></>}</tr></thead>
+                <tbody>{shown.slice(0, half).map((b, i) => <tr key={i}>{cell(b)}{!phone && cell(shown![half + i])}</tr>)}</tbody>
               </table>
             </div>
           </>}

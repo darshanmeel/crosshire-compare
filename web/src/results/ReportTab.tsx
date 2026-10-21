@@ -41,7 +41,7 @@ export function ReportTab({ run, limit }: { run: RunView; limit: number }) {
         </label>
       </div>
       <div className="report-frame" role="region" aria-label="Report preview">
-        <div className="chrome"><Icon name="file" size="sm" /><span className="rd-file">{d?.report ?? `${run.pair}__report.html`}</span><span className="grow" />preview · the file is self-contained</div>
+        <div className="chrome"><Icon name="file" size="sm" /><span className="rd-file">{d?.report ?? `${run.pair}__report.html`}</span><span className="grow" /><span className="ph-hide">preview · the file is self-contained</span></div>
         <iframe title="Report" src={src} sandbox="" className={height === "fit" ? "rd-fit" : undefined}
                 height={height === "fit" ? undefined : height} />
       </div>

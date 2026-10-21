@@ -151,9 +151,9 @@ function outlierBody(o: Row | undefined, kind: string, filled: number, st: Row, 
   return (
     <Checks name="Outlier findings" items={items} ok={ok} more={pcts.length > 0 && (
         <div className="tblwrap">
-          <table className="tbl compact" aria-label="Percentiles">
+          <table className="tbl compact cards" aria-label="Percentiles">
             <thead><tr>{pcts.map((k) => <th key={k} className="num">{k}</th>)}</tr></thead>
-            <tbody><tr>{pcts.map((k) => <td key={k} className="num m">{fmt(o[k], isNum)}</td>)}</tr></tbody>
+            <tbody><tr>{pcts.map((k) => <td key={k} className="num m" data-label={k}>{fmt(o[k], isNum)}</td>)}</tr></tbody>
           </table>
         </div>
       )} />

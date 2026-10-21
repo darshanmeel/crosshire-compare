@@ -1,6 +1,7 @@
 // web/src/results/SummaryView.tsx - the Summary tab (SPEC §08): the tiles and their caption, the
 // Columns panel with its match bars and the one-sided columns, Why they differ beside it, and under
 // them two folds: Profile by bucket and Columns & values (each column's value pairs).
+import type { ReactNode } from "react";
 import type { RunView } from "../compare/types";
 import { Expander } from "../ui/Expander";
 import { Chip, ErrorNote, Loading, num, pctText, Tile } from "../ui/kit";
@@ -46,21 +47,24 @@ function ColumnsPanel({ s, names, matched }: { s: Summary; names: [string, strin
   const onlyA = rows.filter((r) => r.Role === `only in ${NA}`), onlyB = rows.filter((r) => r.Role === `only in ${NB}`);
   const hash = s.mode === "hash";
   const gapA = `Values only in ${NA}`, gapB = `Values only in ${NB}`;
+  // a phone card labels each value with the header it sits under
+  const [h1, h2, h3] = hash ? [`Only in ${NA}`, `Only in ${NB}`, undefined] : ["Matched", "Mismatched", "Match %"];
+  const td = (cls: string, v: ReactNode, label?: string) => <td className={cls || undefined} data-label={label}>{v}</td>;
   const cell = (r: LedgerRow) => {
-    if (r.Role === "key") return <><td className="num m dim">-</td><td className="num m dim">-</td><td><Chip tone="key">key</Chip></td></>;
+    if (r.Role === "key") return <>{td("num m dim", "-", h1)}{td("num m dim", "-", h2)}{td("", <Chip tone="key">key</Chip>, h3)}</>;
     if (hash) {
       const a = n(r[gapA]), b = n(r[gapB]);
-      return <><td className={a ? "num m neg-n" : "num m dim"}>{a == null ? "-" : num(a)}</td>
-               <td className={b ? "num m neg-n" : "num m dim"}>{b == null ? "-" : num(b)}</td><td /></>;
+      return <>{td(a ? "num m neg-n" : "num m dim", a == null ? "-" : num(a), h1)}
+               {td(b ? "num m neg-n" : "num m dim", b == null ? "-" : num(b), h2)}<td /></>;
     }
     const ok = n(r.Matched), bad = n(r.Mismatched) ?? 0, pct = n(r["Match %"]);
-    if (ok == null) return <><td className="num m dim">-</td><td className="num m dim">-</td><td className="dim">not compared</td></>;
+    if (ok == null) return <>{td("num m dim", "-", h1)}{td("num m dim", "-", h2)}{td("dim", "not compared", h3)}</>;
     const all = ok + bad;
     return (
       <>
-        <td className="num m">{num(ok)}</td>
-        <td className={bad ? "num m neg-n" : "num m dim"}>{num(bad)}</td>
-        <td><MatchBars ok={ok} bad={bad} pct={all ? (100 * ok) / all : pct ?? 0} /></td>
+        {td("num m", num(ok), h1)}
+        {td(bad ? "num m neg-n" : "num m dim", num(bad), h2)}
+        {td("", <MatchBars ok={ok} bad={bad} pct={all ? (100 * ok) / all : pct ?? 0} />, h3)}
       </>
     );
   };
@@ -71,7 +75,7 @@ function ColumnsPanel({ s, names, matched }: { s: Summary; names: [string, strin
         <span className="sub">{hash ? "values present on one side only, per compared column" : `match measured on the ${num(matched)} paired rows`}</span>
       </div>
       <div className="tblwrap">
-        <table className="tbl" aria-label="Columns">
+        <table className="tbl cards" aria-label="Columns">
           <thead><tr>
             <th><span className="sw a" />{NA}</th><th><span className="sw b" />{NB}</th><th>Read as</th>
             {hash
@@ -80,8 +84,8 @@ function ColumnsPanel({ s, names, matched }: { s: Summary; names: [string, strin
           </tr></thead>
           <tbody>{shown.map((r) => (
             <tr key={r.Column} className={r.Role === "paired, not compared" ? "muted" : undefined}>
-              <td className="m ca">{String(r[NA] ?? "-")}</td><td className="m cb">{String(r[NB] ?? "-")}</td>
-              <td><ReadAs text={String(r["Read as"] ?? "")} /></td>
+              <td className="m ca" data-label={NA}>{String(r[NA] ?? "-")}</td><td className="m cb" data-label={NB}>{String(r[NB] ?? "-")}</td>
+              <td data-label="Read as"><ReadAs text={String(r["Read as"] ?? "")} /></td>
               {cell(r)}
             </tr>
           ))}</tbody>
