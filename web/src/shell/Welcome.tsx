@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Meta } from "../api/client";
 import { getForm, setForm } from "../sources/formStore";
 import { loadBody, type Tag } from "../sources/types";
-import { Button } from "../ui/kit";
+import { Button, ErrorNote } from "../ui/kit";
 import type { Page } from "./usePage";
 import { setView } from "./view";
 
@@ -69,7 +69,7 @@ export function Welcome({ page, meta, setPage }: { page: Page; meta?: Meta; setP
             ? <Button onClick={() => setView({ view: "config" })}>Run from a saved config</Button>
             : <Button onClick={() => setPage("Compare")}>Compare two tables instead</Button>}
         </div>
-        {err && <div className="note error">{err}</div>}
+        {err && <ErrorNote>{err}</ErrorNote>}
       </div>
       <ol className="how">
         {c.how.map(([b, rest], i) => <li key={i}><span className="n">{i + 1}</span><span>{b}{rest}</span></li>)}

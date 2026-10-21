@@ -2,7 +2,7 @@
 // in the head, its eight most frequent values as bars. The ten most and ten least frequent of any
 // column are on its detail page (FreqBars, used there too).
 import { usePick } from "../results/pickStore";
-import { Bar, LinkButton, num, Panel } from "../ui/kit";
+import { Bar, ErrorNote, LinkButton, Loading, num, Panel } from "../ui/kit";
 import { fmt, pct, rowsOf, type Row } from "./frame";
 import { openColumn } from "./ColumnsTable";
 import type { Frame, FreqInfo, Profile } from "./types";
@@ -65,8 +65,8 @@ export function FreqSection({ p, made }: { p: Profile; made: string }) {
       )}>
       <div className="panel-body">
         {!column ? <p className="caption">No columns to list.</p>
-          : q.error ? <div className="note error">{(q.error as Error).message}</div>
-          : !q.data ? <p className="caption">Reading…</p>
+          : q.error ? <ErrorNote>{(q.error as Error).message}</ErrorNote>
+          : !q.data ? <Loading>Reading…</Loading>
           : <FreqBars t={q.data.top} numeric={st?.Type === "number"} limit={8} label={`Most frequent values of ${column}`} />}
         {column && <div><LinkButton iconAfter="arrow" onClick={() => openColumn(column)}>Most and least frequent of {column}</LinkButton></div>}
       </div>

@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../api/client";
 import { Icon } from "../ui/icons";
-import { Button, CommitInput } from "../ui/kit";
+import { Button, CommitInput, ErrorNote, InfoTip } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { errorText, type FilterRow, type FiltersView } from "../setup/api";
 import { useFilters } from "../keys/summary";
@@ -27,7 +27,7 @@ export function FiltersBox() {
   const [put, setPut] = useState<{ pending: boolean; error: unknown }>({ pending: false, error: null });
   const queue = useRef<Promise<void>>(Promise.resolve());
   const f = q.data;
-  if (!f) return q.error ? <div className="note error">{errorText(q.error)}</div> : null;
+  if (!f) return q.error ? <ErrorNote>{errorText(q.error)}</ErrorNote> : null;
   /** Each change is worked out from the latest filters when its turn comes, and sent with their version: two quick
    *  changes (a typed value, then an Operator) are sent one after the other, never from the same old rows. */
   const save = (next: (rows: FilterRow[]) => FilterRow[]) => {
@@ -57,8 +57,8 @@ export function FiltersBox() {
     if (grid || !f.rows.length) save((rows) => [...rows, BLANK]);
   }}>Add a filter</Button>;
   const errors = <>
-    {f.error && <div className="note error">{marks(f.error)}</div>}
-    {(q.error != null || put.error != null) && <div className="note error">{errorText(q.error ?? put.error)}</div>}
+    {f.error && <ErrorNote>{marks(f.error)}</ErrorNote>}
+    {(q.error != null || put.error != null) && <ErrorNote>{errorText(q.error ?? put.error)}</ErrorNote>}
   </>;
   if (!grid) return (                                // none picked yet: one line, the grid after Add
     <div className="panel atcompare empty">
@@ -74,11 +74,13 @@ export function FiltersBox() {
     <div className="panel atcompare">
       <div className="panel-head">
         <h3>Filters at compare</h3>
-        <span className="sub">Filters - which rows take part, on the common names</span>
+        <span className="sub">which rows take part</span>
+        <InfoTip label="About Filters at compare" text="Which rows take part, on the common names." />
         {n > 0 && <div className="actions"><span className="pill ok"><i />{n} applied</span></div>}
       </div>
       <div className="panel-note">
-        <span>{marks("Both sides, after types · values match exactly (*Ignore case* does not apply) · to shrink a big file before it is read: **Rows to read** above")}</span>
+        <span>{marks("Both sides, after types · exact match")}</span>
+        <InfoTip label="About these filters" text="Values match exactly: Ignore case does not apply. To shrink a big file before it is read, use Rows to read above." />
       </div>
       <div className="tblwrap">
         <table className="tbl compact filters-tbl" aria-label="Filters">

@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { DERIVED_KEYS, errorText, SETUP_KEY, type Settings } from "../setup/api";
-import { CommitInput, InfoTip } from "../ui/kit";
+import { CommitInput, ErrorNote, InfoTip } from "../ui/kit";
 import "./values.css";
 
 const NULLS = "Comma separated, any case - read as null on both sides";
@@ -42,7 +42,7 @@ export function HowValuesRead({ settings }: { settings: Settings }) {
                      onDone={(v) => put.mutate({ tolerance: Math.max(0, Number(v) || 0) })} />
         <span className="hint">absolute · 0 = exact</span>
       </div>
-      {put.error && <div className="note error" role="alert">{errorText(put.error)}</div>}
+      {put.error && <ErrorNote role="alert">{errorText(put.error)}</ErrorNote>}
     </div>
   );
 }

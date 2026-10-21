@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 import { Icon } from "../ui/icons";
-import { Button, MenuButton } from "../ui/kit";
+import { Button, Loading, MenuButton, ToneNote } from "../ui/kit";
 import { marks } from "../ui/marks";
 import type { Saved } from "./types";
 import { useSaveDefaults } from "./useProfiling";
@@ -44,7 +44,7 @@ export function SaveRow({ made, folder, name }: { made: string; folder: string; 
                onChange={(e) => { kept[made] = e.target.value; setText(e.target.value); }} />
         <Button icon="folder" onClick={save} disabled={busy}>Save to folder</Button>
       </div>
-      {said && <div className={`note ${said.tone}`}>{marks(said.text)}</div>}
+      {said && <ToneNote tone={said.tone}>{marks(said.text)}</ToneNote>}
     </div>
   );
 }
@@ -55,7 +55,7 @@ export function ProfileFiles({ name, made }: { name: string; made: string }) {
   return <>
     <MenuButton className="btn" label={<><Icon name="folder" />Save to folder</>} group="Files" wide>
       <p className="caption">All six tables of the profile, written to this folder</p>
-      {d ? <SaveRow made={made} folder={d.save_folder} name={name} /> : <p className="caption">Finding the folder…</p>}
+      {d ? <SaveRow made={made} folder={d.save_folder} name={name} /> : <Loading>Finding the folder…</Loading>}
     </MenuButton>
     <a className="btn primary" href={`/api/profiling/profile.csv?name=${encodeURIComponent(name)}`} download={d?.csv_name}
        aria-label="Download profile.csv"><Icon name="download" />profile.csv</a>

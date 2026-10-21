@@ -4,7 +4,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import type { RunView } from "../compare/types";
 import { Icon } from "../ui/icons";
-import { Bar, Button, Callout, DiffCell, grouped, MenuButton, num } from "../ui/kit";
+import { Bar, Button, Callout, DiffCell, grouped, Loading, MenuButton, num } from "../ui/kit";
 import { fileUrl, pivot, useDiffRows, useNearMatch, type DiffRowsPage, type KeyRow } from "./detailApi";
 import { Failed } from "./Failed";
 import "./detail.css";
@@ -70,7 +70,7 @@ function NearMatch({ runId, onClose }: { runId: string; onClose: () => void }) {
         <span className="sub">High similarity means nearly the same text - formatting, padding or casing rather than data</span>
         <div className="actions"><button type="button" className="icon-btn" aria-label="Close near-match analysis" onClick={onClose}><Icon name="x" /></button></div>
       </div>
-      {q.isFetching && !f && <p className="caption rd-pad">Measuring every differing cell…</p>}
+      {q.isFetching && !f && <Loading className="rd-pad">Measuring every differing cell…</Loading>}
       {q.error && <div className="rd-pad"><Failed error={q.error} /></div>}
       {f && (
         <div className="tblwrap">
@@ -110,7 +110,7 @@ export function DiffRowsTab({ run }: { run: RunView }) {
     : rows;
 
   if (q.error) return <div className="rd"><Failed error={q.error} /></div>;
-  if (!first) return <div className="rd"><p className="caption">Reading the rows that differ…</p></div>;
+  if (!first) return <div className="rd"><Loading>Reading the rows that differ…</Loading></div>;
   if (first.note) return <div className="rd"><Callout icon="table">{first.note}</Callout></div>;
   if (!run.diff_rows) return <div className="rd"><Callout tone="pos" icon="check">No rows differ - every matched row agrees on every compared column.</Callout></div>;
 

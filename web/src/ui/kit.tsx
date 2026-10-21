@@ -127,13 +127,17 @@ export function SideBadge({ side }: { side: "a" | "b" | "k" | "A" | "B" | "P" })
 }
 
 /** A section of the page: mono numeral eyebrow, title, grey sub-line, actions on the right. */
-export function Section({ n, title, sub, actions, id, children }: { n?: string; title: ReactNode; sub?: ReactNode; actions?: ReactNode; id?: string; children?: ReactNode }) {
+/** `info` is the longer help behind the short sub-line, on an InfoTip. */
+const about = (title: ReactNode) => (typeof title === "string" ? `About ${title}` : "About this");
+
+export function Section({ n, title, sub, info, actions, id, children }: { n?: string; title: ReactNode; sub?: ReactNode; info?: string; actions?: ReactNode; id?: string; children?: ReactNode }) {
   return (
     <section className="sec" id={id} aria-label={typeof title === "string" ? title : undefined}>
       <div className="sec-head">
         {n && <span className="eyebrow accent">{n}</span>}
         <h2>{title}</h2>
         {sub && <span className="sub">{sub}</span>}
+        {info && <InfoTip label={about(title)} text={info} />}
         {actions && <div className="actions">{actions}</div>}
       </div>
       {children}
@@ -141,11 +145,11 @@ export function Section({ n, title, sub, actions, id, children }: { n?: string; 
   );
 }
 
-export function Panel({ title, sub, actions, foot, children, className }: { title?: ReactNode; sub?: ReactNode; actions?: ReactNode; foot?: ReactNode; children?: ReactNode; className?: string }) {
+export function Panel({ title, sub, info, actions, foot, children, className }: { title?: ReactNode; sub?: ReactNode; info?: string; actions?: ReactNode; foot?: ReactNode; children?: ReactNode; className?: string }) {
   return (
     <div className={["panel", className].filter(Boolean).join(" ")}>
       {(title || actions) && (
-        <div className="panel-head">{title && <h3>{title}</h3>}{sub && <span className="sub">{sub}</span>}{actions && <div className="actions">{actions}</div>}</div>
+        <div className="panel-head">{title && <h3>{title}</h3>}{sub && <span className="sub">{sub}</span>}{info && <InfoTip label={about(title)} text={info} />}{actions && <div className="actions">{actions}</div>}</div>
       )}
       {children}
       {foot && <div className="panel-foot">{foot}</div>}
@@ -165,6 +169,22 @@ export function Callout({ tone, icon, children, onDismiss }: { tone?: "warn" | "
       {onDismiss && <button type="button" className="link-btn" onClick={onDismiss} aria-label="Dismiss"><Icon name="x" size="sm" /></button>}
     </div>
   );
+}
+
+/** The one waiting state: a running pill (with an optional short line) on a row of fixed height,
+ *  so the panel does not jump when the data arrives. */
+export function Loading({ children, line, className }: { children: ReactNode; line?: ReactNode; className?: string }) {
+  return <div className={["loading", className].filter(Boolean).join(" ")} role="status"><Pill tone="run">{children}</Pill>{line && <span className="caption">{line}</span>}</div>;
+}
+
+/** The one error state: a red callout with the alert icon, holding the server's sentence as it came. */
+export function ErrorNote({ children, className, role }: { children: ReactNode; className?: string; role?: "alert" | "status" }) {
+  return <div className={["note error iconed", className].filter(Boolean).join(" ")} role={role}><Icon name="alert" />{children}</div>;
+}
+
+/** A note in its tone; an error one is the ErrorNote. */
+export function ToneNote({ tone, children, role }: { tone: string; children: ReactNode; role?: "status" }) {
+  return tone === "error" ? <ErrorNote role={role}>{children}</ErrorNote> : <div className={`note ${tone}`} role={role}>{children}</div>;
 }
 
 /** Match % in green at 100, light green at 95 or more, amber below; plain accent otherwise. */

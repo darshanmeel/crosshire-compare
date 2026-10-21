@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
-import { Button } from "../ui/kit";
+import { Button, ErrorNote, Loading } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { Tips } from "../ui/Tips";
 import { useNearMatch } from "./detailApi";
@@ -42,13 +42,13 @@ export function ColumnsView({ run }: { run: RunView }) {
   });
   if (q.error) return <div className="cv"><Failed error={q.error} /></div>;
   const d = q.data;
-  if (!d) return <div className="cv"><p className="caption">Reading…</p></div>;
+  if (!d) return <div className="cv"><Loading>Reading…</Loading></div>;
   if (d.hash_caption) return <div className="cv"><p className="caption">{d.hash_caption}</p></div>;
   const rest = d.rest ?? [];
   return (
     <div className="cv">
       <Tips items={d.tips ?? []} />
-      {d.differ_error && <div className="note error">{marks(d.differ_error)}</div>}
+      {d.differ_error && <ErrorNote>{marks(d.differ_error)}</ErrorNote>}
       {rest.length > 0 && (
         <fieldset className="col-pick cv-more">
           <legend>{d.rest_title}</legend>

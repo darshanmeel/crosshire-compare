@@ -5,7 +5,7 @@ import { useRunError } from "../compare/actions";
 import { STALE } from "../compare/types";
 import { goToSection } from "../shell/view";
 import { NoteLine } from "../sources/NoteLine";
-import { Callout, LinkButton } from "../ui/kit";
+import { Callout, ErrorNote, LinkButton } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { ResultsHead } from "./ResultsHead";
 import { ResultsView } from "./ResultsView";
@@ -17,8 +17,8 @@ export function ResultsPage() {
   if (!st) return null;
   const notes = (
     <>
-      {refused && <div className="note error">{marks(refused)}</div>}
-      {st.filter_error && <div className="note error">{st.filter_error}</div>}
+      {refused && <ErrorNote>{marks(refused)}</ErrorNote>}
+      {st.filter_error && <ErrorNote>{st.filter_error}</ErrorNote>}
       {st.said.map((n, i) => <NoteLine key={i} note={n} />)}
     </>
   );

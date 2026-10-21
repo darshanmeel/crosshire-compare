@@ -4,7 +4,7 @@
 import { useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText } from "../api/client";
-import { Button } from "../ui/kit";
+import { Button, ErrorNote } from "../ui/kit";
 
 export type EngineView = {
   memory: string; memory_from: "env" | "saved" | "default";
@@ -47,7 +47,7 @@ export function EngineLimits() {
       <span className="caption runset-help">
         Past the memory limit DuckDB spills to disk, up to the disk limit. Defaults {v.default_memory} and {v.default_disk}; the next step uses them.
       </span>
-      {err && <div className="note error" role="alert">{err}</div>}
+      {err && <ErrorNote role="alert">{err}</ErrorNote>}
     </form>
   );
 }

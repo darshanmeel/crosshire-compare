@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Meta } from "../api/client";
 import { Expander } from "../ui/Expander";
-import { Button, Chip, Pill } from "../ui/kit";
+import { Button, Chip, ErrorNote, InfoTip, Pill } from "../ui/kit";
 import { ConnectionForm } from "./ConnectionForm";
 import { FilesBox } from "./FilesBox";
 import { NEW, passwordText, refreshConnections, savedBody, type ConnForm, type ConnRow, type Tested } from "./types";
@@ -54,7 +54,7 @@ function ConnCard({ r, tested, onTested, onEdit, editing }: {
         {r.password === "session" && <> · <button type="button" className="link-btn inline" onClick={() => forget.mutate()} disabled={forget.isPending}>Forget the password</button></>}
       </div>
       {tested && !tested.ok && <div className="said neg">{tested.message}</div>}
-      {err && <div className="note error">{err}</div>}
+      {err && <ErrorNote>{err}</ErrorNote>}
     </li>
   );
 }
@@ -76,11 +76,12 @@ export function ConnectionsManager({ meta }: { meta?: Meta }) {
   return (
     <div className="conns">
       <p className="conn-intro">
-        Pick one under <strong>Database</strong> on either side; a folder connection shows under <strong>Path on disk</strong>.
+        Pick one under <strong>Database</strong>; folders under <strong>Path on disk</strong>.
       </p>
-      {error && <div className="note error">{String((error as Error).message)}</div>}
+      {error && <ErrorNote>{String((error as Error).message)}</ErrorNote>}
       {!isLoading && rows.length === 0 && !error && (
-        <p className="conn-hint">None yet. Fill the form and press Save, import a connections file below - or set <code>COMPARE_CONN_&lt;NAME&gt;=&lt;uri&gt;</code> in the environment.</p>
+        <p className="conn-hint">None yet - fill the form and press Save.{" "}
+          <InfoTip label="Other ways to add one" text="Import a connections file below, or set COMPARE_CONN_<NAME>=<uri> in the environment." /></p>
       )}
       {rows.length > 0 && (
         <ul className="conn-list" aria-label="Saved connections">

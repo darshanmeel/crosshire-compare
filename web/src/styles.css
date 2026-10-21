@@ -263,6 +263,9 @@ button.chip { cursor: pointer; } button.chip:hover { color: var(--fs-accent); }
 /* the engine's messages (NoteLine): error / warning / success / info, as callouts */
 .note { background: var(--fs-panel); border: 1px solid var(--fs-line); border-radius: var(--r-sm); padding: 8px 12px; font-size: 13px; color: var(--fs-text2); }
 .note.error { border-color: var(--fs-neg); background: var(--fs-neg-bg); color: var(--fs-text); }
+.note.iconed { position: relative; padding-left: 34px; overflow-wrap: anywhere; }
+.note.iconed > svg { position: absolute; left: 12px; top: 11px; color: var(--fs-neg); }
+.loading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 36px; }
 .note.warning { border-color: var(--fs-warn-dot); background: var(--fs-warn-bg); }
 .note.success { border-color: var(--fs-pos-dot); background: var(--fs-pos-bg); }
 .caption { font-size: 12.5px; color: var(--fs-text3); }

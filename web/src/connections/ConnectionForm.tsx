@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Meta } from "../api/client";
 import { Expander } from "../ui/Expander";
-import { Button, LinkButton, Seg } from "../ui/kit";
+import { Button, InfoTip, LinkButton, Seg, ToneNote } from "../ui/kit";
 import { NEW, connBody, envName, refreshConnections, type ConnForm, type PwWhere, type Tested } from "./types";
 
 type Said = { tone: "success" | "error"; text: string } | null;
@@ -104,8 +104,8 @@ export function ConnectionForm({ meta, pick, onDone, onTested }: {
           ]} />
           <span className="conn-hint">
             {where === "file" ? "Written to the connections file on this machine."
-              : where === "session" ? "Held until the app stops - asked again next time; nothing secret touches disk."
-              : <>Only the variable's name is written; the app reads it where it runs. Or set <code>COMPARE_CONN_&lt;NAME&gt;=uri</code> and save nothing.</>}
+              : where === "session" ? <>Held until the app stops.{" "}<InfoTip label="About This session" text="Asked again next time; nothing secret touches disk." /></>
+              : <>Only the variable's name is written.{" "}<InfoTip label="About Environment variable" text="The app reads it where it runs. Or set COMPARE_CONN_<NAME>=uri and save nothing." /></>}
           </span>
         </div>
       )}
@@ -123,7 +123,7 @@ export function ConnectionForm({ meta, pick, onDone, onTested }: {
         <Button type="submit" variant="dark" disabled={!name || save.isPending}>Save</Button>
         {editing && <Button variant="ghost" className="conn-del" onClick={() => del.mutate()} disabled={del.isPending}>Delete</Button>}
       </div>
-      {said && <div className={`note ${said.tone}`} role="status">{said.text}</div>}
+      {said && <ToneNote tone={said.tone} role="status">{said.text}</ToneNote>}
     </form>
   );
 }

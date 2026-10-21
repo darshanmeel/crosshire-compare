@@ -26,6 +26,7 @@ const PATHS = {
   external: ["M14 4h6v6M20 4l-9 9M18 14v6H4V6h6", 1.8],
   copy: ["M9 9h11v11H9zM5 15H4V4h11v1", 1.8],
   info: ["M12 11v6M12 7.6v.01", 2, "<circle cx='12' cy='12' r='9'/>"],
+  alert: ["M12 3l10 18H2zM12 10v5M12 18v.01", 2],
   refresh: ["M20 11a8 8 0 0 0-14.5-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.5 4.5L20 16m0 4v-4h-4", 1.8],
 } as const satisfies Record<string, readonly [string, number] | readonly [string, number, string]>;
 

@@ -134,7 +134,7 @@ function KeyCandidates({ p, name }: { p: Profile; name: string }) {
   const differs = done.key_cols !== s.key_cols || done.top_keys !== s.top_keys || done.shortlist !== s.shortlist;
   const said = sentences(p.keys.text);
   return (
-    <Panel title="Key candidates" sub={`single columns first, then combinations up to ${done.key_cols}`}
+    <Panel title="Key candidates" sub={`single, then up to ${done.key_cols} together`} info={`Single columns first, then combinations of up to ${done.key_cols} columns.`}
       actions={<MenuButton label="Search settings" group="Key search settings" wide>
         <p className="caption">This profile: combinations up to {done.key_cols}
           {done.key_sample ? <> found on a random sample of {num(done.key_sample)} rows, the best {done.shortlist} checked on every row</> : null}
@@ -215,7 +215,7 @@ function CouldBeTypes({ made }: { made: string }) {
   const rows = useCasts(made).data?.columns ?? [];
   if (!rows.length) return null;
   return (
-    <Panel title="Could be another type" sub="read as text or a number, but the values read as a number, a date or a timestamp">
+    <Panel title="Could be another type" sub="values that read as another type" info="Read as text or a number, but the values read as a number, a date or a timestamp.">
       <div className="panel-body">
         <ul className="prof-points" aria-label="Could be another type">
           {rows.map((r) => {
@@ -245,7 +245,7 @@ function DepPairs({ p, pairs, keys }: { p: Profile; pairs: DepPair[]; keys: stri
   const full = pairs.find((x) => x.v >= 100);
   const back = full && pairs.find((x) => x.x === full.y && x.y === full.x);
   return (
-    <Panel className="dep-pairs" title="Dependencies across the table" sub="how far one column decides another beyond chance · 0 is chance, 100% every value has one">
+    <Panel className="dep-pairs" title="Dependencies across the table" sub="how far one column decides another" info="Beyond chance: 0 is chance, 100% means every value has one.">
       <div className="panel-body">
         <ul className="dep-pairs-list" aria-label="Strongest dependencies">
           {pairs.map((x) => (
@@ -288,7 +288,7 @@ export function ProfileView({ view, name }: { view: ProfilingView; name: string 
         </div>
         <div className="side">
           <KeyCandidates p={p} name={name} />
-          <Panel title="What stands out" sub="each finding once, with the columns it is about">
+          <Panel title="What stands out" sub="each finding once, with its columns">
             <div className="panel-body">
               {found.length
                 ? <ul className="prof-found">{found.map((f) => <FindingRow key={f.title} f={f} />)}</ul>

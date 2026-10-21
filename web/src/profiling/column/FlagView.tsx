@@ -5,7 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { api } from "../../api/client";
-import { Bar, Chip, num, Panel, StatGrid } from "../../ui/kit";
+import { Bar, Chip, ErrorNote, Loading, num, Panel, StatGrid } from "../../ui/kit";
 import { Dependencies, NotShown, share } from "../ColumnDetail";
 import { pct } from "../frame";
 import { Findings, type Finding } from "./Findings";
@@ -80,11 +80,11 @@ export function FlagView({ p, column, made, st }: ColumnViewProps) {
   const nullCard = { label: "Nulls", value: <>{num(nulls)} <span className="pc">· {pct(st["Null %"])}</span></> };
   if (q.error) return (<>
     <StatGrid stats={[{ label: "Rows", value: num(rows) }, nullCard]} />
-    <div className="note error">{(q.error as Error).message}</div>
+    <ErrorNote>{(q.error as Error).message}</ErrorNote>
   </>);
   if (!d) return (<>
     <StatGrid stats={[{ label: "Rows", value: num(rows) }, nullCard]} />
-    <p className="caption">Counting…</p>
+    <Loading>Counting…</Loading>
   </>);
 
   const t = d.true, f = d.false, filled = t + f;
@@ -135,7 +135,7 @@ export function FlagView({ p, column, made, st }: ColumnViewProps) {
   // --- values: each spelling as read, and what it becomes ---
   const seenSet = new Set(seen.map((s) => s.value));
   const values = (
-    <Panel title="Values" sub="as read from the file, and what they become"><div className="panel-body">
+    <Panel title="Values" sub="as read, and what they become"><div className="panel-body">
       <ul className="kv prof-kv flag-kv" aria-label={`Values of ${column}`}>
         {seen.map((s) => (
           <li key={s.value} className={s.reads === true ? "t" : s.reads === false ? "f" : "o"}>
@@ -185,7 +185,8 @@ export function FlagView({ p, column, made, st }: ColumnViewProps) {
           </select>
         </label>
       : "True rate by group"}
-      sub={d.groups.length ? `share of true among the filled values in each ${d.how === "value" ? "group" : d.how === "year" ? "year" : "band of equal row counts"}` : undefined}>
+      sub={d.groups.length ? `share of true per ${d.how === "value" ? "group" : d.how === "year" ? "year" : "band"}` : undefined}
+      info={d.groups.length ? `Among the filled values in each ${d.how === "value" ? "group" : d.how === "year" ? "year" : "band of equal row counts"}.` : undefined}>
       <div className="panel-body">
         {!d.groups.length ? <p className="caption">No other column with 2 to 50 values, dates or numbers to group by.</p> : <>
           <ul className="kv prof-kv flag-kv" aria-label={`True rate of ${column} by ${curName}`}>

@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { goToSection } from "../shell/view";
-import { Button, Callout, grouped, LinkButton, MenuButton, num } from "../ui/kit";
+import { Button, Callout, grouped, LinkButton, Loading, MenuButton, num } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import { ColumnPick, notCompared } from "./ColumnPick";
 import { Failed } from "./Failed";
@@ -92,7 +92,7 @@ function SidePanel({ run, side }: { run: RunView; side: "A" | "B" }) {
         )}
       </div>
       {q.error && <div className="panel-body"><Failed error={q.error} /></div>}
-      {!d && !q.error && <div className="panel-body"><p className="caption">Reading…</p></div>}
+      {!d && !q.error && <div className="panel-body"><Loading>Reading…</Loading></div>}
       {d && d.total === 0 && <div className="panel-body"><p className="caption">Every {name} row has a partner on the other side.</p></div>}
       {d && d.total > 0 && (
         <>

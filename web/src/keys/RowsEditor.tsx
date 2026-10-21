@@ -13,7 +13,7 @@ import { useLog } from "../shell/LogPanel";
 import { getView, goToSection } from "../shell/view";
 import { useSources } from "../sources/useSources";
 import { Icon } from "../ui/icons";
-import { Button, num, Section } from "../ui/kit";
+import { Button, ErrorNote, InfoTip, num, Section } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { FiltersBox } from "../values/FiltersBox";
 import { BucketCard } from "./BucketCard";
@@ -24,10 +24,10 @@ import { RunSettingsCard } from "./RunSettingsCard";
 import { filterLine, matchLine, useFilters } from "./summary";
 import "./keys.css";
 
-function Sub({ id, title, sub, children }: { id: string; title: string; sub?: string; children: ReactNode }) {
+function Sub({ id, title, sub, info, children }: { id: string; title: string; sub?: string; info?: string; children: ReactNode }) {
   return (
     <section className="sec rows-sub" aria-labelledby={id}>
-      <div className="sec-head"><h3 id={id}>{title}</h3>{sub && <span className="sub">{sub}</span>}</div>
+      <div className="sec-head"><h3 id={id}>{title}</h3>{sub && <span className="sub">{sub}</span>}{info && <InfoTip label={`About ${title}`} text={info} />}</div>
       {children}
     </section>
   );
@@ -79,22 +79,22 @@ function CompareRow() {
         <span className="caption">{n} column{n === 1 ? "" : "s"} {matchLine(s?.ready ? s.keys : [], k)} · {filt.startsWith("none") ? "no filters applied" : filt}</span>
       </div>
       {st.gate === "tick" && <div className="note warning">{marks(TICK_COMPARE)}</div>}
-      {st.filter_error && <div className="note error">{marks(st.filter_error)}</div>}
-      {err && <div className="note error">{marks(err)}</div>}
+      {st.filter_error && <ErrorNote>{marks(st.filter_error)}</ErrorNote>}
+      {err && <ErrorNote>{marks(err)}</ErrorNote>}
     </div>
   );
 }
 
 export function RowsEditor() {
   return (
-    <Section n="03" title="Rows · how they pair up" sub="a key when there is one; position or a hash of the compared columns when there is not"
+    <Section n="03" title="Rows · how they pair up" sub="by key, position or row hash" info="A key when there is one; position or a hash of the compared columns when there is not."
              actions={<Button icon="arrowl" onClick={() => goToSection("rows")}>Back to the setup</Button>}>
       <KeyBox />
-      <Sub id="rows-read" title="Rows to read" sub="cut either side down before it is compared - DuckDB SQL, applied at load">
+      <Sub id="rows-read" title="Rows to read" sub="DuckDB SQL, applied at load" info="Cut either side down before it is compared.">
         <div className="two"><RowsToReadCard tag="A" /><RowsToReadCard tag="B" /></div>
       </Sub>
       <FiltersBox />
-      <Sub id="rows-bucket" title="Profile by bucket" sub="optional - the Summary then shows what each group of rows holds">
+      <Sub id="rows-bucket" title="Profile by bucket" sub="optional - groups in the Summary" info="The Summary then shows what each group of rows holds.">
         <BucketCard />
       </Sub>
       <More>

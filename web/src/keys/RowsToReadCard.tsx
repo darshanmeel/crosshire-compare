@@ -11,7 +11,7 @@ import { useSources } from "../sources/useSources";
 import { loadBody, type SideView, type Tag } from "../sources/types";
 import { useQuickClause } from "../sources/useQuickClause";
 import { Icon } from "../ui/icons";
-import { Button, LinkButton, num, Pill, SideBadge } from "../ui/kit";
+import { Button, ErrorNote, LinkButton, num, Pill, SideBadge } from "../ui/kit";
 import { marks } from "../ui/marks";
 import "./keys.css";
 
@@ -118,7 +118,7 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
         </Button>
         <LinkButton onClick={copy}>Copy to {otherName}</LinkButton>
       </div>
-      {said.error && <div className="note error">{marks(said.error)}</div>}
+      {said.error && <ErrorNote>{marks(said.error)}</ErrorNote>}
       {said.warnings.map((w, i) => <div key={i} className="note warning">{marks(w)}</div>)}
     </section>
   );

@@ -5,7 +5,7 @@ import { api } from "../api/client";
 import { Running } from "../compare/RunningPanel";
 import { EngineLimits, type EngineView } from "../shell/EngineLimits";
 import { setView, useView } from "../shell/view";
-import { LinkButton, Panel, Pill } from "../ui/kit";
+import { ErrorNote, LinkButton, Loading, Panel, Pill } from "../ui/kit";
 import { Tips } from "../ui/Tips";
 import { useSideForm } from "../sources/formStore";
 import { sideName } from "../sources/names";
@@ -64,9 +64,9 @@ export function ProfilingPage() {
     <>
       {busy && (running
         ? <Running job={running} title="Profiling…" />
-        : <div className="prof-running" role="status"><Pill tone="run">Profiling…</Pill><span className="caption">Starting…</span></div>)}
-      {failed && <div className="note error">{failed}</div>}
-      {view.error && <div className="note error">{(view.error as Error).message}</div>}
+        : <Loading className="prof-running" line="Starting…">Profiling…</Loading>)}
+      {failed && <ErrorNote>{failed}</ErrorNote>}
+      {view.error && <ErrorNote>{(view.error as Error).message}</ErrorNote>}
       {v?.profile
         ? shown
           ? <ColumnDetail p={v.profile} column={shown} made={v.made} name={name} label={P.label} />

@@ -7,7 +7,7 @@ import { useJobOfKind } from "../api/useJob";
 import { RunDisc } from "../shell/RunDisc";
 import { Expander } from "../ui/Expander";
 import { Icon } from "../ui/icons";
-import { Bar, Button, num, Tabs } from "../ui/kit";
+import { Bar, Button, ErrorNote, InfoTip, num, Tabs } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { errorText, refreshSetup, type Frame, type FreqView, type ProfileView } from "../setup/api";
 import { splitFreq } from "../profiling/FreqSection";
@@ -42,7 +42,7 @@ function SplitTables({ name, top, rest, all }: { name: string; top: Frame; rest:
 function FreqTables({ col, names }: { col: string; names: [string, string] }) {
   const q = useQuery({ queryKey: ["setup-freq", col],
                        queryFn: () => api.get<FreqView>(`/api/setup/profile/freq?col=${encodeURIComponent(col)}`) });
-  if (!q.data) return q.error ? <div className="note error">{errorText(q.error)}</div> : null;
+  if (!q.data) return q.error ? <ErrorNote>{errorText(q.error)}</ErrorNote> : null;
   return (
     <Expander open title={marks(q.data.title)}>
       <div className="two">
@@ -124,7 +124,8 @@ export function ProfileBox() {
     <div className="panel profilebox">
       <div className="panel-head">
         <h3>Profile both files</h3>
-        <span className="sub">nulls, distinct values and ranges per column, per file - feeds the key search</span>
+        <span className="sub">feeds the key search</span>
+        <InfoTip label="About Profile both files" text="Nulls, distinct values and ranges per column, per file - feeds the key search." />
         <div className="actions">
           <Button variant={p ? "default" : "primary"} size="sm" icon={p ? "refresh" : "play"} disabled={busy || start.isPending}
                   onClick={() => start.mutate()}>{p ? "Profile again" : "Profile both files"}</Button>
@@ -133,7 +134,7 @@ export function ProfileBox() {
       {(running || err || p?.stale) && (
         <div className="panel-body">
           {running && <RunDisc entry={running} />}
-          {err && <div className="note error">{err}</div>}
+          {err && <ErrorNote>{err}</ErrorNote>}
           {p?.stale && <div className="callout warn"><Icon name="refresh" /><span className="grow">{p.stale_said}</span></div>}
         </div>
       )}

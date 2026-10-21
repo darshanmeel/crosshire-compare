@@ -5,7 +5,7 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { api } from "../../api/client";
-import { Callout, num, Panel, plural, Seg, StatGrid, type SegOption } from "../../ui/kit";
+import { Callout, ErrorNote, Loading, num, Panel, plural, Seg, StatGrid, type SegOption } from "../../ui/kit";
 import { Checks, Dependencies, NotShown, Points, share, type Point } from "../ColumnDetail";
 import { pct } from "../frame";
 import { Findings, type Finding } from "./Findings";
@@ -330,7 +330,7 @@ function Timestamp({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: Whe
               note: nulls ? <>rows with no stamp - <code>{column} IS NULL</code></> : undefined },
           ]} />
         </Chart>
-        <Panel title="Precision and repeats" sub="how fine the stamps are, and which ones repeat"><div className="panel-body">
+        <Panel title="Precision and repeats" sub="how fine, and which repeat"><div className="panel-body">
           <Callout tone="pos" icon="check">
             <strong>Read as a timestamp.</strong>{shape && w.form
               ? <> <code>{shape.example}</code> → <code>{formText(w)}</code>.</>
@@ -346,11 +346,11 @@ function Timestamp({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: Whe
         </div></Panel>
       </div>
       <div className="prof-stack">
-        <Panel title="Outliers" sub="stamps that do not belong to the session"><div className="panel-body">
+        <Panel title="Outliers" sub="stamps outside the session"><div className="panel-body">
           <Checks name="Outlier findings" items={outl}
             ok={<><strong>None.</strong> Every stamp carries a time{s ? `, between ${s.from} and ${s.to}` : ""}; nothing in the future, no placeholders.</>} />
         </div></Panel>
-        <Panel title="Parts · week and day" sub="the stamps taken apart by weekday and hour"><div className="panel-body when-cal">
+        <Panel title="Parts · week and day" sub="by weekday and hour"><div className="panel-body when-cal">
           <span className="eyebrow">Weekday</span>
           <Counts name="Weekday" total={w.filled} rows={countRows(w.weekday)} mark={weekend} />
           {hourRange.length > 0 && <><span className="eyebrow">Hour of day</span>
@@ -425,7 +425,7 @@ function DateView({ p, column, st, w, bin, setBin }: ColumnViewProps & { w: When
           {w.bins.length > 0 && w.bins.length <= TABLE_BINS && <BinTable w={w} bin={bin} />}
           {(line || batchBin) && <p className="prof-said">{line}{batch && batchBin && <> {binLabel(batchBin, bin, w)} holds the {num(batch.n)}-row batch on {batch.value}.</>}</p>}
         </Chart>
-        <Panel title="Parts · weekday, month and quarter" sub="where the dates land in the week and the year"><div className="panel-body when-cal">
+        <Panel title="Parts · weekday, month and quarter" sub="where dates land in week and year"><div className="panel-body when-cal">
           <span className="eyebrow">Weekday</span>
           <Counts name="Weekday" total={w.filled} rows={countRows(w.weekday)} mark={weekend} />
           {quarters.length > 1 && <><span className="eyebrow">Quarter</span>
@@ -464,9 +464,9 @@ export function WhenView(props: ColumnViewProps) {
   const chosen = pick && pick.column === column && pick.as === as ? pick.bin : "";
   const q = useWhen(column, made, as, chosen);
   const setBin = (bin: WhenBin) => setPick({ column, as, bin });
-  if (q.error) return <div className="note error">{(q.error as Error).message}</div>;
+  if (q.error) return <ErrorNote>{(q.error as Error).message}</ErrorNote>;
   const w = q.data;
-  if (!w || w.column !== column) return <p className="caption">Counting…</p>;
+  if (!w || w.column !== column) return <Loading>Counting…</Loading>;
   const bin = w.bin;
   return w.kind === "timestamp"
     ? <Timestamp {...props} w={w} bin={bin} setBin={setBin} />

@@ -6,7 +6,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Meta } from "../api/client";
-import { Button, LinkButton, Pill, SideBadge, type Tone } from "../ui/kit";
+import { Button, ErrorNote, LinkButton, Pill, SideBadge, type Tone } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { DatabaseBox, FetchCap, useDbSide } from "./DatabaseBox";
 import { getForm, setForm, useSideForm } from "./formStore";
@@ -170,8 +170,8 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
                                    uploaded={loaded && !view!.is_database && !!view!.staged && view!.label === view!.staged} />}
       {f.how === "path" && <PathBox tag={tag} meta={meta} />}
       {f.how === "database" && <DatabaseBox tag={tag} db={db} />}
-      {schema.error && <div className="note error">{(schema.error as Error).message}</div>}
-      {ready && schema.data?.error && <div className="note error">{schema.data.error}</div>}
+      {schema.error && <ErrorNote>{(schema.error as Error).message}</ErrorNote>}
+      {ready && schema.data?.error && <ErrorNote>{schema.data.error}</ErrorNote>}
       {newCols && (
         <p className="caption cols-found">{cols.length} columns: {cols.slice(0, 12).join(", ")}{cols.length > 12 ? ` … +${cols.length - 12} more` : ""}</p>
       )}
@@ -190,7 +190,7 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
           </div>
         )}
       </>}
-      {said.error && <div className="note error">{said.error}</div>}
+      {said.error && <ErrorNote>{said.error}</ErrorNote>}
       {said.warnings.map((w, i) => <div key={i} className="note warning">{marks(w)}</div>)}
       {loaded && view && (
         <LoadedLine tag={tag} view={view} box={f.name} otherBox={other.name} otherView={src?.sides?.[otherTag]}

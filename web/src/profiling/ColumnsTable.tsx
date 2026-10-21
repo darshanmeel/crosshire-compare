@@ -54,7 +54,7 @@ export function ColumnsTable({ p, keyCols, findings }: { p: Profile; keyCols: st
   const rows = rowsOf(p.stats);
   const sel = rows.some((r) => r.Column === last) ? last : null;
   return (
-    <Panel className="prof-cols" title="Columns" sub="every column measured · open a row for its page"
+    <Panel className="prof-cols" title="Columns" sub="open a row for its page" info="Every column measured. Open a row for its own page."
       foot={<span>{STATS_FOOT} · under each name, a guess from its name, shape and values · a dot: something stands out - hover it or open the column
         {sel && <> · selected: <button type="button" className="link-btn" onClick={() => openColumn(sel)}>{sel} - open its detail</button></>}</span>}>
       <StatsTable stats={p.stats} keyCols={keyCols} sel={sel} onOpen={openColumn} info={columnInfo(p, keyCols, findings)} />

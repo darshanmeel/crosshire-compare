@@ -3,7 +3,7 @@
 // them two folds: Profile by bucket and Columns & values (each column's value pairs).
 import type { RunView } from "../compare/types";
 import { Expander } from "../ui/Expander";
-import { Chip, num, pctText, Tile } from "../ui/kit";
+import { Chip, ErrorNote, Loading, num, pctText, Tile } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { BucketProfile } from "./BucketProfile";
 import { ColumnsView } from "./ColumnsView";
@@ -103,7 +103,7 @@ export function SummaryView({ run }: { run: RunView }) {
   const [values, setValues] = usePick("fold_values", false);
   if (q.error) return <Failed error={q.error} />;
   const s = q.data;
-  if (!s) return <p className="caption">Reading…</p>;
+  if (!s) return <Loading>Reading…</Loading>;
   const c = countsOf(s);
   const [NA, NB] = run.names;
   const cc = Object.fromEntries(s.column_counts.map((m) => [m.label, m.value]));
@@ -117,8 +117,8 @@ export function SummaryView({ run }: { run: RunView }) {
       )}
       {s.filter_note && <div className="note">{marks(s.filter_note)}</div>}
       {s.unmatched && (
-        <div className="note error">{marks(s.unmatched.lead)}
-          <ul>{s.unmatched.lines.map((l, i) => <li key={i}>{marks(l)}</li>)}</ul></div>
+        <ErrorNote>{marks(s.unmatched.lead)}
+          <ul>{s.unmatched.lines.map((l, i) => <li key={i}>{marks(l)}</li>)}</ul></ErrorNote>
       )}
       <div className="tiles">
         <Tile label={s.counts[0]?.label ?? `Rows ${NA}`} value={num(c.rowsA)} />
@@ -144,7 +144,7 @@ export function SummaryView({ run }: { run: RunView }) {
       {s.mode !== "hash" && (
         <section className="panel fold cols-values" aria-label="Columns & values">
           <Expander open={values} onToggle={setValues}
-            title={<>Columns &amp; values <span className="sub">each compared column's value pairs, and the near-match analysis</span></>}>
+            title={<>Columns &amp; values <span className="sub">value pairs per column, and near-match</span></>}>
             <ColumnsView run={run} />
           </Expander>
         </section>

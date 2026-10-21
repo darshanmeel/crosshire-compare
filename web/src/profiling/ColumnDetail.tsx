@@ -1,7 +1,7 @@
 // web/src/profiling/ColumnDetail.tsx - one column of the profile (screen 16): back to all columns,
 // previous / next, its statistics, outliers, shapes, most and least frequent values and what
 // determines it - all from the profile held.
-import { Bar, Button, Callout, Chip, LinkButton, num, Panel, Seg } from "../ui/kit";
+import { Bar, Button, Callout, Chip, ErrorNote, LinkButton, Loading, num, Panel, Seg } from "../ui/kit";
 import { Fragment, useId, useState, type ReactNode } from "react";
 import { setView } from "../shell/view";
 import { castsOf, castType } from "./casts";
@@ -253,8 +253,8 @@ export function Frequent({ column, made, st, title = "Most and least frequent", 
   const isNum = st.Type === "number";
   return (
     <Panel title={title} sub={sub ?? `${num(st.Distinct as number)} distinct`}><div className="panel-body">
-      {q.error ? <div className="note error">{(q.error as Error).message}</div>
-        : !q.data ? <p className="caption">Reading…</p>
+      {q.error ? <ErrorNote>{(q.error as Error).message}</ErrorNote>
+        : !q.data ? <Loading>Reading…</Loading>
         : <FreqLists column={column} isNum={isNum} {...splitFreq(q.data.top, q.data.bottom)} />}
       {children}
     </div></Panel>

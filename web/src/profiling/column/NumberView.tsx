@@ -5,7 +5,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import { api } from "../../api/client";
-import { Bar, Callout, LinkButton, num, Panel, plural, Seg, StatGrid } from "../../ui/kit";
+import { Bar, Callout, ErrorNote, LinkButton, Loading, num, Panel, plural, Seg, StatGrid } from "../../ui/kit";
 import { CouldBe, Dependencies, NotShown, Outliers, Points, READS_AS, share, toNum, type Point } from "../ColumnDetail";
 import { FreqBars, splitFreq } from "../FreqSection";
 import { fmt, pct, rowsOf, type Row } from "../frame";
@@ -183,7 +183,7 @@ export function NumberView({ p, column, made, st, cast }: ColumnViewProps) {
     <Panel title="Distribution" sub={mode === "log" ? "rows per order of magnitude" : mode === "pct" ? "rows between percentiles" : `${bins.length || 10} equal bins · rows per bin`}
       actions={<Seg mini label="Bins" value={mode} onChange={setPick} options={MODES} />}>
       <div className="panel-body">
-        {!shown ? <p className="caption">{mode === "pct" ? "No percentiles for this column." : "Counting…"}</p>
+        {!shown ? (mode === "pct" ? <p className="caption">No percentiles for this column.</p> : <Loading>Counting…</Loading>)
           : !shown.length ? <p className="caption">No values to bin.</p>
           : <>
             {mode !== "pct" ? <>
@@ -259,7 +259,7 @@ function FormParts({ column, made, form, lotEnd }: { column: string; made: strin
   const g = (t: string) => groups.find((x) => x.title === t);
   const before = g("Digits before the point"), after = g("Places after the point"), both = g("Before · after");
   const head = { title: "Form · parts", sub: "digits, decimals, round numbers" };
-  if (!form) return <Panel {...head}><div className="panel-body"><p className="caption">Reading…</p></div></Panel>;
+  if (!form) return <Panel {...head}><div className="panel-body"><Loading>Reading…</Loading></div></Panel>;
   if (form.filled === 0) return <Panel {...head}><div className="panel-body"><p className="caption">No values.</p></div></Panel>;
   const { min, max } = form.places;
   // without /parts yet, the digits banded by /numform
@@ -307,8 +307,8 @@ function NumFrequent({ column, made, st, filled }: { column: string; made: strin
   const near = !!q.data && Number(st["Distinct % of filled"] ?? 0) >= NEAR_UNIQUE && distinct > repeats.length
     && repeats.length < rowsOf(q.data.top).length;
   const body = (() => {
-    if (q.error) return <div className="note error">{(q.error as Error).message}</div>;
-    if (!q.data) return <p className="caption">Reading…</p>;
+    if (q.error) return <ErrorNote>{(q.error as Error).message}</ErrorNote>;
+    if (!q.data) return <Loading>Reading…</Loading>;
     const { top, rest, all } = splitFreq(q.data.top, q.data.bottom);
     if (!rest) return <><span className="eyebrow">Every value · most to least frequent</span>
       <FreqBars t={top} numeric label={`Most frequent values of ${column}`} /></>;

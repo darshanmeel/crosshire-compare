@@ -8,7 +8,7 @@ import { api, type LogEntry } from "../api/client";
 import { useJobOfKind } from "../api/useJob";
 import { RunDisc } from "../shell/RunDisc";
 import { Icon } from "../ui/icons";
-import { Button, Callout, LinkButton, Seg } from "../ui/kit";
+import { Button, Callout, ErrorNote, LinkButton, Seg, ToneNote } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { Tips } from "../ui/Tips";
 import { errorText, refreshSetup, SETUP_KEY, useSetup, type KeysView, type Said, type SetupView } from "../setup/api";
@@ -25,7 +25,7 @@ type Mode = "key" | "position" | "hash";
 export const AUTO_CHECK_ROWS = 1_000_000;
 
 function Line({ said }: { said: Said }) {
-  return said.tone === "caption" ? <p className="caption">{marks(said.text)}</p> : <div className={`note ${said.tone}`}>{marks(said.text)}</div>;
+  return said.tone === "caption" ? <p className="caption">{marks(said.text)}</p> : <ToneNote tone={said.tone}>{marks(said.text)}</ToneNote>;
 }
 
 /** The figure a suggestion's row says beside its columns - its overlap when the frame has one. */
@@ -90,7 +90,7 @@ export function KeyBox() {
     autoChecked.current = keyId;
     keysCall.mutate({ path: "/api/setup/keys/check" });
   }, [keyId, !!k?.report, small, ticks.isPending, keysCall.isPending]);
-  if (!k) return q.error ? <div className="note error">{errorText(q.error)}</div> : null;
+  if (!k) return q.error ? <ErrorNote>{errorText(q.error)}</ErrorNote> : null;
   const s = k.suggestions;
   const chosen = s ? [...new Set(picks.flatMap((i) => s.combos[i] ?? []))] : [];
   const rows = setup?.ready ? setup.rows : [];
@@ -160,7 +160,7 @@ export function KeyBox() {
       </div>
 
       {running && <RunDisc entry={running} />}
-      {err && <div className="note error">{marks(err)}</div>}
+      {err && <ErrorNote>{marks(err)}</ErrorNote>}
 
       {s && (
         <div className="pairup-sugg">

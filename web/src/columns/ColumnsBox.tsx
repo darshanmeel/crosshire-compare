@@ -2,7 +2,7 @@
 // preview, the pairing board in its panel with the summary foot, and the setup card behind "Summary".
 import { useState } from "react";
 import { marks } from "../ui/marks";
-import { Button } from "../ui/kit";
+import { Button, ErrorNote, ToneNote } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import type { SetupReady } from "../setup/api";
 import { FrameTable } from "../setup/FrameTable";
@@ -92,9 +92,9 @@ export function ColumnsBox({ s, c }: { s: SetupReady; c: ColumnCalls }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      {s.said.map((n, i) => <div key={i} className={`note ${n.tone}`}>{marks(n.text)}</div>)}
-      {s.duplicates.length > 0 && <div className="note error">{marks(`Common name used more than once: **${s.duplicates.join(", ")}**`)}</div>}
-      {c.err && <div className="note error" role="alert">{c.err}</div>}
+      {s.said.map((n, i) => <ToneNote key={i} tone={n.tone}>{marks(n.text)}</ToneNote>)}
+      {s.duplicates.length > 0 && <ErrorNote>{marks(`Common name used more than once: **${s.duplicates.join(", ")}**`)}</ErrorNote>}
+      {c.err && <ErrorNote role="alert">{c.err}</ErrorNote>}
       <DataMatch s={s} c={c} />
       <div className="panel cols-panel">
         <ColumnTable s={s} busy={c.busy} edit={c.edit} setRole={c.setRole} />

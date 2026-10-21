@@ -58,7 +58,7 @@ export function ValuesEditor() {
   const at = ready ? pairIndex(ready, pair) : 0;
   const spec = ready?.specs[at];
   return (
-    <Section n="02" title="Columns · transform & convert values" sub="steps run in DuckDB before the compare - each side separately" actions={back}>
+    <Section n="02" title="Columns · transform & convert values" sub="DuckDB steps, each side separately" info="The steps run in DuckDB before the compare, on each side separately." actions={back}>
       {!ready ? (
         <Callout icon="table">Load both sides first - then each pair of columns can be read through its own steps.</Callout>
       ) : (

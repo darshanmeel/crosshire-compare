@@ -2,7 +2,7 @@
 // the WHERE, the order and the top N, applied as the side is read. The full editor is the Rows view.
 import { useEffect, useId } from "react";
 import { errorText } from "../api/client";
-import { Button, num } from "../ui/kit";
+import { Button, ErrorNote, num } from "../ui/kit";
 import { Tips } from "../ui/Tips";
 import { useSideForm } from "./formStore";
 import type { SideForm, Tag } from "./types";
@@ -43,7 +43,7 @@ export function RowsToRead({ tag, cols, quickOps }: { tag: Tag; cols: string[]; 
           <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
         </div>
       )}
-      {q.add.isError && <div className="note error" role="alert">{errorText(q.add.error)}</div>}
+      {q.add.isError && <ErrorNote role="alert">{errorText(q.add.error)}</ErrorNote>}
       <label className="field"><span className="lbl">Filter (WHERE)</span>
         <textarea className="in mono" aria-label="Filter (WHERE)" rows={3} placeholder={"hire_date >= '2026-07-20'\nAND department = 'Finance'"}
                   value={f.where} onChange={(e) => set({ where: e.target.value })} />

@@ -6,7 +6,7 @@ import { useQueries } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { setView } from "../shell/view";
-import { Bar, Button, grouped, LinkButton, num } from "../ui/kit";
+import { Bar, Button, ErrorNote, grouped, LinkButton, Loading, num } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import { useNearMatch } from "./detailApi";
 import { useOneSided, useOwnNames } from "./OneSidedTab";
@@ -58,8 +58,8 @@ export function WhyTheyDiffer({ run, s }: { run: RunView; s: Summary }) {
                 <span className="m neg">{num(differing[i].Mismatched as number)} mismatches</span>
                 {few && <span className="dim">- {d!.distinct === 1 ? "one value pair accounts for all of them" : `${d!.distinct} value pairs account for all of them`}</span>}
               </div>
-              {pairs[i].error && <p className="caption">Could not read the value pairs.</p>}
-              {!d && !pairs[i].error && <p className="caption">Reading…</p>}
+              {pairs[i].error && <ErrorNote>Could not read the value pairs.</ErrorNote>}
+              {!d && !pairs[i].error && <Loading>Reading…</Loading>}
               {d && top > 1 && (
                 <ul className="kv" aria-label={`Value pairs for ${col}`}>
                   {d.pairs.filter((p) => p.n > 1).map((p, j) => (

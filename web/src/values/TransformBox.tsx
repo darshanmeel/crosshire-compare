@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { marks } from "../ui/marks";
 import { Icon } from "../ui/icons";
-import { Button, Chip, CommitInput, LinkButton, num, Pill, plural, Seg, type Tone as PillTone } from "../ui/kit";
+import { Button, Chip, CommitInput, ErrorNote, LinkButton, num, Pill, plural, Seg, type Tone as PillTone } from "../ui/kit";
 import { plainSteps } from "../columns/pairing";
 import { errorText, useSetupSend, useStepsRebuild, type CheckView, type Frame, type SetupReady, type Spec, type Step, type StepsMeta, type TryView } from "../setup/api";
 import { FrameTable } from "../setup/FrameTable";
@@ -51,7 +51,7 @@ export function PairHead({ s, spec }: { s: SetupReady; spec: Spec }) {
       {cs && <Chip title={spec.case ? "Set in the column table" : "Follows Ignore case in values"}>{cs} case</Chip>}
       <span className="grow" />
       {by && <Pill tone={tone}>paired by {by}{tone === "warn" && !/check/.test(by) ? " · check" : ""}</Pill>}
-      {send.error && <div className="note error" role="alert">{errorText(send.error)}</div>}
+      {send.error && <ErrorNote role="alert">{errorText(send.error)}</ErrorNote>}
     </div>
   );
 }
@@ -177,7 +177,7 @@ function Preview({ s, spec, which, check }: { s: SetupReady; spec: Spec; which: 
         {shown > 0 && <span className="sub">{num(oks.filter((x) => x === true).length)} of {plural(shown, "shown row")} match after these steps</span>}
         {check}
       </div>
-      {f?.error ? <div className="vx-check"><div className="note error" role="alert">{f.error}</div></div>
+      {f?.error ? <div className="vx-check"><ErrorNote role="alert">{f.error}</ErrorNote></div>
         : f && f.columns.length ? (
         <>
           <div className="tblwrap">
@@ -327,7 +327,7 @@ export function TransformBox({ s }: { s: SetupReady }) {
           )}
         </div>
 
-        {err && <div className="note error" role="alert">{marks(err)}</div>}
+        {err && <ErrorNote role="alert">{marks(err)}</ErrorNote>}
 
         <div className="field">
           <span className="vx-add-head">
@@ -345,7 +345,7 @@ export function TransformBox({ s }: { s: SetupReady }) {
         </div>
 
         <Preview s={s} spec={spec} which={which} check={checkLine} />
-        {ck?.error && <div className="note error" role="alert">{errorText(ck.error)}</div>}
+        {ck?.error && <ErrorNote role="alert">{errorText(ck.error)}</ErrorNote>}
         {ck?.data?.said && <div className="note">{ck.data.said}</div>}
         {report && <FrameTable label="Conversion check" frame={report} />}
       </div>

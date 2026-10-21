@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { LogEntry } from "../api/client";
 import { copyText } from "../ui/copy";
 import { Icon } from "../ui/icons";
-import { Button, Callout, Pill, num, plural } from "../ui/kit";
+import { Button, Callout, ErrorNote, num, Pill, plural } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { logText, useClearLog, useLog } from "./LogPanel";
 import { toggleLog } from "./view";
@@ -54,7 +54,7 @@ export function LogView() {
           <span className="copied" role="status">{copied === "yes" ? "Copied" : copied === "no" ? "Could not copy - select the text instead" : ""}</span>
         </div>
       </div>
-      {error && <div className="note error">{String((error as Error).message)}</div>}
+      {error && <ErrorNote>{String((error as Error).message)}</ErrorNote>}
       {n === 0
         ? <div className="panel log-empty">Nothing yet - every load, compare, write and profile lands here.</div>
         : <ol className="panel log" aria-label="Log entries">{entries.map((e) => <Entry key={e.id} e={e} />)}</ol>}

@@ -10,7 +10,7 @@ import { useSideForm } from "../sources/formStore";
 import { sideLabels, sideName } from "../sources/names";
 import { useSources } from "../sources/useSources";
 import { Icon } from "../ui/icons";
-import { Button, num } from "../ui/kit";
+import { Button, ErrorNote, num } from "../ui/kit";
 import { activeFilters } from "../values/FiltersBox";
 import { useLog } from "./LogPanel";
 import type { Page } from "./usePage";
@@ -39,7 +39,7 @@ export function StepRail({ steps, actions, note }: { steps: RailStep[]; actions:
       </ol>
       <span className="grow" />
       <div className="actions">{actions}</div>
-      {note && <div className="note error rail-note" role="alert">{note}</div>}
+      {note && <ErrorNote className="rail-note" role="alert">{note}</ErrorNote>}
     </nav>
   );
 }

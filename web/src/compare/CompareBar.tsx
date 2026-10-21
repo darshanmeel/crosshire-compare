@@ -4,7 +4,7 @@
 import { useId } from "react";
 import { useSetup } from "../setup/api";
 import { NoteLine } from "../sources/NoteLine";
-import { Button, Callout, num, plural } from "../ui/kit";
+import { Button, Callout, ErrorNote, num, plural } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { useRunCompare, useRunError } from "./actions";
 import { TICK_COMPARE } from "./types";
@@ -44,7 +44,7 @@ export function CompareBar() {
         )}
         {why ? <span className="why" id={whyId}>{marks(why)}</span> : <span className="help">{help.join(" · ")}</span>}
       </div>
-      {st.filter_error && <div className="note error">{marks(st.filter_error)}</div>}
+      {st.filter_error && <ErrorNote>{marks(st.filter_error)}</ErrorNote>}
       {refused}
       {st.said.map((n, i) => <NoteLine key={i} note={n} />)}
     </div>

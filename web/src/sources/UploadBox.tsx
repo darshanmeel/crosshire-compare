@@ -4,7 +4,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorText } from "../api/client";
-import { Dropzone, LinkButton } from "../ui/kit";
+import { Dropzone, ErrorNote, LinkButton } from "../ui/kit";
 import type { SideView, Tag } from "./types";
 
 export function UploadBox({ tag, staged, types, uploaded = false, onBusy }:
@@ -23,7 +23,7 @@ export function UploadBox({ tag, staged, types, uploaded = false, onBusy }:
       <div className="upload">
         <p className="upload-line"><b className="staged">{staged}</b><span>uploaded</span>
           <LinkButton icon="upload" onClick={() => setReplacing(true)}>Replace file</LinkButton></p>
-        {err && <div className="note error">{err}</div>}
+        {err && <ErrorNote>{err}</ErrorNote>}
       </div>
     );
   const hint = tag === "P" ? "a wide or big table takes minutes — cut it down under Rows to read to try a slice"
@@ -34,7 +34,7 @@ export function UploadBox({ tag, staged, types, uploaded = false, onBusy }:
         title={<><strong>Drop a CSV, JSON or Parquet file</strong> here</>} hint={hint} />
       {up.isPending ? <p className="caption" role="status">Uploading {up.variables?.name}…</p>
         : staged && <p className="caption"><b className="staged">{staged}</b> is uploaded — press Load to read it</p>}
-      {err && <div className="note error">{err}</div>}
+      {err && <ErrorNote>{err}</ErrorNote>}
     </div>
   );
 }

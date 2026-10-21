@@ -3,8 +3,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorText } from "../api/client";
 import { Icon } from "../ui/icons";
-import { Button, Chip } from "../ui/kit";
-import { marks } from "../ui/marks";
+import { Button, Chip, InfoTip, ToneNote } from "../ui/kit";
 import { refreshConnections, type ConnRow } from "./types";
 
 type Found = { name: string; label: string; where: string; replaces: boolean };
@@ -31,7 +30,8 @@ export function FilesBox({ rows }: { rows: ConnRow[] }) {
 
   return (
     <section className="conn-files" aria-label="Import or export">
-      <p className="conn-hint">{marks("JSON or YAML, one connection per name - the fields the form has (`kind`, `host`, `user`, `database`…) or a `uri`. `${NAME}` reads the environment, so a shared file need hold no password.")}</p>
+      <p className="conn-hint">JSON or YAML, one connection per name.{" "}
+        <InfoTip label="About connections files" text="Each holds the fields the form has (kind, host, user, database…) or a uri. ${NAME} reads the environment, so a shared file need hold no password." /></p>
       <div className="row">
         <label className="btn sm conn-pick">
           <Icon name="upload" size="sm" />Import a file
@@ -52,7 +52,7 @@ export function FilesBox({ rows }: { rows: ConnRow[] }) {
           <div className="row"><Button variant="dark" size="sm" onClick={() => add.mutate()} disabled={add.isPending}>Add {found.length} connection{found.length === 1 ? "" : "s"}</Button></div>
         </div>
       )}
-      {said && <div className={`note ${said.tone}`} role="status">{said.text}</div>}
+      {said && <ToneNote tone={said.tone} role="status">{said.text}</ToneNote>}
     </section>
   );
 }

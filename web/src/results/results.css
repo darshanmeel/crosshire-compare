@@ -29,6 +29,7 @@
 .buckets .seg button { height: auto; min-height: 30px; white-space: normal; text-align: left; }
 .bucket-line { margin: 0; font-size: 13px; color: var(--fs-text2); }
 .bucket-bar { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.bucket-end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 16px; }
 .bucket-facts { display: flex; flex-direction: column; gap: 6px; }
 .bucket-facts .side { font-size: 12px; color: var(--fs-text2); }
 .bucket-facts .findings { margin: 2px 0 0; gap: 6px; }

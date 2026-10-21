@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { errorText, useSetupSend, type SetupReady } from "../setup/api";
 import { sideLabels } from "../sources/names";
-import { Button, SideBadge } from "../ui/kit";
+import { Button, ErrorNote, InfoTip, SideBadge } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import { marks } from "../ui/marks";
 
@@ -44,7 +44,8 @@ export function AddColumn({ s, onClose }: { s: SetupReady; onClose: () => void }
     <div className="panel add-col" role="region" aria-label="Add a column">
       <div className="panel-head">
         <h3>Add a column</h3>
-        <span className="sub">made from an expression on each side, then paired and compared like any other - DuckDB SQL on the file's columns</span>
+        <span className="sub">a DuckDB expression per side</span>
+        <InfoTip label="About Add a column" text="Made from an expression on each side, then paired and compared like any other - DuckDB SQL on the file's columns." />
       </div>
       <div className="panel-body add-col-body">
         <label className="field">
@@ -78,7 +79,7 @@ export function AddColumn({ s, onClose }: { s: SetupReady; onClose: () => void }
             </label>
           </div>
         ))}
-        {err && <div className="note error" role="alert">{marks(err)}</div>}
+        {err && <ErrorNote role="alert">{marks(err)}</ErrorNote>}
         <div className="add-col-foot">
           <Button variant="primary" disabled={send.isPending || !shownName.trim() || !(expr.A.trim() || expr.B.trim())} onClick={() => void add()}>
             {send.isPending ? "Checking…" : "Add column"}

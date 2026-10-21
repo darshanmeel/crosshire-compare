@@ -3,7 +3,7 @@
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, errorText, type Meta } from "../api/client";
-import { Button } from "../ui/kit";
+import { Button, ErrorNote } from "../ui/kit";
 import { useSideForm } from "./formStore";
 import { NoteLine } from "./NoteLine";
 import type { FolderFiles, FolderRow, Tag } from "./types";
@@ -30,7 +30,7 @@ export function PathBox({ tag, meta }: { tag: Tag; meta: Meta }) {
   });
   return (
     <div className="pathbox">
-      {folders.error && <div className="note error">{(folders.error as Error).message}</div>}
+      {folders.error && <ErrorNote>{(folders.error as Error).message}</ErrorNote>}
       {rows.length > 0 && (
         <div className="row" title="A folder saved under Connections (kind Folder): pick its file by name. The config keeps the folder and the name, so a rerun reads the next file there by name.">
           <label className="lbl w" htmlFor={`${id}-folder`}>Folder</label>
@@ -60,7 +60,7 @@ export function PathBox({ tag, meta }: { tag: Tag; meta: Meta }) {
       </div>
       {gone && !folder && <div className="note warning">The folder {gone} is gone - reading Any path instead.</div>}
       {folder && files.data?.note && <NoteLine note={files.data.note} />}
-      {err && <div className="note error">{err}</div>}
+      {err && <ErrorNote>{err}</ErrorNote>}
     </div>
   );
 }

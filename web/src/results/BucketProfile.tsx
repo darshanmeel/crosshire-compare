@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { Expander } from "../ui/Expander";
-import { num, Seg } from "../ui/kit";
+import { ErrorNote, InfoTip, Loading, num, Seg } from "../ui/kit";
 import { ColumnPick, notCompared } from "./ColumnPick";
 import { marks } from "../ui/marks";
 import { Failed } from "./Failed";
@@ -41,17 +41,20 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
   const nc = notCompared(d?.groups);
   return (
     <section className="panel fold buckets" aria-label="Profile by bucket">
-      <Expander open={open} onToggle={setOpen} title={<>Profile by bucket <span className="sub">the top values of a set of rows · every mismatched column counted, tick any other · <span className="nc-word">not compared</span> columns in orange · paired rows count both sides</span></>}>
+      <Expander open={open} onToggle={setOpen} title={<>Profile by bucket <span className="sub">the top values of a set of rows</span></>}>
       <div className="panel-body">
         <div className="bucket-bar">
           <Seg label="Bucket" value={bucket} onChange={setHeld} options={buckets.map((b) => ({ label: b.label, value: b.id }))} />
-          <Seg label="Column profile" mini value={depth} onChange={setDepth}
-            options={[{ label: "Simple", value: "simple", title: "The top values of each column" },
-                      { label: "Extended", value: "extended", title: "Nulls, distinct, top value, range, shapes, first and last characters and spellings - a side each" }]} />
+          <div className="bucket-end">
+            <Seg label="Column profile" mini value={depth} onChange={setDepth}
+              options={[{ label: "Simple", value: "simple", title: "The top values of each column" },
+                        { label: "Extended", value: "extended", title: "Nulls, distinct, top value, range, shapes, first and last characters and spellings - a side each" }]} />
+            <InfoTip label="About Profile by bucket" text="Every mismatched column is counted, tick any other. Not compared columns show in orange. Paired rows count both sides." />
+          </div>
         </div>
         {sidedTip && <p className="caption">{marks(sidedTip)}</p>}
         {q.error && <Failed error={q.error} />}
-        {!d && !q.error && <p className="caption">Profiling…</p>}
+        {!d && !q.error && <Loading>Profiling…</Loading>}
         {d && (
           <>
             {d.by_key && (
@@ -104,7 +107,7 @@ export function factPills(s: SideFacts): Finding[] {
 }
 
 function ColumnFacts({ sides, loading, failed }: { sides?: SideFacts[]; loading: boolean; failed: boolean }) {
-  if (!sides) return <p className="caption">{failed ? "The column facts could not be read." : loading ? "Reading the column…" : ""}</p>;
+  if (!sides) return failed ? <ErrorNote>The column facts could not be read.</ErrorNote> : loading ? <Loading>Reading the column…</Loading> : <p className="caption" />;
   return (
     <div className="bucket-facts">
       {sides.map((s) => (

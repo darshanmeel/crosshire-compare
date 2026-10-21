@@ -7,7 +7,7 @@ import { api, errorText, type LogEntry } from "../api/client";
 import { useJobOfKind } from "../api/useJob";
 import { useConnections } from "../connections/ConnectionsManager";
 import { setView } from "../shell/view";
-import { Button, num } from "../ui/kit";
+import { Button, ErrorNote, num } from "../ui/kit";
 import { useSideForm } from "./formStore";
 import { RadioSeg } from "./SourceChoice";
 import { dbOf, type DbPlan, type Tag } from "./types";
@@ -80,7 +80,7 @@ export function DatabaseBox({ tag, db }: { tag: Tag; db: DbSide }) {
   const { dbRows, name, err, forget, again } = db;
   const p = db.plan;
 
-  if (db.conns.error) return <div className="note error">{(db.conns.error as Error).message}</div>;
+  if (db.conns.error) return <ErrorNote>{(db.conns.error as Error).message}</ErrorNote>;
   if (!dbRows.length)
     return (
       <div className="row db-empty">
@@ -135,14 +135,14 @@ export function DatabaseBox({ tag, db }: { tag: Tag; db: DbSide }) {
                     placeholder={"SELECT emp_id, first_name, department, hire_date\nFROM hr.employees\nWHERE hire_date >= '2026-01-01'"} />
         </label>
       )}
-      {p?.error && <div className="note error">{p.error}</div>}
+      {p?.error && <ErrorNote>{p.error}</ErrorNote>}
       {p?.held && (
         <div className="row">
           <span className="caption">Fetched at {p.held.at} - {num(p.held.rows)} rows{p.held.capped ? " · capped" : ""}</span>
           <Button size="sm" icon="refresh" onClick={() => again.mutate()}>Fetch again</Button>
         </div>
       )}
-      {err && <div className="note error">{err}</div>}
+      {err && <ErrorNote>{err}</ErrorNote>}
     </div>
   );
 }

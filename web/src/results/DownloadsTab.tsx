@@ -8,7 +8,7 @@ import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { goToSection, setView } from "../shell/view";
 import { Icon } from "../ui/icons";
-import { Button, Command, LinkButton, num, plural } from "../ui/kit";
+import { Button, Command, LinkButton, Loading, num, plural } from "../ui/kit";
 import { download, fileUrl, filesKey, size, useRunFiles, type FilesView } from "./detailApi";
 import { Failed } from "./Failed";
 import { FolderSave } from "./FolderSave";
@@ -69,7 +69,7 @@ export function DownloadsTab({ run, limit }: { run: RunView; limit: number }) {
   const [picked, setPicked] = useState<Set<string> | null>(null);
   if (f.error) return <div className="rd"><Failed error={f.error} /></div>;
   const d = f.data;
-  if (!d) return <div className="rd"><p className="caption">Reading…</p></div>;
+  if (!d) return <div className="rd"><Loading>Reading…</Loading></div>;
   const busy = act.isPending ? act.variables : null;
   const [NA, NB] = run.names;
   const pair = run.pair;

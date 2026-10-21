@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { api } from "../../api/client";
 import { useSetup } from "../../setup/api";
 import { setView } from "../../shell/view";
-import { Button, Callout, num, Panel, plural, StatGrid } from "../../ui/kit";
+import { Button, Callout, ErrorNote, Loading, num, Panel, plural, StatGrid } from "../../ui/kit";
 import { Checks, NotShown, Points, readShape, share, type Point } from "../ColumnDetail";
 import { pct } from "../frame";
 import { Findings, type Finding } from "./Findings";
@@ -128,7 +128,7 @@ function InCompare({ column, cmp, gap, past }: {
   return (
     <Panel title="In Compare" sub={sub}><div className="panel-body">
       {items ? <Points name="In Compare" items={items} />
-        : <p className="caption">{q ? "No comparison is set up yet - load two tables on the Compare page." : "Reading…"}</p>}
+        : q ? <p className="caption">No comparison is set up yet - load two tables on the Compare page.</p> : <Loading>Reading…</Loading>}
       {key && cmp?.stale && <p className="caption">From the last run - the setup has changed since.</p>}
       {key && key.only.some((o) => o.n > 0)
         ? <Button className="key-open" iconAfter="arrow" onClick={openOneSided}>See the one-sided rows</Button>
@@ -172,8 +172,8 @@ export function KeyView({ column, made, st }: ColumnViewProps) {
   const k = useKeyCheck(column, made);
   const cmp = useKeyCompare(column, made).data;
   const isNum = st.Type === "number";
-  if (k.error) return <div className="note error">{(k.error as Error).message}</div>;
-  if (!k.data) return <p className="caption">Checking the key…</p>;
+  if (k.error) return <ErrorNote>{(k.error as Error).message}</ErrorNote>;
+  if (!k.data) return <Loading>Checking the key…</Loading>;
   const d = k.data;
   const n = d.number;
   const top = d.shapes[0];
@@ -304,12 +304,12 @@ export function KeyView({ column, made, st }: ColumnViewProps) {
       {!calm && banner}
       <div className="prof-grid prof-col-grid">
         <div className="prof-stack">
-          <Panel title="Sequence · Parts" sub="the prefix and the number part, in order - where it runs and where it breaks"><div className="panel-body">
+          <Panel title="Sequence · Parts" sub="where it runs and breaks" info="The prefix and the number part, in order - where it runs and where it breaks."><div className="panel-body">
             {calm && banner}
             {spans.length > 0 && <SequenceBar spans={spans} past={past} />}
             <Points name="Shape and sequence" items={seq} />
           </div></Panel>
-          <Panel title="Key check" sub="what makes a column safe to match rows on"><div className="panel-body">
+          <Panel title="Key check" sub="safe to match rows on?" info="What makes a column safe to match rows on."><div className="panel-body">
             <Checks name="Key check" items={check} ok={<><strong>Safe to match on.</strong> Unique by itself, no nulls or blanks, no case or whitespace variants{n && !n.leading_zeros ? ", no leading zeros at risk" : ""}.</>} />
           </div></Panel>
         </div>

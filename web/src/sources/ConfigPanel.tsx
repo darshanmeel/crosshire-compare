@@ -7,7 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type LogEntry, type Meta } from "../api/client";
 import { useJobOfKind } from "../api/useJob";
 import { Icon } from "../ui/icons";
-import { Button, Command, Dropzone, Panel, Pill, Seg } from "../ui/kit";
+import { Button, Command, Dropzone, ErrorNote, Panel, Pill, Seg } from "../ui/kit";
 import { setView } from "../shell/view";
 import { arg, readConf, readPairs, summarise, type ConfSummary, type PairRow } from "./configRead";
 import { setForm, takeConfig } from "./formStore";
@@ -62,7 +62,7 @@ function Batch({ config }: { config: string }) {
             <input type="file" accept=".csv,text/csv" aria-label="Pairs file" onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = ""; }} />
           </label>
         </>}>
-        {err && <div className="panel-note"><div className="note error">{err}</div></div>}
+        {err && <div className="panel-note"><ErrorNote>{err}</ErrorNote></div>}
         {pairs ? (
           <div className="tblwrap">
             <table className="tbl compact" aria-label={`Pairs in ${pairs.name}`}>
@@ -147,7 +147,7 @@ export function ConfigPanel() {
               <Dropzone accept=".json,application/json" label="Config file" onFile={read}
                         title={file ? <span className="m">{file.filename}</span> : "Drop a config.json here"}
                         hint="the one a run writes (Downloads tab)" />
-              {file?.error && <div className="note error">{file.filename}: {file.error}</div>}
+              {file?.error && <ErrorNote>{file.filename}: {file.error}</ErrorNote>}
             </>
           ) : (
             <div className="row">
@@ -172,7 +172,7 @@ export function ConfigPanel() {
             <Button variant="primary" icon="play" disabled={!ready || working} onClick={run}>{working ? "Loading the config…" : "Run this config"}</Button>
             <Button onClick={() => setView({ view: "setup" })}>Open in the setup instead</Button>
           </div>
-          {err && <div className="note error" role="alert">{err}</div>}
+          {err && <ErrorNote role="alert">{err}</ErrorNote>}
           {!working && src?.config?.said.map((n, i) => <NoteLine key={i} note={n} />)}
           <div className="cfg-other">
             <span className="lbl">Other files, same setup</span>

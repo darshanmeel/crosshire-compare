@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 import { api } from "../../api/client";
 import { Icon } from "../../ui/icons";
-import { Bar, Button, Callout, num, Panel, Seg, StatGrid } from "../../ui/kit";
+import { Bar, Button, Callout, Loading, num, Panel, Seg, StatGrid } from "../../ui/kit";
 import { castType } from "../casts";
 import { CouldBe, Dependencies, Frequent, NotShown, Parts, Points, readShape, Shapes, share } from "../ColumnDetail";
 import { SHOWN, strongest } from "../DepMatrix";
@@ -138,7 +138,7 @@ function SimilarPanel({ column, sim, method, setMethod, picks, pick }:
   const groups = sim?.groups ?? [];
   const fewer = sim ? merged(sim) : 0;
   let body: ReactNode;
-  if (!sim) body = <p className="caption">Looking…</p>;
+  if (!sim) body = <Loading>Looking…</Loading>;
   else if (!groups.length) body = <p className="caption">{method === "same" && !by
     ? `No other column names one value of ${column} each - nothing to tell renames by.`
     : "No values look alike this way."}</p>;
@@ -176,7 +176,7 @@ function SimilarPanel({ column, sim, method, setMethod, picks, pick }:
       Merge all {num(groups.length)} · {num(sim.distinct)} → {num(fewer)} values</Button></div>
   </>);
   return (
-    <Panel className="sim-panel" title="Similar values" sub="values that are probably the same thing spelled twice">
+    <Panel className="sim-panel" title="Similar values" sub="likely one value, spelled twice" info="Values that are probably the same thing spelled twice.">
       <div className="panel-body">
         <div className="sim-method">
           <span className="eyebrow">Method</span>
@@ -194,7 +194,7 @@ function SimilarPanel({ column, sim, method, setMethod, picks, pick }:
 function ValuesPanel({ column, sim, method, picks, shapes, made, category, lead }:
   { column: string; sim?: SimilarBody; method: Method; picks: Record<string, string>; shapes: Row[]; made: string; category: boolean; lead?: ReactNode }) {
   const freq = useFreq(sim && sim.more > 0 ? column : null, made).data;
-  if (!sim) return <Panel title="Values"><div className="panel-body">{lead}<p className="caption">Reading…</p></div></Panel>;
+  if (!sim) return <Panel title="Values"><div className="panel-body">{lead}<Loading>Reading…</Loading></div></Panel>;
   const vals = sim.values ?? [];
   const under = new Map<string, SimMember[]>();       // kept value → the spellings merged into it
   const folded = new Set<string>();
@@ -224,7 +224,7 @@ function ValuesPanel({ column, sim, method, picks, shapes, made, category, lead 
     : [];
   const sub = sim.more ? `the ${num(vals.length)} most frequent of ${num(sim.distinct)}` : `all ${num(sim.distinct)} · most to least frequent`;
   return (
-    <Panel title="Values" sub={sim.groups.length ? `${sub} · grouped members shown indented` : sub}>
+    <Panel title="Values" sub={sub} info={sim.groups.length ? "Grouped members are shown indented." : undefined}>
       <div className="panel-body">
         {lead}
         <ul className="kv prof-kv text-values" aria-label={`Values of ${column}`}>{rows}</ul>
