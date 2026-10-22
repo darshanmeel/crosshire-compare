@@ -12,7 +12,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .. import sql
+from .. import sql, theme
 
 from . import jobs
 from .workspace import Workspace, Workspaces, workspace
@@ -43,7 +43,7 @@ def host_name(header: str) -> str:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="CrossHire Compare", docs_url=None, redoc_url=None)
+    app = FastAPI(title=theme.APP_NAME, docs_url=None, redoc_url=None)
 
     @app.middleware("http")
     async def guard(request: Request, call_next):
@@ -90,7 +90,7 @@ def create_app() -> FastAPI:
 
     from fastapi.responses import Response as RawResponse
 
-    from .. import connforms, filepick, theme
+    from .. import connforms, filepick
     from ..connections import KINDS
 
     @app.get("/theme.css", include_in_schema=False)

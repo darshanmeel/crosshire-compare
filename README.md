@@ -217,7 +217,7 @@ There is no settings file. Everything is either in the page or an environment va
 | `COMPARE_THEME` | `paper` | `aurora` or `violet` switches the whole look - the page and the report - to that palette, opening dark. Anything else falls back to paper. |
 | `COMPARE_WEB_PORT` | `8501` | The port the page is served on (`--port` overrides it). |
 | `COMPARE_ALLOWED_HOSTS` | empty | Extra Host names the server answers to, comma separated - needed when the page is reached by a machine name, for example in a container. |
-| `COMPARE_APP_NAME` | `CrossHire Compare` | The name in the browser tab, the header, the report header and `summary.json`. |
+| `COMPARE_APP_NAME` | `CrossHire Compare` | The name in the browser tab, the header, the report header, `summary.json` and the line the server prints at start. The logo stays. One word works (`Compare`); the last word is set in italics in the header. |
 | `COMPARE_APP_TAGLINE` | `Tables, side by side` | A line under the name, where one is shown. |
 | `COMPARE_WORK_DIR` | `<temp>/crosshire-compare` | Where staged uploads, Parquet snapshots, database fetches, run folders and zips go, and DuckDB's own temp directory. Created on first use; swept. |
 | `COMPARE_OUT_DIR` | unset | When set, the root every save lands under: the save boxes default to `<COMPARE_OUT_DIR>/<pair>__<run_id>` and a folder outside it is refused. |

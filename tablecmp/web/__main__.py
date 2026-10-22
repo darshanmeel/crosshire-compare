@@ -15,7 +15,7 @@ try:
 except ModuleNotFoundError:                      # said in one sentence by main
     uvicorn = None
 
-from .. import outputs
+from .. import outputs, theme
 
 DEFAULT_PORT = 8501
 
@@ -99,7 +99,7 @@ def main(argv: list[str] | None = None, prog: str = "python -m tablecmp.web") ->
     except OSError:
         pass
     url = shown_url(args.host, args.port)
-    print(f"CrossHire Compare at {url} - Ctrl+C stops it")
+    print(f"{theme.APP_NAME} at {url} - Ctrl+C stops it")
     if not args.no_browser:
         threading.Timer(1.2, webbrowser.open, [url]).start()
     uvicorn.run("tablecmp.web.app:app", host=args.host, port=args.port, log_level="warning")

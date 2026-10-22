@@ -38,6 +38,13 @@ test("the header shows the brand, the page switch, Connections and the Log count
   expect(screen.getByRole("button", { name: "Connections" })).toBeInTheDocument();   // none saved: no "0" badge
 });
 
+test("the browser tab takes the app's name from /api/meta", async () => {
+  vi.stubGlobal("fetch", mockFetch());
+  mount();
+  await screen.findByText("Compare", { selector: "em" });
+  expect(document.title).toBe("CrossHire Compare");
+});
+
 test("the rail's Auto keeps its old name and waits for both sides", async () => {
   vi.stubGlobal("fetch", mockFetch());
   mount();

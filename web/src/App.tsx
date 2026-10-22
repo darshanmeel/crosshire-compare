@@ -71,6 +71,7 @@ function ProfilePage({ meta, setPage }: { meta: Meta; setPage: (p: Page) => void
 export default function App() {
   const { data: meta } = useMeta();
   const [page, setPage] = usePage();
+  useEffect(() => { if (meta?.app_name) document.title = meta.app_name; }, [meta?.app_name]);
   const v = useView();
   useCompareFreshness();
   useAnchor();
