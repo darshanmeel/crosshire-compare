@@ -82,6 +82,8 @@ def side_view(ws: Workspace, tag: str) -> dict:
             "kind": s.kind, "rows": s.rows, "columns": s.columns, "cut": s.cut,
             "is_database": s.is_database, "conn": s.conn, "fetched_at": s.fetched_at,
             "snapshot": bool(s.cache_path),
+            "sheet": s.sheet, "cell_range": s.cell_range, "stop_at_blank": s.stop_at_blank,
+            "skip_rows": s.skip_rows, "read_from": s.read_from if s.loaded else "",
             "caption": loaded_caption(s) if s.loaded else "",
             "notes": [{"tone": t, "text": x} for t, x in loaded_notes(s)] if s.loaded else [],
             "staged": p.staged_label if p.staged and Path(p.staged).exists() else "",

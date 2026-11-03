@@ -13,7 +13,7 @@ import os
 import subprocess
 import sys
 
-FILE_TYPES = [("Data files", "*.csv *.txt *.tsv *.dat *.json *.jsonl *.ndjson *.parquet"), ("All files", "*.*")]
+FILE_TYPES = [("Data files", "*.csv *.txt *.tsv *.dat *.json *.jsonl *.ndjson *.parquet *.xlsx *.xlsm *.xls"), ("All files", "*.*")]
 WAIT = 600          # seconds the dialog may stay open
 
 _DIALOG = """
@@ -21,7 +21,7 @@ import json, sys, tkinter, tkinter.filedialog
 root = tkinter.Tk()
 root.withdraw()
 root.attributes("-topmost", True)
-path = tkinter.filedialog.askopenfilename(parent=root, title="Choose a CSV, JSON or Parquet file",
+path = tkinter.filedialog.askopenfilename(parent=root, title="Choose a CSV, JSON, Parquet or Excel file",
                                           initialdir=sys.argv[1] or None, filetypes=[tuple(t) for t in json.loads(sys.argv[2])])
 sys.stdout.write(path or "")
 """

@@ -51,6 +51,14 @@ def side_block(side: Side, name: str) -> dict:
         block.pop("kind")                        # the fetch is always Parquet
     else:
         block["path"] = side.csv_path
+        # where the table sits in the file: an Excel sheet and range, the lines above a CSV's header
+        block.update({k: v for k, v in side.read_opts.items() if v})
+        if side.kind == "excel" and not side.sheet:
+            try:                                 # the sheet read, by name: a sheet put in front of it later
+                from .excel import resolve_sheet  # must not change what a rerun reads
+                block["sheet"] = resolve_sheet(side.csv_path, "")
+            except (ValueError, OSError):
+                pass
         try:
             block["uploaded"] = Path(side.csv_path).resolve().is_relative_to(work_dir().resolve())
         except OSError:
@@ -144,13 +152,22 @@ def options_of(conf: dict) -> ReadOptions:
     return ReadOptions(tuple(tokens), bool(s.get("trim", True)))
 
 
-def with_file(block: dict, path: str | None, name: str | None = None) -> dict:
+READ_FIELDS = ("sheet", "cell_range", "stop_at_blank", "skip_rows")
+
+
+def with_file(block: dict, path: str | None, name: str | None = None, read: dict | None = None) -> dict:
     """A side of the config with another file in it - a rerun on the next pair. The name is
-    the one given, else the file's stem: two runs of one pair name are told apart by it."""
+    the one given, else the file's stem: two runs of one pair name are told apart by it.
+    `read` gives the new file's sheet / cell_range (an Excel file) where the config's do not
+    fit it; a file of another kind drops the config's sheet, range and lines to skip."""
+    read = {k: v for k, v in (read or {}).items() if k in READ_FIELDS and v not in (None, "")}
     if not path:
-        return dict(block, **({"name": name} if name else {}))
+        return dict(block, **({"name": name} if name else {}), **read)
     out = {k: v for k, v in block.items() if k not in DB_FIELDS + ("uploaded", "folder", "file")}
-    out.update(path=str(path), kind=kind_of(str(path)), name=name or Path(path).stem)
+    kind = kind_of(str(path))
+    if kind != (block.get("kind") or ("parquet" if block.get("connection") else "")):
+        out = {k: v for k, v in out.items() if k not in READ_FIELDS}
+    out.update(path=str(path), kind=kind, name=name or Path(path).stem, **read)
     root = _folder_path(str(block.get("folder") or ""))
     if root and not Path(path).is_absolute() and not Path(path).exists():
         # a bare name, and the side came from a folder: the file of that name in the folder
@@ -202,7 +219,18 @@ def open_side(block: dict, which: str, passwords: dict[str, str] | None = None, 
     side.order_by = list(block.get("order_by") or [])
     side.desc = bool(block.get("desc"))
     side.limit = int(block.get("limit") or 0)
-    schema = source_schema(side.csv_path, side.kind, side.delimiter, side.header, file_stamp(side.csv_path))
+    side.sheet = str(block.get("sheet") or "")
+    side.cell_range = str(block.get("cell_range") or "")
+    side.stop_at_blank = bool(block.get("stop_at_blank"))
+    try:
+        side.skip_rows = max(0, int(block.get("skip_rows") or 0))
+    except (TypeError, ValueError):
+        raise ConfigError(f"{name}: skip_rows is not a number") from None
+    try:
+        schema = source_schema(side.csv_path, side.kind, side.delimiter, side.header, file_stamp(side.csv_path),
+                               **side.read_opts)
+    except ValueError as exc:                    # an Excel sheet or range that is not there
+        raise ConfigError(f"{name}: {exc}") from None
     names = list(block.get("column_names") or [])
     side.schema = apply_names(schema, names) if names else dict(schema)
     side.source_columns = list(schema)
@@ -281,12 +309,13 @@ def write_outputs(run: dict, cfg: dict, A: Side, B: Side, name_a: str, name_b: s
 
 def run_pair(conf: dict, left: str | None = None, right: str | None = None,
              names: tuple[str | None, str | None] = (None, None), out: str | None = None,
-             passwords: dict[str, str] | None = None, say=print) -> PairOutcome:
+             passwords: dict[str, str] | None = None, say=print,
+             reads: tuple[dict | None, dict | None] = (None, None)) -> PairOutcome:
     """One pair: the config's own sides, or its settings on other files. The run folder is
-    copied under `out` when it is given. Any failure is the pair's own outcome - the next
-    pair of a batch still runs."""
-    a_block = with_file(conf["sides"]["A"], left, names[0])
-    b_block = with_file(conf["sides"]["B"], right, names[1])
+    copied under `out` when it is given; `reads` gives each side's sheet / range. Any failure
+    is the pair's own outcome - the next pair of a batch still runs."""
+    a_block = with_file(conf["sides"]["A"], left, names[0], reads[0])
+    b_block = with_file(conf["sides"]["B"], right, names[1], reads[1])
     label = f"{a_block.get('name') or 'A'} against {b_block.get('name') or 'B'}"
     try:
         opts = options_of(conf)

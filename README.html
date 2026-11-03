@@ -213,7 +213,7 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
 <section class="sec" id="sources">
   <div class="sec-head"><div class="sec-num">02</div><div><h2 class="sec-h">Sources.</h2><div class="sec-sub">upload, path on disk, or database - one card per side</div></div></div>
   <div class="body">
-    <p>Each side is a CSV (any delimiter), a JSON file (an array, or one object per line) or a Parquet file. The Profile page's one <strong>File</strong> card works the same way.</p>
+    <p>Each side is a CSV (any delimiter), a JSON file (an array, or one object per line), a Parquet file or an Excel workbook (.xlsx, .xlsm; .xls when the xlrd package is installed). The Profile page's one <strong>File</strong> card works the same way.</p>
     <figure class="shot"><img src="docs/app-loaded.png" alt="Source cards A (HR) and B (Payroll), both loaded: 3,000 and 2,985 rows, 7 columns each" loading="lazy"><figcaption>HR 3,000 rows · Payroll 2,985 rows · 7 columns each · Parquet snapshot</figcaption></figure>
     <ul class="pts">
       <li><b>Name</b> - shown everywhere and used to name every output file; left blank or at Left / Right, it takes the name the side was loaded with</li>
@@ -221,6 +221,8 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <li><b>Path on disk</b> - read in place, nothing copied, so any size; <b>Browse…</b> opens the file dialog where the app has a screen</li>
       <li><b>Folder</b> - with a folder connection saved (section 03), pick a file by its name in that folder instead of a full path</li>
       <li><b>Delimiter · First row is a header</b> - for CSV; <b>Advanced</b> takes column names when the header is missing or short, and holds <b>Load A</b> again once a side is loaded</li>
+      <li><b>Skip lines at top</b> - for CSV: lines above the header, such as a title or an export note</li>
+      <li><b>Sheet · Table starts at · Stop at the first empty row</b> - for Excel: the sheet (the first visible one unless picked), the table's top-left cell (<code>B4</code>) or a whole range (<code>B4:H500</code>), and whether notes or totals under a blank row are left out. Cells read as the workbook shows them: dates as <code>2026-07-20</code>, whole numbers without <code>.0</code>. A formula with no saved value reads as empty, and the card says so - open the file in Excel, save it, load again</li>
       <li><b>The foot</b> - the file, rows × columns and <em>Parquet snapshot</em>, the column names, and <b>Preview 10 rows</b> at their end</li>
       <li><b>Rows to read</b> - a WHERE filter, an order and a top N, applied by DuckDB as the file is read</li>
       <li><b>Snapshot the rows read to Parquet</b> - on by default; the rows are read once, then everything reads the snapshot</li>
@@ -541,9 +543,11 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
     <p><strong>On the command line</strong> - the same comparison on other files, one pair or many:</p>
 <pre><code>python -m tablecmp.run HR_compare_Payroll__config.json                       # the config's own two sides
 python -m tablecmp.run config.json --left jan/hr.csv --right jan/payroll.csv --out results
+python -m tablecmp.run config.json --left feb.xlsx --sheet-left Staff --range-left B4
 python -m tablecmp.run config.json --pairs pairs.csv --out results           # left,right[,name_left,name_right]</code></pre>
     <ul class="pts">
       <li><b>Names</b> - a side given another file is named after its stem, unless a name is given</li>
+      <li><b>Excel</b> - another workbook keeps the config's sheet and range; <code>--sheet-left</code>, <code>--range-left</code> (and <code>-right</code>) or the <code>sheet_left</code>, <code>range_left</code>… columns of pairs.csv give others</li>
       <li><b>Folder connection</b> - a bare file name is read in that <a href="#connections">folder connection</a>; a full path is that file</li>
       <li><b><code>--connections team.yml</code></b> (<code>-c</code>) - adds a <a href="#connections-files">connections file</a> for the run, read-only</li>
       <li><b>Output</b> - each pair writes a full run folder under <code>--out</code></li>

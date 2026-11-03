@@ -1,6 +1,7 @@
 duckdb>=1.2
 pandas
 pyarrow
+openpyxl                        # Excel files (.xlsx / .xlsm), read into Parquet first
 pyyaml                          # connections files in YAML
 fastapi                         # the React page's server
 uvicorn                         #   and what runs it

@@ -76,7 +76,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--right", help="another file for side B")
     ap.add_argument("--name-left", help="what to call side A (default: the file's stem)")
     ap.add_argument("--name-right", help="what to call side B")
-    ap.add_argument("--pairs", help="a CSV of pairs: left,right[,name_left,name_right]")
+    ap.add_argument("--sheet-left", help="the sheet to read in side A's Excel file (default: the config's, else the first)")
+    ap.add_argument("--sheet-right", help="the sheet to read in side B's Excel file")
+    ap.add_argument("--range-left", help="where side A's table sits in the sheet: B4, or B4:H500")
+    ap.add_argument("--range-right", help="where side B's table sits in the sheet")
+    ap.add_argument("--pairs", help="a CSV of pairs: left,right[,name_left,name_right,sheet_left,sheet_right,"
+                                    "range_left,range_right]")
     ap.add_argument("--out", "-o", help="copy each run folder here (default: it stays in the work folder)")
     ap.add_argument("--connections", "-c", action="append", default=[],
                     help="a JSON or YAML connections file to use as well (may be given again)")
@@ -112,7 +117,11 @@ def _run(args: argparse.Namespace) -> int:
         print(f"[{i}/{len(pairs)}] {p.get('left') or conf['sides']['A'].get('path') or conf['sides']['A'].get('connection')}"
               f"  against  {p.get('right') or conf['sides']['B'].get('path') or conf['sides']['B'].get('connection')}",
               flush=True)
-        o = run_pair(conf, p.get("left") or None, p.get("right") or None, names, args.out, passwords, say)
+        one = len(pairs) == 1
+        reads = tuple({"sheet": p.get(f"sheet_{s}") or (getattr(args, f"sheet_{s}") if one else None),
+                       "cell_range": p.get(f"range_{s}") or (getattr(args, f"range_{s}") if one else None)}
+                      for s in ("left", "right"))
+        o = run_pair(conf, p.get("left") or None, p.get("right") or None, names, args.out, passwords, say, reads)
         done.append(o)
         if o.error:
             print(f"  ✗ {o.status}: {o.error}", flush=True)

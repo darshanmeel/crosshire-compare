@@ -80,7 +80,7 @@ def test_a_path_on_disk_and_what_is_said_about_it(c, tmp_path, monkeypatch):
     s = c.post("/api/sources/A/schema", json={"how": "path", "path": str(junk)}, headers=W).json()
     assert s["error"].startswith("Could not read the parquet file:")
     blank = c.post("/api/sources/A/schema", json={"how": "path", "path": ""}, headers=W).json()
-    assert blank == {"label": "", "kind": "csv", "columns": [], "error": ""}
+    assert blank == {"label": "", "kind": "csv", "columns": [], "error": "", "sheets": [], "sheet": "", "hidden": []}
 
 
 def test_a_folder_lists_its_files_and_a_file_is_picked_by_name(c, tmp_path):

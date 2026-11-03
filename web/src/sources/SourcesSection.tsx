@@ -52,7 +52,7 @@ export function SourcesSection({ meta }: { meta: Meta }) {
       </Section>
     );
   return (
-    <Section n="01" id="sources" title="Sources" sub={both ? "CSV, JSON, Parquet or a database table on either side" : "load both sides to continue"}>
+    <Section n="01" id="sources" title="Sources" sub={both ? "CSV, JSON, Parquet, Excel or a database table on either side" : "load both sides to continue"}>
       <div className="two"><SideCard tag="A" meta={meta} /><SideCard tag="B" meta={meta} /></div>
       {(fa.how === "database" || fb.how === "database") && <DatabaseCallout />}
     </Section>

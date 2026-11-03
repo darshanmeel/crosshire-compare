@@ -1,4 +1,5 @@
-"""One CSV file, and which of its rows to read. DuckDB streams it from disk."""
+"""One data file (CSV, JSON, Parquet, an Excel sheet), and which of its rows to read. DuckDB
+streams it from disk; an Excel sheet is read once into Parquet first (excel.py)."""
 from __future__ import annotations
 
 import os
@@ -17,12 +18,16 @@ from .sql import ident, lit, scratch
 class Side:
     name: str = ""          # what you call it - shown everywhere
     label: str = ""         # the file name
-    csv_path: str = ""      # the file read: CSV / Parquet / JSON, or the Parquet a database fetch produced
-    kind: str = "csv"       # csv | parquet | json
+    csv_path: str = ""      # the file read: CSV / Parquet / JSON / Excel, or the Parquet a database fetch produced
+    kind: str = "csv"       # csv | parquet | json | excel
     origin: str = ""        # where a database fetch came from, for display ("Snowflake · HR.EMPLOYEES")
     cache_path: str = ""    # Parquet snapshot of the rows read, when one was taken
     delimiter: str = ","
     header: bool = True
+    sheet: str = ""         # excel: the sheet to read, "" = the first
+    cell_range: str = ""    # excel: where the table sits - "B4", "B4:H500", "B4:H"; "" = from A1
+    stop_at_blank: bool = False   # excel: the table ends at its first fully empty row
+    skip_rows: int = 0      # csv: lines above the header to skip (a title, notes)
     where: str = ""                                   # on the file's own columns
     order_by: list[str] = field(default_factory=list)
     desc: bool = False
@@ -67,7 +72,28 @@ class Side:
         """Everything that decides which rows come out of this file."""
         return [self.csv_path, self.kind, self.cache_path, self.delimiter, self.header, self.where,
                 self.order_by, self.desc, self.limit, self.conn, self.query, self.cap, self.fetched_at,
-                sorted(self.derived.items())]
+                sorted(self.derived.items()), sorted(self.read_opts.items())]
+
+    @property
+    def read_opts(self) -> dict:
+        """Where in the file the table sits - only the options this kind of file takes."""
+        return read_opts(self.kind, self.sheet, self.cell_range, self.stop_at_blank, self.skip_rows)
+
+    @property
+    def read_from(self) -> str:
+        """Those options in words, for the loaded line: "sheet Sales · B4:H500"."""
+        o = self.read_opts
+        bits = []
+        if o.get("sheet"):
+            bits.append(f"sheet {o['sheet']}")
+        if o.get("cell_range"):
+            bits.append(o["cell_range"])
+        if o.get("stop_at_blank"):
+            bits.append("stops at the first blank row")
+        if o.get("skip_rows"):
+            n = o["skip_rows"]
+            bits.append(f"skips {n:,} line" + ("s" if n != 1 else ""))
+        return " · ".join(bits)
 
     @property
     def cut(self) -> str:
@@ -83,7 +109,22 @@ class Side:
 
 FILE_KINDS = {".csv": "csv", ".txt": "csv", ".tsv": "csv", ".dat": "csv",
               ".parquet": "parquet", ".pq": "parquet",
-              ".json": "json", ".jsonl": "json", ".ndjson": "json"}
+              ".json": "json", ".jsonl": "json", ".ndjson": "json",
+              ".xlsx": "excel", ".xlsm": "excel", ".xls": "excel"}
+
+
+def read_opts(kind: str, sheet: str = "", cell_range: str = "", stop_at_blank: bool = False,
+              skip_rows: int = 0) -> dict:
+    """The read options that apply to a kind of file: the sheet, range and stop for Excel, the
+    lines to skip for a CSV, none for the rest - so an option left from another kind never
+    changes a read or a cache key."""
+    if kind == "excel":
+        return {"sheet": (sheet or "").strip(),
+                "cell_range": (cell_range or "").strip().upper().replace(" ", ""),
+                "stop_at_blank": bool(stop_at_blank)}
+    if kind == "csv":
+        return {"skip_rows": max(0, int(skip_rows or 0))}
+    return {}
 
 
 def kind_of(path: str) -> str:
@@ -102,8 +143,8 @@ def folder_files(root: str, limit: int = FOLDER_LIST_MAX) -> list[str]:
     out: list[str] = []
     for dirpath, dirnames, filenames in os.walk(base):
         dirnames[:] = sorted(d for d in dirnames if not d.startswith("."))
-        for f in sorted(filenames):
-            if Path(f).suffix.lower() in FILE_KINDS:
+        for f in sorted(filenames):              # not a hidden file, nor the ~$ lock file Excel keeps beside an open workbook
+            if Path(f).suffix.lower() in FILE_KINDS and not f.startswith((".", "~$")):
                 out.append(Path(dirpath, f).relative_to(base).as_posix())
                 if len(out) >= limit:
                     return out
@@ -116,20 +157,27 @@ def in_folder(root: str, name: str) -> str:
     return str(p if p.is_absolute() else Path(root) / p)
 
 
-def read_csv_expr(path: str, delimiter: str, header: bool, all_varchar: bool = True) -> str:
+def read_csv_expr(path: str, delimiter: str, header: bool, all_varchar: bool = True,
+                  skip_rows: int = 0) -> str:
     return (f"read_csv({lit(path)}, delim={lit(delimiter)}, "
             f"header={'true' if header else 'false'}, null_padding=true"
+            + (f", skip={int(skip_rows)}" if skip_rows and int(skip_rows) > 0 else "")
             + (", all_varchar=true" if all_varchar else "") + ")")
 
 
 def raw_expr(path: str, kind: str, delimiter: str = ",", header: bool = True,
-             all_varchar: bool = True) -> str:
-    """A DuckDB table expression for the file as it is, typed columns and all."""
+             all_varchar: bool = True, *, sheet: str = "", cell_range: str = "",
+             stop_at_blank: bool = False, skip_rows: int = 0) -> str:
+    """A DuckDB table expression for the file as it is, typed columns and all. An Excel sheet
+    is its Parquet copy (made on first use; ValueError for a bad sheet or range)."""
     if kind == "parquet":
         return f"read_parquet({lit(path)})"
     if kind == "json":
         return f"read_json_auto({lit(path)}, maximum_object_size=67108864)"
-    return read_csv_expr(path, delimiter, header, all_varchar)
+    if kind == "excel":
+        from .excel import to_parquet
+        return f"read_parquet({lit(to_parquet(path, sheet, cell_range, header, stop_at_blank))})"
+    return read_csv_expr(path, delimiter, header, all_varchar, skip_rows)
 
 
 def text_expr(col: str, typ: str) -> str:
@@ -144,11 +192,15 @@ def text_expr(col: str, typ: str) -> str:
     return f"{ident(col)}::VARCHAR AS {ident(col)}"
 
 
-def read_expr(path: str, kind: str, delimiter: str = ",", header: bool = True) -> str:
+def read_expr(path: str, kind: str, delimiter: str = ",", header: bool = True, **opts) -> str:
     """The same file with every column as text - the one form the rest of the app reads,
-    so a Parquet DATE, a JSON number and a CSV field all go through the same typing."""
+    so a Parquet DATE, a JSON number and a CSV field all go through the same typing.
+    `opts` are the read options (read_opts): sheet, cell_range, stop_at_blank, skip_rows."""
+    o = read_opts(kind, **opts)
     if kind == "csv":
-        return read_csv_expr(path, delimiter, header, all_varchar=True)
+        return read_csv_expr(path, delimiter, header, all_varchar=True, skip_rows=o["skip_rows"])
+    if kind == "excel":                           # every column is text already
+        return raw_expr(path, kind, delimiter, header, **o)
     cols = source_schema(path, kind, delimiter, header, file_stamp(path))
     sel = ", ".join(text_expr(c, t) for c, t in cols.items()) or "*"
     return f"(SELECT {sel} FROM {raw_expr(path, kind, delimiter, header)})"
@@ -162,19 +214,28 @@ def file_stamp(path: str) -> str:
         return ""
 
 
-@lru_cache(maxsize=64)
-def source_schema(path: str, kind: str, delimiter: str, header: bool,
-                  stamp: str = "") -> dict[str, str]:
+def source_schema(path: str, kind: str, delimiter: str, header: bool, stamp: str = "",
+                  sheet: str = "", cell_range: str = "", stop_at_blank: bool = False,
+                  skip_rows: int = 0) -> dict[str, str]:
     """Column names and the types the file itself carries (or DuckDB sniffs for a CSV) -
-    cheap on a big file, DuckDB reads only what it needs to know the shape."""
+    cheap on a big file, DuckDB reads only what it needs to know the shape. The read options
+    that do not apply to the kind are dropped, so they never split the cache. ValueError for
+    an Excel sheet or range that is not there."""
+    o = read_opts(kind, sheet, cell_range, stop_at_blank, skip_rows)
+    return dict(_source_schema(path, kind, delimiter, header, stamp, tuple(sorted(o.items()))))
+
+
+@lru_cache(maxsize=64)
+def _source_schema(path: str, kind: str, delimiter: str, header: bool, stamp: str,
+                   opts: tuple) -> dict[str, str]:
     con = scratch()
-    q = f"DESCRIBE SELECT * FROM {raw_expr(path, kind, delimiter, header, all_varchar=False)}"
+    q = f"DESCRIBE SELECT * FROM {raw_expr(path, kind, delimiter, header, all_varchar=False, **dict(opts))}"
     return {r[0]: r[1] for r in con.execute(q).fetchall()}
 
 
 def select_sql(side: Side) -> str:
     """The rows to read from the file, with the sidebar's filter, order and top-N."""
-    sql = f"SELECT * FROM {read_expr(side.csv_path, side.kind, side.delimiter, side.header)}"
+    sql = f"SELECT * FROM {read_expr(side.csv_path, side.kind, side.delimiter, side.header, **side.read_opts)}"
     if side.where.strip():
         sql += f" WHERE {side.where.strip()}"
     if side.order_by:

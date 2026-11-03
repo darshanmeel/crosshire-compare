@@ -18,6 +18,10 @@
 .side-card .upload-line { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; font-size: 13px; color: var(--fs-text3); }
 .side-card .upload-line .link-btn { height: 36px; }
 .side-card .in.cap { width: 120px; height: 32px; }
+/* how a file is read, beside the delimiter: a CSV's lines to skip, an Excel file's sheet and range */
+.side-card .in.skip { width: 72px; height: 32px; font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.side-card .in.sheet { height: 32px; width: auto; min-width: 120px; max-width: 220px; }
+.side-card .in.range { height: 32px; width: 132px; }
 .side-card .db-empty { justify-content: space-between; }
 .side-card .cols-found { margin: 0; font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
 .side-card .load-row { gap: 12px; }

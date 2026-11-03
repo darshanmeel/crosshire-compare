@@ -27,7 +27,8 @@ NAME_HELP = {"side": "What to call this side everywhere - and it names every out
                       "connection's name."}
 QUICK_OPS = ["=", "!=", ">", ">=", "<", "<=", "contains", "starts with",
              "in (comma separated)", "is null", "is not null"]
-UPLOAD_TYPES = ["csv", "txt", "tsv", "dat", "json", "jsonl", "ndjson", "parquet"]
+UPLOAD_TYPES = ["csv", "txt", "tsv", "dat", "json", "jsonl", "ndjson", "parquet", "xlsx", "xlsm", "xls"]
+UPLOAD_WORDS = "a CSV, JSON, Parquet or Excel file"          # what the upload and the folder notes say
 CAP_WARNING = ("A cap without an ORDER BY can give the two sides different rows - "
                "add ORDER BY, or fetch everything.")
 CONFIG_PARTLY = ("The settings are in. Load the sides above, then give the same file "
@@ -103,7 +104,7 @@ def folder_note(root: str, files: list[str]) -> tuple[str, str] | None:
     if len(files) >= FOLDER_LIST_MAX:
         return ("caption", f"The first {FOLDER_LIST_MAX:,} files are listed - type a name for any other")
     if not files:
-        return ("caption", "No CSV, JSON or Parquet file in it yet - type a name")
+        return ("caption", "No CSV, JSON, Parquet or Excel file in it yet - type a name")
     return None
 
 
@@ -125,6 +126,10 @@ class ReadAsked:
     limit: int = 0
     names_text: str = ""
     snapshot: bool = True
+    sheet: str = ""                   # excel: "" = the first sheet
+    cell_range: str = ""              # excel: "B4", "B4:H500"; "" = from A1
+    stop_at_blank: bool = False       # excel: stop at the first fully empty row
+    skip_rows: int = 0                # csv: lines above the header to skip
 
 
 def names_warning(names_text: str, schema: dict[str, str]) -> str:
@@ -141,13 +146,17 @@ def build_side(tag: str, ask: ReadAsked, schema: dict[str, str], db_side: Side |
     side = Side(name=ask.name.strip() or tag, label=ask.label, csv_path=ask.path, kind=ask.kind,
                 origin=ask.origin, delimiter=ask.delimiter, header=ask.header, where=ask.where,
                 order_by=list(ask.order_by), desc=bool(ask.desc), limit=int(ask.limit), folder=ask.folder,
+                sheet=ask.sheet, cell_range=ask.cell_range, stop_at_blank=bool(ask.stop_at_blank),
+                skip_rows=int(ask.skip_rows or 0),
                 **({"conn": db_side.conn, "database": db_side.database, "query": db_side.query,
                     "fetched_at": db_side.fetched_at, "cap": db_side.cap, "capped": db_side.capped}
                    if db_side else {}))
     names = ask.names_text.split(",") if ask.names_text.strip() else []
     side.schema = apply_names(schema, names) if names else dict(schema)
     side.source_columns = list(schema)
-    # a Parquet source with no cut is already what a snapshot would be - no second copy
+    # a Parquet source with no cut is already what a snapshot would be - no second copy. An Excel
+    # sheet is snapshotted like a CSV: its conversion follows the workbook, and a workbook saved
+    # again after Load must not change what this side holds
     already = ask.kind == "parquet" and not (ask.where.strip() or ask.order_by or ask.limit)
     if ask.snapshot and not already:
         snapshot(side, str(work_dir() / f"cmp_{tag}_{int(time.time() * 1000)}.parquet"))
@@ -160,6 +169,7 @@ def build_side(tag: str, ask: ReadAsked, schema: dict[str, str], db_side: Side |
 def loaded_caption(side: Side) -> str:
     return (f":green[**✓ {side.name}**] · {side.origin or side.label} · {side.rows or 0:,} rows × "
             f"{len(side.schema)} columns"
+            + (f"  ·  {side.read_from}" if side.read_from else "")
             + (f"  ·  {side.cut}" if side.cut else "")
             + (f"  ·  fetched {side.fetched_at}" if side.fetched_at else "")
             + (f"  ·  capped at {side.cap:,}" if side.capped else "")
@@ -172,17 +182,31 @@ def loaded_notes(side: Side) -> list[tuple[str, str]]:
     if side.rows == 0:
         out.append(("warning", "The filter left no rows." if side.cut else
                     "The fetch returned no rows." if side.is_database else "The file has no rows."))
-    if side.kind == "csv" and side.header and looks_headerless(side.schema):
+    if side.kind in ("csv", "excel") and side.header and looks_headerless(side.schema):
         out.append(("error", "These column names look like a data row. Untick **First row is a "
-                             "header** and load again."))
+                             "header** and load again."
+                             + (" Or say where the table starts under **Table starts at**."
+                                if side.kind == "excel" else "")))
     # an empty CSV gets one auto-named column from DuckDB - there is no data row to name
-    missing = short_header(side.schema) if side.kind == "csv" and side.rows else 0
-    if missing:
+    missing = short_header(side.schema) if (side.kind == "csv" or side.kind == "excel" and side.header) and side.rows else 0
+    if missing and side.kind == "excel":
+        out.append(("error", f"The header row leaves **{missing}** of the **{len(side.schema)}** columns "
+                             "unnamed, so they were named after their position (column3 and the like). Name them in the "
+                             "sheet, or paste the full comma-separated list into **Advanced → Column "
+                             "names**, and load again."))
+    elif missing:
         named = len(side.schema) - missing
         out.append(("error", f"The header row names only **{named}** columns but the data has "
                              f"**{len(side.schema)}** fields, so the last {missing} were auto-named. "
                              "Paste the full comma-separated list into **Advanced → Column names** "
                              "and load again."))
+    if side.kind == "excel" and side.csv_path:
+        from .excel import PEEK_ROWS, unsaved_formulas
+        n, more = unsaved_formulas(side.csv_path, side.sheet, side.cell_range)
+        if n:
+            out.append(("warning", f"**{n:,}** formula cells{f' in the first {PEEK_ROWS:,} rows' if more else ''} "
+                                   "have no saved value, so they read as empty - the workbook was written by a "
+                                   "program and never saved in Excel. Open it in Excel, save it, and load again."))
     return out
 
 
@@ -264,7 +288,9 @@ def config_boxes(conf: dict, folders: set[str]) -> dict:
         else:
             known = bool(b.get("folder") and b.get("file") and b["folder"] in folders)
             box.update(how="path", path=str(b.get("path") or ""),
-                       folder=str(b["folder"]) if known else "", file=str(b["file"]) if known else "")
+                       folder=str(b["folder"]) if known else "", file=str(b["file"]) if known else "",
+                       sheet=str(b.get("sheet") or ""), cell_range=str(b.get("cell_range") or ""),
+                       stop_at_blank=bool(b.get("stop_at_blank")), skip_rows=int(b.get("skip_rows") or 0))
         out[tag] = box
     return out
 

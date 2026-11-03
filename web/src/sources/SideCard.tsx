@@ -40,6 +40,12 @@ function loadHint(tag: Tag, f: SideForm, meta: Meta): ReactNode {
   return kinds.length ? <>{kinds.join(", ")} under <strong>Database</strong></> : <>A database table under <strong>Database</strong></>;
 }
 
+/** The compact card's foot: how the file was read, in place of its column names. */
+function readSummary(f: SideForm, excel: boolean): string {      // the sheet, range and lines skipped are in the line above
+  const head = f.header ? "first row is a header" : "no header row";
+  return excel ? head : `delimiter ${f.delimiter} · ${head}`;
+}
+
 export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta: Meta; compact?: boolean; extra?: ReactNode }) {
   const id = useId();
   const single = tag === "P";
@@ -60,7 +66,12 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
     placeholderData: keepPreviousData,
   });
   const cols = ready ? (schema.data?.columns?.map((c) => c.name) ?? []) : [];
-  const isCsv = ((ready ? schema.data?.kind : undefined) ?? view?.kind ?? "csv") === "csv";
+  const kind = (ready ? schema.data?.kind : undefined) ?? view?.kind ?? "csv";
+  const isCsv = kind === "csv";
+  const isExcel = kind === "excel";
+  const sheets = ready ? (schema.data?.sheets ?? []) : [];
+  const hidden = ready ? (schema.data?.hidden ?? []) : [];
+  const sheetRead = f.sheet || schema.data?.sheet || sheets[0] || "";
   const [said, setSaid] = useState<{ warnings: string[]; error: string }>({ warnings: [], error: "" });
   const [open, setOpen] = useState<Open>(null);
   const [preview, setPreview] = useState(false);
@@ -107,15 +118,40 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
     <LinkButton iconAfter="chevron" aria-expanded={open === "advanced"} aria-controls={`${id}-adv`} onClick={() => toggle("advanced")}
                 className={open === "advanced" ? "open" : undefined}>Advanced</LinkButton>
   </>;
-  const delimiter = isCsv && f.how !== "database" && <>
+  const header = <label className="check"><input type="checkbox" aria-label="First row is a header" checked={f.header}
+                                                 onChange={(e) => set({ header: e.target.checked })} />First row is a header</label>;
+  // how the file is read, where the delimiter sat: a CSV's delimiter, header and lines to skip; an
+  // Excel file's sheet, where the table starts, header and whether it ends at its first empty row
+  const delimiter = f.how !== "database" && (isCsv ? <>
     <span className="row">
       <label className="lbl" htmlFor={`${id}-delim`}>Delimiter</label>
       <input id={`${id}-delim`} type="text" className="in tiny" aria-label="Delimiter" maxLength={3} value={f.delimiter}
              onChange={(e) => set({ delimiter: e.target.value })} />
     </span>
-    <label className="check"><input type="checkbox" aria-label="First row is a header" checked={f.header}
-                                    onChange={(e) => set({ header: e.target.checked })} />First row is a header</label>
-  </>;
+    {header}
+    <span className="row" title="Lines above the header row - a title or notes - that are not part of the table">
+      <label className="lbl" htmlFor={`${id}-skip`}>Skip lines at top</label>
+      <input id={`${id}-skip`} type="number" className="in skip" min={0} step={1} inputMode="numeric" value={f.skip_rows}
+             onChange={(e) => set({ skip_rows: Math.max(0, Math.floor(Number(e.target.value) || 0)) })} />
+    </span>
+  </> : isExcel ? <>
+    <span className="row">
+      <label className="lbl" htmlFor={`${id}-sheet`}>Sheet</label>
+      <select id={`${id}-sheet`} className="in sheet" value={sheetRead} onChange={(e) => set({ sheet: e.target.value })}>
+        {sheetRead && !sheets.includes(sheetRead) && <option value={sheetRead}>{sheetRead}</option>}
+        {sheets.map((n) => <option key={n} value={n}>{hidden.includes(n) ? `${n} (hidden)` : n}</option>)}
+      </select>
+    </span>
+    <span className="row" title="Top-left cell of the header row, or a full range">
+      <label className="lbl" htmlFor={`${id}-range`}>Table starts at</label>
+      <input id={`${id}-range`} type="text" className="in mono range" placeholder="A1 or B4:H500" maxLength={30}
+             spellCheck={false} value={f.cell_range} onChange={(e) => set({ cell_range: e.target.value })} />
+    </span>
+    {header}
+    <label className="check" title="For notes or totals under the table">
+      <input type="checkbox" checked={f.stop_at_blank} onChange={(e) => set({ stop_at_blank: e.target.checked })} />Stop at the first empty row
+    </label>
+  </> : null);
   const snapshot = (inline: boolean) => (
     <label className="check" title="Reads the rows once, keeps them as a compact Parquet file in the temp folder, and everything after reads that instead of the source again. Recommended for big files.">
       <input type="checkbox" aria-label="Snapshot the rows read to Parquet" checked={f.snapshot}
@@ -193,9 +229,9 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
       {said.error && <ErrorNote>{said.error}</ErrorNote>}
       {said.warnings.map((w, i) => <div key={i} className="note warning">{marks(w)}</div>)}
       {loaded && view && (
-        <LoadedLine tag={tag} view={view} box={f.name} otherBox={other.name} otherView={src?.sides?.[otherTag]}
+        <LoadedLine tag={tag} view={view} sheet={isExcel ? sheetRead : ""} box={f.name} otherBox={other.name} otherView={src?.sides?.[otherTag]}
                     preview={preview} onPreview={() => setPreview((p) => !p)} previewId={`${id}-preview`}
-                    cols={compact && isCsv && f.how !== "database" ? `delimiter ${f.delimiter} · ${f.header ? "first row is a header" : "no header row"}` : undefined}>
+                    cols={compact && f.how !== "database" && (isCsv || isExcel) ? readSummary(f, isExcel) : undefined}>
           {compact && <>{toggles}{loadBtn(true)}{extra}</>}
         </LoadedLine>
       )}

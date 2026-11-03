@@ -9,7 +9,7 @@ import { setView } from "./view";
 
 const COPY = {
   Compare: {
-    eyebrow: "CSV, JSON, Parquet or a database table, either side",
+    eyebrow: "CSV, JSON, Parquet, Excel or a database table, either side",
     h: <>Two tables, <em>every difference.</em></>,
     lede: <>Read by DuckDB, paired in one table, compared row by row on a key you choose — or let <strong>Auto</strong> work the whole thing out.</>,
     how: [
@@ -19,7 +19,7 @@ const COPY = {
     ],
   },
   Profiling: {
-    eyebrow: "CSV, JSON, Parquet or a database table",
+    eyebrow: "CSV, JSON, Parquet, Excel or a database table",
     h: <>One table, <em>every column.</em></>,
     lede: <>Read by DuckDB once: which column identifies a row, what stands out, the statistics of every column, its outliers, shapes and dependencies, and its most and least frequent values.</>,
     how: [

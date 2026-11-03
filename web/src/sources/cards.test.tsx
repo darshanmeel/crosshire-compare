@@ -31,7 +31,7 @@ test("an empty card: region, Name, Not loaded, the source radios, and Load only 
   const choice = within(A).getByRole("radiogroup", { name: "Source for A" });
   expect(within(choice).getAllByRole("radio").map((r) => r.closest("label")!.textContent)).toEqual(["Upload", "Path on disk", "Database"]);
   expect(within(A).getByRole("radio", { name: "Upload" })).toBeChecked();
-  expect(within(A).getByLabelText("CSV, JSON or Parquet file")).toBeInTheDocument();          // the dropzone's file input
+  expect(within(A).getByLabelText("CSV, JSON, Parquet or Excel file")).toBeInTheDocument();          // the dropzone's file input
   expect(within(A).getByRole("button", { name: "Load A" })).toBeDisabled();
   await userEvent.click(within(A).getByLabelText("Path on disk"));                   // a label a test can check
   expect(getForm("A").how).toBe("path");
@@ -51,7 +51,7 @@ test("a file dropped on the dropzone is uploaded, and the card says it is staged
   }));
   mount(<SideCard tag="B" meta={META} />);
   const file = new File(["EmployeeId\nE1\n"], "payroll.csv", { type: "text/csv" });
-  const drop = screen.getByText("Drop a CSV, JSON or Parquet file").closest(".drop")!;
+  const drop = screen.getByText("Drop a CSV, JSON, Parquet or Excel file").closest(".drop")!;
   fireEvent.drop(drop, { dataTransfer: { files: [file] } });
   await waitFor(() => expect(calls.some(([u]) => u === "/api/sources/B/upload?filename=payroll.csv")).toBe(true));
   expect(await screen.findByText("payroll.csv")).toHaveClass("staged");
@@ -247,9 +247,9 @@ test("a side loaded from its upload shows one line - the file, uploaded, Replace
   const A = screen.getByRole("region", { name: "File A" });
   const replace = await within(A).findByRole("button", { name: "Replace file" });
   expect(within(A).getByText("uploaded")).toBeInTheDocument();
-  expect(within(A).queryByText("Drop a CSV, JSON or Parquet file")).toBeNull();
+  expect(within(A).queryByText("Drop a CSV, JSON, Parquet or Excel file")).toBeNull();
   expect(within(A).getByRole("radio", { name: "Upload" })).toBeChecked();              // the source segment stays
   await userEvent.click(replace);
-  expect(within(A).getByText("Drop a CSV, JSON or Parquet file")).toBeInTheDocument();
-  expect(within(A).getByLabelText("CSV, JSON or Parquet file").closest("label.drop")).not.toBeNull();   // the whole zone picks
+  expect(within(A).getByText("Drop a CSV, JSON, Parquet or Excel file")).toBeInTheDocument();
+  expect(within(A).getByLabelText("CSV, JSON, Parquet or Excel file").closest("label.drop")).not.toBeNull();   // the whole zone picks
 });

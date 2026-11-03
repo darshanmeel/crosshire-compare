@@ -206,6 +206,8 @@ def _source_row(nm: str, s: Side, n: int, path: str) -> str:
         text += f" · connection <code>{esc(s.conn)}</code>"
     elif path:
         text += f" · {esc(path)}"
+    if not s.is_database and s.read_from:        # an Excel sheet and range, a CSV's lines skipped
+        text += f" · {esc(s.read_from)}"
     if s.cut:
         text += f" ({esc(s.cut)})"
     if s.cache_path:

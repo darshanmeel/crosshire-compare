@@ -57,7 +57,7 @@ def test_a_browsed_file_is_named_in_its_folder(work):
 
 def test_what_a_folder_list_says(work):
     assert ld.folder_note(str(work / "gone"), [])[0] == "error"
-    assert ld.folder_note(str(work), []) == ("caption", "No CSV, JSON or Parquet file in it yet - type a name")
+    assert ld.folder_note(str(work), []) == ("caption", "No CSV, JSON, Parquet or Excel file in it yet - type a name")
     assert "first 2,000" in ld.folder_note(str(work), ["x"] * 2000)[1]
     assert ld.folder_note(str(work), ["a.csv"]) is None
 

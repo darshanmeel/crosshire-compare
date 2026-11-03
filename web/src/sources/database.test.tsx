@@ -81,7 +81,7 @@ test("each card's foot says what was read, warns of two sides of one name, and p
   expect(within(A).getByText("emp_id, first_name")).toBeInTheDocument();
   expect(within(A).getByText("Both sides are called SAMPLE")).toBeInTheDocument();
   expect(within(B).getByText("The fetch returned no rows.")).toBeInTheDocument();
-  expect(screen.getByText("CSV, JSON, Parquet or a database table on either side")).toBeInTheDocument();
+  expect(screen.getByText("CSV, JSON, Parquet, Excel or a database table on either side")).toBeInTheDocument();
   const toggle = within(A).getByRole("button", { name: "Preview 10 rows" });
   expect(toggle).toHaveAttribute("aria-expanded", "false");
   await userEvent.click(toggle);

@@ -6,7 +6,7 @@ import { api, errorText, type Meta } from "../api/client";
 import { Button, ErrorNote } from "../ui/kit";
 import { useSideForm } from "./formStore";
 import { NoteLine } from "./NoteLine";
-import type { FolderFiles, FolderRow, Tag } from "./types";
+import { FRESH_READ, type FolderFiles, type FolderRow, type Tag } from "./types";
 
 export function PathBox({ tag, meta }: { tag: Tag; meta: Meta }) {
   const id = useId();
@@ -25,7 +25,7 @@ export function PathBox({ tag, meta }: { tag: Tag; meta: Meta }) {
   }, [folders.data, f.folder]);
   const browse = useMutation({
     mutationFn: () => api.send<{ path: string; file: string }>("POST", "/api/sources/browse", { start: f.path, folder }),
-    onSuccess: (r) => { setErr(""); if (r.file) set({ file: r.file }); else if (r.path) set({ path: r.path, folder: "" }); },
+    onSuccess: (r) => { setErr(""); if (r.file) set({ file: r.file, ...FRESH_READ }); else if (r.path) set({ path: r.path, folder: "", ...FRESH_READ }); },
     onError: (e) => setErr(errorText(e)),
   });
   return (
@@ -34,7 +34,7 @@ export function PathBox({ tag, meta }: { tag: Tag; meta: Meta }) {
       {rows.length > 0 && (
         <div className="row" title="A folder saved under Connections (kind Folder): pick its file by name. The config keeps the folder and the name, so a rerun reads the next file there by name.">
           <label className="lbl w" htmlFor={`${id}-folder`}>Folder</label>
-          <select id={`${id}-folder`} className="in grow" aria-label="Folder" value={folder} onChange={(e) => set({ folder: e.target.value })}>
+          <select id={`${id}-folder`} className="in grow" aria-label="Folder" value={folder} onChange={(e) => set({ folder: e.target.value, ...FRESH_READ })}>
             <option value="">Any path</option>
             {rows.map((r) => <option key={r.name} value={r.name}>{r.name} · {r.host}</option>)}
           </select>
@@ -44,11 +44,11 @@ export function PathBox({ tag, meta }: { tag: Tag; meta: Meta }) {
         {folder === "" ? <>
           <label className="lbl w" htmlFor={`${id}-path`}>Path</label>
           <input id={`${id}-path`} type="text" className="in mono grow" aria-label="Path to CSV or JSON" placeholder="C:\data\exports\employees_2026-09.csv"
-                 value={f.path} onChange={(e) => set({ path: e.target.value })} />
+                 value={f.path} onChange={(e) => set({ path: e.target.value, ...FRESH_READ })} />
         </> : <>
-          <label className="lbl w" htmlFor={`${id}-file`} title="CSV, JSON and Parquet files in the folder and its subfolders. A name typed is read in the folder - 2026-10/hr.csv too.">File</label>
+          <label className="lbl w" htmlFor={`${id}-file`} title="CSV, JSON, Parquet and Excel files in the folder and its subfolders. A name typed is read in the folder - 2026-10/hr.csv too.">File</label>
           <input id={`${id}-file`} type="text" className="in mono grow" aria-label={`File in ${folder}`} list={`files_${tag}`} placeholder="pick one, or type its name"
-                 value={f.file} onChange={(e) => set({ file: e.target.value })} />
+                 value={f.file} onChange={(e) => set({ file: e.target.value, ...FRESH_READ })} />
           <datalist id={`files_${tag}`}>{files.data?.files.map((x) => <option key={x} value={x} />)}</datalist>
         </>}
         {meta.filepick && (

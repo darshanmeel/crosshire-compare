@@ -15,10 +15,10 @@ from starlette.requests import ClientDisconnect
 
 from .. import connections as cx
 from .. import databases as db
-from .. import filepick, loading
+from .. import excel, filepick, loading
 from ..connforms import CAP_DEFAULT
 from ..sources import (Side, add_derived, file_stamp, folder_files, in_folder, kind_of, path_allowed, preview_rows, quick_clause,
-                       source_schema, work_dir)
+                       read_opts, source_schema, work_dir)
 from .. import setup as su
 from . import jobs, runs
 from . import setupws as sw
@@ -54,6 +54,10 @@ class PickIn(BaseModel):
     delimiter: str = Field(",", max_length=3)
     header: bool = True
     db: DbIn | None = None
+    sheet: str = Field("", max_length=100)          # an Excel file: the sheet, "" = the first
+    cell_range: str = Field("", max_length=30)      # an Excel file: where the table sits - B4, B4:H500
+    stop_at_blank: bool = False                     # an Excel file: the table ends at its first empty row
+    skip_rows: int = Field(0, ge=0, le=1_000_000)   # a CSV: lines above the header to skip
 
 
 class BrowseIn(BaseModel):
@@ -163,7 +167,7 @@ async def upload(tag: str, request: Request, filename: str = Query(..., max_leng
     there is no size cap. Never takes ws.lock - a running job must not stall the server."""
     _tag(tag)
     if not loading.upload_ok(filename):
-        raise HTTPException(400, "Upload a CSV, JSON or Parquet file: "
+        raise HTTPException(400, f"Upload {loading.UPLOAD_WORDS}: "
                                  + ", ".join("." + t for t in loading.UPLOAD_TYPES) + ".")
     dest = loading.upload_path(tag, filename)
     try:
@@ -183,19 +187,46 @@ async def upload(tag: str, request: Request, filename: str = Query(..., max_leng
     return side_view(ws, tag)
 
 
+def read_as(kind: str, pick: PickIn) -> tuple[str, bool, dict]:
+    """(delimiter, header, read options) the boxes give for this kind of file: a CSV takes all
+    but the sheet, an Excel file its header and sheet boxes, the rest none of them."""
+    if kind == "csv":
+        return pick.delimiter or ",", pick.header, read_opts(kind, skip_rows=pick.skip_rows)
+    if kind == "excel":
+        return ",", pick.header, read_opts(kind, pick.sheet, pick.cell_range, pick.stop_at_blank)
+    return ",", True, {}
+
+
+def kind_word(kind: str) -> str:
+    return "Excel" if kind == "excel" else kind
+
+
 @router.post("/{tag}/schema")
 def schema(tag: str, pick: PickIn, ws: Workspace = Depends(workspace)) -> dict:
-    """The columns the picked file has - what the panel lists, and what Load is offered."""
+    """The columns the picked file has - what the panel lists, and what Load is offered. An
+    Excel file also says its sheets and the one read."""
     _tag(tag)
     got = resolve_pick(ws, tag, pick)
     kind = kind_of(got.path) if got.path else "csv"
-    out = {"label": got.label, "kind": kind, "columns": [], "error": got.error}
-    if got.path:
-        delim, header = (pick.delimiter or ",", pick.header) if kind == "csv" else (",", True)
+    out = {"label": got.label, "kind": kind, "columns": [], "error": got.error, "sheets": [], "sheet": "",
+           "hidden": []}
+    if got.path and kind == "excel" and Path(got.path).name.startswith("~$"):
+        out["error"] = ("This is the lock file Excel keeps beside an open workbook - "
+                        "pick the workbook itself.")
+    elif got.path:
+        delim, header, opts = read_as(kind, pick)
         try:
-            found = source_schema(got.path, kind, delim, header, file_stamp(got.path))
+            if kind == "excel":                  # the header and the first rows - Load reads the whole sheet
+                out["sheets"] = excel.sheet_names(got.path)
+                out["hidden"] = excel.hidden_sheets(got.path)
+                out["sheet"] = excel.resolve_sheet(got.path, opts["sheet"])
+                found = dict.fromkeys(excel.peek_columns(got.path, header=header, **opts), "VARCHAR")
+            else:
+                found = source_schema(got.path, kind, delim, header, file_stamp(got.path), **opts)
         except duckdb.Error as exc:
-            out["error"] = f"Could not read the {kind} file: {exc}"
+            out["error"] = f"Could not read the {kind_word(kind)} file: {exc}"
+        except ValueError as exc:                    # a sheet or range not there, a workbook that will not open
+            out["error"] = str(exc)
         else:
             out["columns"] = [{"name": n, "type": t} for n, t in found.items()]
     return out
@@ -239,11 +270,15 @@ def load(tag: str, body: LoadIn, ws: Workspace = Depends(workspace)) -> dict:
     if not got.path:
         raise HTTPException(400, "Nothing to load - pick a file, or fetch a table, first.")
     kind = kind_of(got.path)
-    delim, header = (body.delimiter or ",", body.header) if kind == "csv" else (",", True)
+    if kind == "excel" and Path(got.path).name.startswith("~$"):
+        raise HTTPException(400, "This is the lock file Excel keeps beside an open workbook - pick the workbook itself.")
+    delim, header, opts = read_as(kind, body)
     try:
-        found = source_schema(got.path, kind, delim, header, file_stamp(got.path))
+        found = source_schema(got.path, kind, delim, header, file_stamp(got.path), **opts)
     except duckdb.Error as exc:
-        raise HTTPException(400, f"Could not read the {kind} file: {exc}") from exc
+        raise HTTPException(400, f"Could not read the {kind_word(kind)} file: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     if not found:
         raise HTTPException(400, "Nothing to load - pick a file, or fetch a table, first.")
     dbs = got.db_side
@@ -251,12 +286,13 @@ def load(tag: str, body: LoadIn, ws: Workspace = Depends(workspace)) -> dict:
                             path=got.path, kind=kind, origin=dbs.origin if dbs else "", folder=got.folder,
                             delimiter=delim, header=header, where=body.where,
                             order_by=[c for c in body.order_by if c in found], desc=body.desc,
-                            limit=body.limit, names_text=body.column_names, snapshot=body.snapshot)
+                            limit=body.limit, names_text=body.column_names, snapshot=body.snapshot,
+                            **opts)
     warn = loading.names_warning(body.column_names, found)
     with ws.lock:
         try:
             new = loading.build_side(tag, ask, found, dbs)
-        except duckdb.Error as exc:
+        except (duckdb.Error, ValueError) as exc:
             raise HTTPException(400, f"Could not read the rows: {exc}") from exc
         for col, expr in panel(ws, tag).side.derived.items():      # the columns added to the old one come along
             if col in new.schema:
