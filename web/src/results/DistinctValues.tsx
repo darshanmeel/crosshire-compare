@@ -42,6 +42,19 @@ export function GroupBar({ view, setView, columns, column, setColumn, sides, sid
 }
 
 const SIZES = [25, 50, 100];
+
+/** First, Prev, page n of m, Next, Last. */
+export function Pager({ page, pages, setPage, label = "Pages" }: { page: number; pages: number; setPage: (p: number) => void; label?: string }) {
+  return (
+    <nav className="vc-pager" aria-label={label}>
+      <Button size="sm" disabled={page <= 1} onClick={() => setPage(1)}>First</Button>
+      <Button size="sm" icon="arrowl" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</Button>
+      <span role="status" className="m">Page {num(Math.min(page, pages))} of {num(pages)}</span>
+      <Button size="sm" iconAfter="arrow" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button>
+      <Button size="sm" disabled={page >= pages} onClick={() => setPage(pages)}>Last</Button>
+    </nav>
+  );
+}
 const said = (v: string | null | undefined) => (v == null ? "null" : v === "" ? "empty" : v);
 const shown = (v: string | null | undefined) => (v == null || v === "" ? <em className="vc-null">{said(v)}</em> : v);
 
@@ -137,13 +150,7 @@ export function DistinctTable({ runId, subset, differs = "", bar, label, names }
               : <>{num(d.values)} values {search ? "match" : ""}</>}
           </span>
           <span className="grow" />
-          <nav className="vc-pager" aria-label="Pages">
-            <Button size="sm" disabled={page <= 1} onClick={() => setPage(1)}>First</Button>
-            <Button size="sm" icon="arrowl" disabled={page <= 1} onClick={() => setPage(page - 1)}>Prev</Button>
-            <span role="status" className="m">Page {num(Math.min(page, pages))} of {num(pages)}</span>
-            <Button size="sm" iconAfter="arrow" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button>
-            <Button size="sm" disabled={page >= pages} onClick={() => setPage(pages)}>Last</Button>
-          </nav>
+          <Pager page={page} pages={pages} setPage={setPage} />
         </div>
       )}
     </>

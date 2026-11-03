@@ -234,6 +234,7 @@ def open_side(block: dict, which: str, passwords: dict[str, str] | None = None, 
     names = list(block.get("column_names") or [])
     side.schema = apply_names(schema, names) if names else dict(schema)
     side.source_columns = list(schema)
+    side.stamp = file_stamp(side.csv_path)
     if block.get("snapshot") and not (side.kind == "parquet" and not side.cut):
         snapshot(side, str(work_dir() / f"cmp_{which}_{int(time.time() * 1000)}.parquet"))
     for col, expr in (block.get("derived") or {}).items():

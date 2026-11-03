@@ -1,4 +1,5 @@
 // web/src/results/values.test.tsx - the parts of the value counts that need no API: the axis, the shades, the URL.
+import { countMax } from "./BucketProfile";
 import { axisMax, rankCls, valuesUrl } from "./valuesApi";
 
 test("the axis is the smallest round step that holds the largest share", () => {
@@ -15,4 +16,8 @@ test("the first three values have their own shade, the rest one", () => {
 test("the URL lists what is asked, in one order, without empty parts", () => {
   expect(valuesUrl("r1", { size: 3, column: "a/b %", side: "a", differs: "", basis: "nonnull" }))
     .toBe("/api/results/r1/values?column=a%2Fb+%25&side=a&basis=nonnull&size=3");
+});
+
+test("the count axis is the smallest 1, 2 or 5 times a power of ten that holds the largest count", () => {
+  expect([1, 3, 40, 51, 649, 2000].map(countMax)).toEqual([1, 5, 50, 100, 1000, 2000]);
 });

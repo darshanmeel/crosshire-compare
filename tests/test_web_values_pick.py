@@ -154,3 +154,34 @@ def test_a_list_read_while_the_side_was_loaded_again_is_not_kept(c, monkeypatch)
     monkeypatch.setattr(routes_sources, "column_values", swap)
     c.get("/api/sources/A/values?column=department")
     assert not p.values
+
+
+def test_a_side_opened_from_a_config_also_refuses_a_changed_file(c, tmp_path):
+    import os
+    import shutil
+    from tests.test_web_sources import _conf, wait
+    f = tmp_path / "hr.csv"
+    shutil.copy(HR, f)
+    _, path = _conf(tmp_path, a={"name": "HR", "path": str(f), "where": "department = 'Finance'", "snapshot": True})
+    wait(c, c.post("/api/sources/config", json={"path": str(path)}, headers=W).json())
+    for e in c.get("/api/log").json()["entries"]:
+        if e["kind"] == "Compare":
+            wait(c, e)
+    assert panel(ws_of(c), "A").side.stamp
+    assert c.get("/api/sources/A/values?column=department").status_code == 200
+    with open(f, "a", encoding="utf-8") as h:
+        h.write("90001,X,Y,ZZZ_NEW_DEPT,1,2020-01-01,true\n")
+    os.utime(f, ns=(1, 1))
+    r = c.get("/api/sources/A/values?column=department&search=zzz")
+    assert r.status_code == 409 and "changed since Load" in r.json()["detail"]
+
+
+def test_an_added_column_is_not_offered_as_a_file_column():
+    import pytest
+    from tablecmp.sources import Side, add_derived, column_values, source_schema
+    s = Side(name="HR", label=HR.name, csv_path=str(HR), kind="csv")
+    s.schema = dict(source_schema(str(HR), "csv", ",", True))
+    s.source_columns = list(s.schema)
+    add_derived(s, "dept2", "upper(department)")
+    with pytest.raises(KeyError):
+        column_values(s, "dept2")

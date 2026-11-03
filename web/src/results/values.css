@@ -2,10 +2,16 @@
    detail on the Summary, the distinct values tables on the Differing and One-sided rows tabs.
    Colours only through the --fs-* tokens. */
 
-/* the shades: 1st to 3rd on each side's ramp, the rest one shade, other values grey, null hatched */
+/* the shades: 1st to 3rd on each side's ramp, 4th and 5th edged in the 1st (their fill alone would not
+   show on the track), the rest one shade (Distinct values), other values grey, null hatched */
 .vc-seg { display: block; }
 .vc-seg.r1.a { background: var(--fs-rank-a1); } .vc-seg.r2.a, .vc-seg.rn.a { background: var(--fs-rank-a2); } .vc-seg.r3.a { background: var(--fs-rank-a3); }
 .vc-seg.r1.b { background: var(--fs-rank-b1); } .vc-seg.r2.b, .vc-seg.rn.b { background: var(--fs-rank-b2); } .vc-seg.r3.b { background: var(--fs-rank-b3); }
+/* 4th: the 3rd shade thinned towards the track; 5th: the track itself - both outlined in the 1st, which keeps 3:1 */
+.vc-seg.r4.a { background: color-mix(in srgb, var(--fs-rank-a3) 55%, var(--fs-surface2)); } .vc-seg.r5.a { background: var(--fs-surface2); }
+.vc-seg.r4.b { background: color-mix(in srgb, var(--fs-rank-b3) 55%, var(--fs-surface2)); } .vc-seg.r5.b { background: var(--fs-surface2); }
+.vc-seg.r4.a, .vc-seg.r5.a { box-shadow: inset 0 0 0 1px var(--fs-rank-a1); }
+.vc-seg.r4.b, .vc-seg.r5.b { box-shadow: inset 0 0 0 1px var(--fs-rank-b1); }
 .vc-seg.ro { background: var(--fs-rank-other); }
 .vc-seg.rp { background: var(--fs-accent-edge); }
 .vc-seg.rnull { background: repeating-linear-gradient(135deg, var(--fs-text4) 0 1.5px, var(--fs-surface2) 1.5px 4px); }
@@ -67,6 +73,12 @@
 .vc-nums > span { display: grid; grid-template-columns: 7px minmax(0, 1fr); gap: 6px; align-items: center; }
 .vc-nums .sw { display: block; width: 7px; height: 7px; border-radius: 2px; }
 .vc-nums strong { font-weight: 600; }
+
+/* Summary detail: every value, a page at a time, scrolling inside the panel */
+.vc-all { display: flex; flex-direction: column; gap: 6px; }
+.vc-all-scroll { max-height: 360px; overflow-y: auto; border-bottom: 1px solid var(--fs-border); }
+.vc-all .vc-val { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-all-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12.5px; color: var(--fs-text2); }
 
 /* Differing / One-sided rows: Show every row | distinct values */
 .vc-groupbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 20px; background: var(--fs-surface); border-top: 1px solid var(--fs-border); border-bottom: 1px solid var(--fs-border); }

@@ -98,7 +98,9 @@
 .vpick { flex: none; }
 .vpick-btn { padding: 0 12px; }
 .vpick-btn:disabled { opacity: .5; cursor: default; color: var(--fs-text3); border-color: var(--fs-border2); }
-.vpick-pop { width: min(360px, calc(100vw - 32px)); max-height: none; gap: 8px; }
+.vpick-pop { width: min(360px, calc(100vw - 32px)); gap: 8px; }
+.menu-pop.vpick-pop { max-height: none; }                          /* beats .menu-pop's 380px: only the list scrolls */
+.vpick-pop > :not(.vpick-list) { flex: none; }
 .vpick-pop:focus { outline: none; }                                 /* focusable only so a click inside keeps it open */
 .vpick-pop .caption { margin: 0; }
 .vpick-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: 280px; overflow: auto; }

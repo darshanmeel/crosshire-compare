@@ -1,4 +1,4 @@
-/* web/src/styles.css - the shared classes of the redesign (design/mockups/style.css), on the --fs-*
+/* web/src/styles.css - the shared classes of the page, on the --fs-*
    tokens /theme.css defines. Light and dark come from the tokens alone: no colour is written here.
    Section-specific CSS stays in each section's own file. */
 *, *::before, *::after { box-sizing: border-box; }

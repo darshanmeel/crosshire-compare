@@ -9,7 +9,8 @@ import { Failed } from "./Failed";
 import { Grid } from "./Grid";
 import { usePick } from "./pickStore";
 import { Findings, type Finding } from "../profiling/column/Findings";
-import { qs, type BucketBody, type BucketFacts, type SideFacts } from "./types";
+import "./values.css";
+import { qs, type BucketBody, type BucketFacts, type Frame, type SideFacts } from "./types";
 
 /** Profile by bucket, folded under the Summary: top values per column for one bucket of rows (matched, differing, only in
  * A, only in B) - the profile of what went wrong. The bucket is held by its id across runs (its
@@ -60,7 +61,7 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
             {d.by_key && (
               <>
                 <p className="bucket-line">{marks(d.by_key.title)}</p>
-                <div className="bucket-grids">{d.by_key.tables.map((t, i) => <div key={i}><p className="caption">{marks(t.title)}</p><Grid frame={t.table} /></div>)}</div>
+                <div className="bucket-keys">{d.by_key.tables.map((t, i) => <div key={i}><p className="caption">{marks(t.title)}</p><KeyBars frame={t.table} /></div>)}</div>
                 <p className="bucket-line">{marks(d.by_key.after)}</p>
               </>
             )}
@@ -75,6 +76,53 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
       </div>
       </Expander>
     </section>
+  );
+}
+
+const STEPS = [1, 2, 5];
+/** The count axis: the smallest 1, 2 or 5 times a power of ten that holds the largest count. */
+export const countMax = (n: number) => {
+  for (let p = 1; ; p *= 10) for (const s of STEPS) if (s * p >= n) return s * p;
+};
+
+/** One key column's values the differing rows sit under, in the engine's order: a bar each for
+ *  the matched rows and the rows that differ on one count axis, the numbers beside them. */
+function KeyBars({ frame }: { frame: Frame }) {
+  const at = (c: string) => frame.columns.indexOf(c);
+  const [iM, iD, iP, iC, iL] = ["Matched rows", "Rows that differ", "% of those rows", "Cells that differ", "Columns that differ"].map(at);
+  const n = (r: unknown[], i: number) => (i < 0 ? 0 : Number(r[i] ?? 0));
+  const max = countMax(Math.max(1, ...frame.rows.map((r) => Math.max(n(r, iM), n(r, iD)))));
+  const ticks = [0, max / 2, max].filter(Number.isInteger);
+  const key = frame.columns[0];
+  return (
+    <div className="vc-list kb" role="list" aria-label={`${key} - rows that differ by value`}>
+      <div className="vc-row vc-axis" aria-hidden="true">
+        <span>{key}</span>
+        <span className="vc-ticks">{ticks.map((t) => <b key={t} style={{ left: `${(100 * t) / max}%` }}>{num(t)}</b>)}</span>
+        <span className="num">Rows · % differ</span>
+      </div>
+      {frame.rows.map((r, k) => {
+        const v = String(r[0] ?? "");
+        const cols = iL < 0 ? "" : String(r[iL] ?? "");
+        const cells = iC < 0 ? "" : `${num(n(r, iC))} ${n(r, iC) === 1 ? "cell" : "cells"}${cols ? `: ${cols}` : ""}`;
+        return (
+          <div className="vc-row" role="listitem" key={k}>
+            <span className="kb-val">
+              <span className="m" title={v}>{v}</span>
+              {cells && <span className="kb-cols" title={cells}>{cells}</span>}
+            </span>
+            <span className="vc-bars">
+              <span className="vc-share"><i className="vc-seg kb-m" style={{ width: `${(100 * n(r, iM)) / max}%` }} /></span>
+              <span className="vc-share"><i className="vc-seg kb-d" style={{ width: `${(100 * n(r, iD)) / max}%` }} /></span>
+            </span>
+            <span className="num vc-nums">
+              <span><span className="sw kb-m" /><span>{num(n(r, iM))} matched</span></span>
+              <span><span className="sw kb-d" /><span>{num(n(r, iD))} differ · <strong>{n(r, iP).toFixed(2)}%</strong></span></span>
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

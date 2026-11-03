@@ -1,4 +1,4 @@
-// The redesign's shared pieces (design/COMPONENTS.md), on the classes in styles.css. Each is a thin
+// The shared UI pieces, on the classes in styles.css. Each is a thin
 // wrapper over a real control: buttons are <button>, toggles say aria-pressed, groups say role="group".
 import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { copyText } from "./copy";

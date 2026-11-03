@@ -311,9 +311,10 @@ def whole_expr(side: Side) -> str:
 def column_values(side: Side, column: str, search: str = "", limit: int = 200) -> dict:
     """A column's distinct values (as text, null kept) over the whole side, the most frequent
     first, then by value. `search` keeps those containing it, any case, taken literally.
-    KeyError for a column the file does not have (a shown name is mapped to the file's)."""
+    KeyError for a column the file does not have, an added column included (a shown name is
+    mapped to the file's)."""
     src = column if column in side.source_columns else side.source_of.get(column)
-    if src is None or src not in (side.source_columns or side.columns):
+    if src is None or src in side.derived or src not in (side.source_columns or side.columns):
         raise KeyError(column)
     frm = whole_expr(side)
     con = scratch()

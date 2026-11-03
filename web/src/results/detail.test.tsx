@@ -1,5 +1,5 @@
 // web/src/results/detail.test.tsx - the Differing rows tab (SPEC §09): one row per key, filters,
-// search, the Show menu, paging and the near-match analysis.
+// search, the Columns menu, paging and the near-match analysis.
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
@@ -60,31 +60,24 @@ test("pivot turns the A/B pairs into one row per key", () => {
   expect(rows[0].b.CostCenter).toBe("CC-110");
 });
 
-test("one row per key: differing cells read A → B, matching cells stay plain, one-sided columns one tick away", async () => {
+test("one row per key: only the key and the columns that differ, a differing cell read A → B", async () => {
   vi.stubGlobal("fetch", serve([]));
   mount(<DiffRowsTab run={RUN} />);
   const table = await screen.findByRole("table", { name: "Rows that differ" });
   const rows = () => within(table).getAllByRole("row");
   const head = () => within(rows()[0]).getAllByRole("columnheader").map((h) => h.textContent);
   expect(rows()).toHaveLength(3);                                        // head + one per key
-  // the columns only one side has can never differ, so they start hidden
-  expect(head()).toEqual([" emp_id", "last_name", "department", "salary", "hire_date", "Cells"]);
-  let moreau = within(rows()[1]).getAllByRole("cell");
+  // last_name and hire_date never differ, the one-sided columns never can: none of them shows
+  expect(head()).toEqual([" emp_id", "department", "salary", "Cells"]);
+  const moreau = within(rows()[1]).getAllByRole("cell");
   expect(moreau[0]).toHaveTextContent("E10402");
-  expect(moreau[1]).toHaveTextContent("Moreau");
-  expect(moreau[1].querySelector(".diff")).toBeNull();
-  expect(moreau[2].querySelector(".diff")).toHaveTextContent("SalesSales EMEA");
-  expect(moreau[3].querySelector(".diff")).toHaveTextContent("14,879.714,836.87");   // separators, decimals as given
-  expect(moreau[5]).toHaveTextContent("2");
-  expect(moreau[5]).toHaveClass("neg-n");
-  await userEvent.click(screen.getByRole("button", { name: /Show: all compared columns/ }));
-  const one = screen.getByRole("group", { name: "On one side only" });
-  await userEvent.click(within(one).getByRole("checkbox", { name: /first_name/ }));
-  await userEvent.click(within(one).getByRole("checkbox", { name: /CostCenter/ }));
-  expect(head()).toEqual([" emp_id", "last_name", "department", "salary", "hire_date", "first_name only in HR", "CostCenter only in Payroll", "Cells"]);
-  moreau = within(rows()[1]).getAllByRole("cell");
-  expect(moreau[5]).toHaveTextContent("Anna");
-  expect(moreau[6]).toHaveTextContent("CC-110");
+  expect(moreau[1].querySelector(".diff")).toHaveTextContent("SalesSales EMEA");
+  expect(moreau[2].querySelector(".diff")).toHaveTextContent("14,879.714,836.87");   // separators, decimals as given
+  expect(moreau[3]).toHaveTextContent("2");
+  expect(moreau[3]).toHaveClass("neg-n");
+  const ibrahim = within(rows()[2]).getAllByRole("cell");
+  expect(ibrahim[1].querySelector(".diff")).toBeNull();                 // department matches on this row: plain
+  expect(ibrahim[1]).toHaveTextContent("Legal");
   expect(screen.getByText(/Showing/).closest("span")).toHaveTextContent("Showing 2 of 3 rows");
   expect(screen.getByRole("link", { name: "cell_diffs.csv" })).toHaveAttribute("href", "/api/results/r1/file/X__cell_diffs.csv");
 });
@@ -100,19 +93,24 @@ test("Load more fetches the next page and adds its rows", async () => {
   expect(screen.getByText(/Showing/).closest("span")).toHaveTextContent("Showing 3 of 3 rows");
 });
 
-test("a column chip keeps the rows where that column differs", async () => {
+test("a column chip keeps the rows where that column differs, and shows the key and that column alone", async () => {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", serve(calls));
   mount(<DiffRowsTab run={RUN} />);
-  const chips = within(await screen.findByRole("group", { name: "Filter by column" }));
+  const table = await screen.findByRole("table", { name: "Rows that differ" });
+  const head = () => within(table).getAllByRole("columnheader").map((h) => h.textContent);
+  const chips = within(screen.getByRole("group", { name: "Filter by column" }));
   expect(chips.getByRole("button", { name: "All differing 3" })).toHaveAttribute("aria-pressed", "true");
   await userEvent.click(chips.getByRole("button", { name: "department 2" }));
   expect(chips.getByRole("button", { name: "department 2" })).toHaveAttribute("aria-pressed", "true");
   expect(calls.map(([u]) => u)).toContain("/api/results/r1/diff-rows?offset=0&limit=50&column=department");
   expect(await screen.findByText(/that differ on/)).toBeInTheDocument();
   expect(screen.queryByText("E10466")).toBeNull();
+  expect(head()).toEqual([" emp_id", "department", "Cells"]);
+  expect(screen.queryByRole("button", { name: /^Columns:/ })).toBeNull();     // one column: nothing to pick
   await userEvent.click(chips.getByRole("button", { name: "All differing 3" }));
   expect(await screen.findByText("E10466")).toBeInTheDocument();
+  expect(head()).toEqual([" emp_id", "department", "salary", "Cells"]);
 });
 
 test("search narrows the loaded rows by key or value", async () => {
@@ -143,20 +141,37 @@ test("search finds a number as it is shown, with its thousands separator, and as
   expect(screen.getByRole("status")).toHaveTextContent("1 of the 2 loaded rows match");
 });
 
-test("the Show menu hides matching columns, or any column", async () => {
+test("search looks only at the key and the columns on screen", async () => {
+  vi.stubGlobal("fetch", serve([]));
+  mount(<DiffRowsTab run={RUN} />);
+  const box = await screen.findByRole("searchbox", { name: "Find a key or value" });
+  await screen.findByText("E10402");
+  for (const hidden of ["Moreau", "2023-10-02", "Anna", "CC-110"]) {      // last_name, hire_date, one-sided A and B
+    await userEvent.clear(box);
+    await userEvent.type(box, hidden);
+    expect(screen.getByText(/Nothing in the 2 loaded rows matches/)).toBeInTheDocument();
+  }
+  await userEvent.clear(box);
+  await userEvent.type(box, "8,453");
+  expect(screen.getByRole("status")).toHaveTextContent("1 of the 2 loaded rows match");
+  await userEvent.click(screen.getByRole("button", { name: /Columns: 2 of 2/ }));
+  await userEvent.click(within(screen.getByRole("group", { name: "Columns to show" })).getByRole("checkbox", { name: "salary" }));
+  expect(screen.getByText(/Nothing in the 2 loaded rows matches/)).toBeInTheDocument();
+});
+
+test("the Columns menu lists only the columns that differ and hides any of them", async () => {
   vi.stubGlobal("fetch", serve([]));
   mount(<DiffRowsTab run={RUN} />);
   const table = await screen.findByRole("table", { name: "Rows that differ" });
-  const menu = screen.getByRole("button", { name: /Show: all compared columns/ });
+  const menu = screen.getByRole("button", { name: /Columns: 2 of 2/ });
   await userEvent.click(menu);
   expect(menu).toHaveAttribute("aria-expanded", "true");
-  await userEvent.click(screen.getByRole("button", { name: /Only columns that differ/ }));
+  const pick = screen.getByRole("group", { name: "Columns to show" });
+  expect(within(pick).getAllByRole("checkbox").map((c) => c.closest("label")!.textContent)).toEqual(["department", "salary"]);
+  await userEvent.click(within(pick).getByRole("checkbox", { name: "salary" }));
   const head = () => within(table).getAllByRole("columnheader").map((h) => h.textContent);
-  expect(head()).toEqual([" emp_id", "department", "salary", "Cells"]);
-  expect(screen.getByRole("button", { name: /Show: columns that differ/ })).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("checkbox", { name: /last_name/ }));
-  expect(head()).toContain("last_name");
-  expect(screen.getByRole("button", { name: /Show: 3 of 6 columns/ })).toBeInTheDocument();
+  expect(head()).toEqual([" emp_id", "department", "Cells"]);
+  expect(screen.getByRole("button", { name: /Columns: 1 of 2/ })).toBeInTheDocument();
   await userEvent.keyboard("{Escape}");
   expect(screen.queryByRole("group", { name: "Columns to show" })).toBeNull();
 });

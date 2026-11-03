@@ -7,7 +7,8 @@ import type { CompareState, RunView } from "../compare/types";
 import { getView, setView } from "../shell/view";
 import { compareState } from "../setup/testkit";
 import { body, json, mount, type Call } from "../sources/testkit";
-import { serveValues } from "./testkit";
+import { serveValues, valuesBody } from "./testkit";
+import { RankKey, StackStrip } from "./TopValues";
 import { marks } from "../ui/marks";
 import { ResultsPage } from "./ResultsPage";
 import { ResultsView } from "./ResultsView";
@@ -52,7 +53,9 @@ const bucketBody = (bucket: string) => ({
   bucket,
   by_key: bucket === "differ" ? {
     title: "**By key value** - where the :red[649 differing rows] sit, per key column of **emp_id**",
-    tables: [{ title: "**emp_id** - top 1 values by rows that differ", table: frame(["emp_id", "Matched rows"], [["E1", 1]]) }],
+    tables: [{ title: "**emp_id** - top 2 values by rows that differ", table: frame(
+      ["emp_id", "Matched rows", "Rows that differ", "% of those rows", "Cells that differ", "Columns that differ"],
+      [["E1", 40, 12, 30, 15, "salary, department"], ["E2-a-very-long-key-value-that-must-not-break-the-row", 8, 8, 100, 8, "salary"]]) }],
     after: "**Every column across these rows** - top values, counted on each side",
   } : null,
   others: [{ name: "department", label: "department" }], others_title: "Other columns - 1 to add",
@@ -199,6 +202,16 @@ test("the Summary: tiles, the Columns panel with its one-sided foot, and Profile
   const bucket = await screen.findByRole("group", { name: "Bucket" });
   expect(within(bucket).getByRole("button", { name: "Matched but different (649)" })).toHaveAttribute("aria-pressed", "true");
   expect(await screen.findByText("Every column across these rows")).toBeInTheDocument();
+  // by key value: the table's values in its order, a bar each for matched and differing rows, the numbers beside them
+  const keyBars = screen.getByRole("list", { name: "emp_id - rows that differ by value" });
+  const items = within(keyBars).getAllByRole("listitem");
+  expect(items.map((li) => li.querySelector(".kb-val .m")!.textContent)).toEqual(["E1", "E2-a-very-long-key-value-that-must-not-break-the-row"]);
+  expect(items[0]).toHaveTextContent("40 matched12 differ · 30.00%");
+  expect(items[0]).toHaveTextContent("15 cells: salary, department");
+  expect(items[1].querySelector(".kb-val .m")).toHaveAttribute("title", "E2-a-very-long-key-value-that-must-not-break-the-row");
+  expect((items[0].querySelector(".kb-m") as HTMLElement).style.width).toBe("80%");     // 40 of an axis to 50
+  expect((items[0].querySelector(".kb-d") as HTMLElement).style.width).toBe("24%");
+  expect(screen.queryByRole("table", { name: /emp_id/ })).toBeNull();
   await userEvent.click(within(bucket).getByRole("button", { name: "Keys matched (2,960)" }));
   await waitFor(() => expect(calls.some(([u]) => u === "/api/results/r1/buckets/matched")).toBe(true));
   const pick = await screen.findByRole("group", { name: "Columns to count" });
@@ -366,21 +379,22 @@ test("Profile by bucket: Simple by default, Extended reads each column's facts a
 
 const asked = (calls: Call[], part: string) => calls.some(([u]) => u.startsWith("/api/results/r1/values?") && u.includes(part));
 
-test("the Summary's top values: a strip a side, a histogram for numbers, and a row opens every value", async () => {
+test("the Summary's top values: a strip of five a side, a histogram for numbers, and a row opens every value", async () => {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", serve(calls));
   mount(<ResultsView run={RUN} limit={1000} />);
   const table = await screen.findByRole("table", { name: "Columns" });
   expect(within(table).getByRole("columnheader", { name: "Top values · % of all rows" })).toBeInTheDocument();
-  expect(await within(table).findByRole("img", { name: "Top values of department on HR: Alpha 30.00%, Bravo 23.33%, Charlie 16.67%, 37 more 27.33%, null 2.67%" })).toBeInTheDocument();
+  expect(await within(table).findByRole("img", { name: "Top values of department on HR: Alpha 30.00%, Bravo 23.33%, Charlie 16.67%, Delta 10.00%, Echo 3.33%, 35 more 14.00%, null 2.67%" })).toBeInTheDocument();
   expect(await within(table).findByRole("img", { name: /^Top values of department on Right: Alpha 29\.94%/ })).toBeInTheDocument();
-  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=department&side=a&basis=nonnull&size=3&bins=12");
+  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=department&side=a&basis=nonnull&size=5&bins=12");
   const dept = within(table).getAllByRole("row")[2];
-  expect(within(dept).getByText("+37 more 27.33%")).toBeInTheDocument();
+  expect(within(dept).getByText("+35 more 14.00%")).toBeInTheDocument();
+  expect(within(dept).getAllByText(/^Echo/)).toHaveLength(2);
   expect(within(dept).getByText("null 2.67%")).toBeInTheDocument();
   expect(await within(table).findByRole("img", { name: "salary on HR: 2,152.33 to 14,979.57, median 8,672.87" })).toBeInTheDocument();
   expect(within(table).getAllByText("median 8,672.87")).toHaveLength(2);
-  // a row opens its values: bars for both sides, % of non-null, then as a table
+  // a row opens its values: the top ten as bars for both sides with every value in a paged table under them, % of non-null, then the table alone
   const open = within(dept).getByRole("button", { name: "Values of department" });
   expect(open).toHaveAttribute("aria-expanded", "false");
   await userEvent.click(open);
@@ -388,11 +402,24 @@ test("the Summary's top values: a strip a side, a histogram for numbers, and a r
   const list = await screen.findByRole("list", { name: "Top values of department" });
   expect(within(list).getAllByRole("listitem")).toHaveLength(10);
   expect(within(list).getAllByRole("listitem")[0]).toHaveTextContent("Alpha900 · 30.00%880 · 29.94%");
+  // the shades fade 1st to 5th, null is hatched, the rest take the other values' grey
+  const tones = within(list).getAllByRole("listitem").map((li) => li.querySelector(".vc-seg.a")!.classList[1]);
+  expect(tones).toEqual(["r1", "r2", "r3", "r4", "r5", "rnull", "ro", "ro", "ro", "ro"]);
   expect(screen.getByText(/^Top 10 of 41 values cover 87\.60% of HR rows and/)).toHaveTextContent("Axis scaled to 50%.");
   expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=department&side=both&basis=all&size=10");
+  const every = await screen.findByRole("table", { name: "Values of department" });
+  expect(asked(calls, "column=department&side=both&basis=all&page=1&size=25")).toBe(true);
+  expect(within(every).getAllByRole("row")).toHaveLength(26);
+  expect(screen.getByText(/^Values/, { selector: ".vc-all-foot span" })).toHaveTextContent("Values 1–25 of 41");
+  await userEvent.click(screen.getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(within(every).getAllByRole("row")).toHaveLength(17));
+  expect(asked(calls, "column=department&side=both&basis=all&page=2&size=25")).toBe(true);
+  expect(screen.getByRole("navigation", { name: "Pages of department" })).toHaveTextContent("Page 2 of 2");
   await userEvent.click(screen.getByRole("button", { name: "% of non-null" }));
   await waitFor(() => expect(asked(calls, "column=department&side=both&basis=nonnull&size=10")).toBe(true));
+  await waitFor(() => expect(asked(calls, "column=department&side=both&basis=nonnull&page=1&size=25")).toBe(true));   // back to page one
   await userEvent.click(within(screen.getByRole("group", { name: "Show values as" })).getByRole("button", { name: "Table" }));
+  expect(screen.queryByRole("list", { name: "Top values of department" })).toBeNull();
   const values = await screen.findByRole("table", { name: "Values of department" });
   expect(within(values).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Value", "HR rows", "HR %", "Right rows", "Right %"]);
   expect(within(values).getAllByRole("row")[1]).toHaveTextContent("Alpha90030.82%88030.61%");
@@ -422,4 +449,23 @@ test("One-sided rows: each panel groups its rows by a column", async () => {
   expect(asked(calls, "column=FullName&subset=only_b&side=b")).toBe(true);
   await userEvent.click(within(a).getByRole("button", { name: "Every row" }));
   expect(within(a).getByRole("table", { name: "Only in HR" })).toBeInTheDocument();
+});
+
+test("the key names the five shades, the other values and null", () => {
+  render(<RankKey />);
+  expect(within(screen.getByRole("list", { name: "Top values key" })).getAllByRole("listitem").map((li) => li.textContent))
+    .toEqual(["1st", "2nd", "3rd", "4th", "5th", "other values", "null"]);
+});
+
+test("a strip is drawn up to five values that never repeat, and six read as every value distinct", () => {
+  const strip = (n: number) => {
+    const rows = Array.from({ length: n }, (_, k) => ({ rank: k + 1, value: `v${k + 1}`, n: [1], cum: [k + 1] }));
+    const body = valuesBody({ sides: [{ side: "a", rows: n, nulls: 0, distinct: n, top: 1 }], values: n, rows: rows.slice(0, 5) });
+    return render(<StackStrip body={body} side="a" column="id" name="HR" />);
+  };
+  strip(5);
+  expect(screen.getByRole("img", { name: "Top values of id on HR: v1 20.00%, v2 20.00%, v3 20.00%, v4 20.00%, v5 20.00%" })).toBeInTheDocument();
+  cleanup();
+  strip(6);
+  expect(screen.getByRole("img", { name: "Top values of id on HR: every value distinct · 6 values" })).toBeInTheDocument();
 });

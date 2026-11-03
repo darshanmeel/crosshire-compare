@@ -1,4 +1,4 @@
-// The redesign's icon set (design/icons.tsx): inline stroke SVGs on currentColor. <Icon name="check" />
+// The app's icon set: inline stroke SVGs on currentColor. <Icon name="check" />
 // renders 14 px, size="sm" 12 px. Decorative by default; pass `label` when the icon is the only content of a control.
 import type { SVGProps } from "react";
 

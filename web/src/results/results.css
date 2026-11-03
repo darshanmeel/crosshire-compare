@@ -36,6 +36,17 @@
 .bucket-grids { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px; }
 .bucket-grids > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .bucket-grids .caption { margin: 0; }
+/* By key value: a bar each for the matched rows and the rows that differ, the numbers beside them */
+.bucket-keys { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(560px, 100%), 1fr)); gap: 14px; }
+.bucket-keys > div { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.bucket-keys .caption { margin: 0; }
+.kb-val { display: flex; flex-direction: column; min-width: 0; }
+.kb-val > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-val .m { font-family: var(--font-mono); }
+.kb-cols { font-size: 11.5px; color: var(--fs-text3); }
+.vc-seg.kb-m, .sw.kb-m { background: var(--fs-rank-other); }
+.vc-seg.kb-d, .sw.kb-d { background: var(--fs-neg); }
+@media (min-width: 601px) { .kb .vc-row { grid-template-columns: minmax(120px, 1fr) minmax(160px, 2fr) 190px; } }
 /* the top-10 tables are read, not clicked - rows sit tight so ten fit at a glance */
 .bucket-grids .tbl th { height: 28px; padding: 0 10px; }
 .bucket-grids .tbl td { height: 26px; padding: 2px 10px; font-size: 12.5px; }
