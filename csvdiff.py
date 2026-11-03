@@ -687,7 +687,7 @@ class CsvDiff:
             # unnest and the HTML report cheap even on very wide tables
             any_diff = "\n               OR ".join(neq[c] for c in compare_cols)
             diff_cols = ", ".join(f"CASE WHEN {neq[c]} THEN {lit(c)} END" for c in compare_cols)
-            diff_expr = f"list_filter([{diff_cols}], x -> x IS NOT NULL)"
+            diff_expr = f"list_filter([{diff_cols}], lambda x: x IS NOT NULL)"
             self._sql(
                 f"CREATE OR REPLACE TEMP TABLE __diff_rows AS\n"
                 f"SELECT *, {diff_expr} AS __diff_cols__\n"

@@ -105,7 +105,7 @@ python compare_app.py             # the page at http://127.0.0.1:8501</code></pr
     <ul class="pts">
       <li><b>Port</b> - <code>--port 8600</code> or <code>COMPARE_WEB_PORT</code>; <code>--no-browser</code> opens no tab; Ctrl+C stops it.</li>
       <li><b>This machine only</b> - it answers on <code>127.0.0.1</code> unless <code>--host</code> says otherwise; a port in use is said in one sentence.</li>
-      <li><b>Python</b> - 3.12 to 3.14, DuckDB 1.2 or newer. No Node needed: the built page is in <code>tablecmp/web_dist/</code>.</li>
+      <li><b>Python</b> - 3.12 to 3.14, DuckDB 1.3 or newer. No Node needed: the built page is in <code>tablecmp/web_dist/</code>.</li>
       <li><b>Drivers</b> - all plain wheels, nothing outside pip; a missing one stops only its own connection kind.</li>
       <li><b>Pinned set</b> - <code>pip install -r requirements.lock</code> reproduces the Docker image exactly.</li>
       <li><b>Name and look</b> - <code>COMPARE_APP_NAME</code> renames the app; <code>COMPARE_THEME=aurora</code> or <code>violet</code> swaps the default <b>paper</b> look.</li>
@@ -825,7 +825,7 @@ def test_the_sample_pair(monkeypatch, tmp_path):
       <tr><td>A cap without an ORDER BY can give the two sides different rows</td><td>A warning: add an ORDER BY or fetch everything.</td></tr>
       <tr><td>Stopped: under 1 GB free in the work folder</td><td>Point <code>COMPARE_WORK_DIR</code> at a bigger disk, or lower the cap.</td></tr>
       <tr><td>A change to a file in tablecmp/ does nothing</td><td>Restart the app.</td></tr>
-      <tr><td>duckdb too old</td><td><code>pip install -U duckdb</code> (1.2+ needed).</td></tr>
+      <tr><td>duckdb too old</td><td><code>pip install -U duckdb</code> (1.3+ needed).</td></tr>
       <tr><td>Port 8501 is in use</td><td>Stop the other app, or <code>python compare_app.py --port 8600</code>.</td></tr>
     </table>
   </div>

@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-DUCKDB_FLOOR = "1.2"
+DUCKDB_FLOOR = "1.3"
 
 
 def layout_problem() -> str:

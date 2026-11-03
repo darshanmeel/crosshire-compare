@@ -7,7 +7,7 @@ Two tables, every difference, in one page.
 A page in the browser, served by FastAPI over DuckDB, that compares two tables row by row. Load a CSV, a JSON file, a Parquet file, an Excel sheet or a database table on either side, pair their columns in one table, set the type once, add transform steps where a side needs them, tick the key and press **Compare** - or press **Auto** and let it work the whole thing out, narrating each step. It is built for reconciling two exports of the same data: two systems, two dates, two vendors. Every run leaves one folder with a fixed set of files - a self-contained HTML report you can hand to someone who never opened the app, the differences as CSV or Parquet, and a JSON with every setting the run used. A second page, **Profiling**, takes one table on its own and says what a reader wants to know first: which column identifies a row, what stands out, the statistics of every column, its outliers, shapes and dependencies.
 
 ![FastAPI + React](https://img.shields.io/badge/FastAPI%20%2B%20React-page-f4b87c?style=flat-square&labelColor=0e0d0b)
-![DuckDB 1.2+](https://img.shields.io/badge/DuckDB-1.2%2B-f4b87c?style=flat-square&labelColor=0e0d0b)
+![DuckDB 1.3+](https://img.shields.io/badge/DuckDB-1.3%2B-f4b87c?style=flat-square&labelColor=0e0d0b)
 ![Python 3.12-3.14](https://img.shields.io/badge/Python-3.12--3.14-f4b87c?style=flat-square&labelColor=0e0d0b)
 ![MIT](https://img.shields.io/badge/License-MIT-f4b87c?style=flat-square&labelColor=0e0d0b)
 
@@ -67,7 +67,7 @@ python compare_app.py             # the page at http://127.0.0.1:8501
 
 `--port 8600` (or `COMPARE_WEB_PORT`) for another port, `--no-browser` to not open a tab. Stop it with Ctrl+C. It answers on this machine only (`127.0.0.1`). A port already in use is said in one sentence. To compare without the page at all, see [Run it again from a config](README.html#rerun).
 
-Python 3.12 to 3.14; DuckDB 1.2 is the floor the app checks at start. Node is not needed to run it: the page is built into `tablecmp/web_dist/`, which is in the repo. Restart the app after updating files in `tablecmp/`. One `pip install` is the whole install: every database driver is a plain wheel - `snowflake-connector-python`, `databricks-sql-connector`, `pymssql` (FreeTDS is inside the wheel, no ODBC driver), `oracledb` (thin mode, no Oracle client), `psycopg[binary]` - so there is no system package and nothing to install outside pip. `requirements.lock` is the pinned set the Docker image installs; `pip install -r requirements.lock` reproduces it exactly. A driver is only imported when a connection of its kind is used, so a missing one stops that kind alone, with a message naming the package.
+Python 3.12 to 3.14; DuckDB 1.3 is the floor the app checks at start. Node is not needed to run it: the page is built into `tablecmp/web_dist/`, which is in the repo. Restart the app after updating files in `tablecmp/`. One `pip install` is the whole install: every database driver is a plain wheel - `snowflake-connector-python`, `databricks-sql-connector`, `pymssql` (FreeTDS is inside the wheel, no ODBC driver), `oracledb` (thin mode, no Oracle client), `psycopg[binary]` - so there is no system package and nothing to install outside pip. `requirements.lock` is the pinned set the Docker image installs; `pip install -r requirements.lock` reproduces it exactly. A driver is only imported when a connection of its kind is used, so a missing one stops that kind alone, with a message naming the package.
 
 Keep `compare_app.py`, `csvdiff.py` (the comparison engine) and the `tablecmp/` folder together - the app stops with a clear message if any of them is missing. There is no config file: the app applies its theme itself when it starts.
 
@@ -365,7 +365,7 @@ Node 24 is needed only to change the screens; running the app needs Python alone
 | *A cap without an ORDER BY can give the two sides different rows* | A warning, not a stop: add an ORDER BY to the query, or fetch everything. |
 | *Stopped: under 1 GB free in the work folder* | The fetch or the run needs room: point `COMPARE_WORK_DIR` at a bigger disk, or lower the cap. |
 | A change to a file in `tablecmp/` does nothing | Restart the app. |
-| duckdb too old | `pip install -U duckdb`. DuckDB 1.2+ is needed. |
+| duckdb too old | `pip install -U duckdb`. DuckDB 1.3+ is needed. |
 | Port 8501 is in use | Another app holds it (an older copy of this app, say): stop it, or `python compare_app.py --port 8600`. |
 
 ## Related
