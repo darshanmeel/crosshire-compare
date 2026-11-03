@@ -224,7 +224,7 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <li><b>Skip lines at top</b> - for CSV: lines above the header, such as a title or an export note</li>
       <li><b>Sheet · Table starts at · Stop at the first empty row</b> - for Excel: the sheet (the first visible one unless picked), the table's top-left cell (<code>B4</code>) or a whole range (<code>B4:H500</code>), and whether notes or totals under a blank row are left out. Cells read as the workbook shows them: dates as <code>2026-07-20</code>, whole numbers without <code>.0</code>. A formula with no saved value reads as empty, and the card says so - open the file in Excel, save it, load again</li>
       <li><b>The foot</b> - the file, rows × columns and <em>Parquet snapshot</em>, the column names, and <b>Preview 10 rows</b> at their end</li>
-      <li><b>Rows to read</b> - a WHERE filter, an order and a top N, applied by DuckDB as the file is read</li>
+      <li><b>Rows to read</b> - a WHERE filter, an order and a top N, applied by DuckDB as the file is read; <b>Pick</b> beside the filter's Value box offers the column's own values (see section 07)</li>
       <li><b>Snapshot the rows read to Parquet</b> - on by default; the rows are read once, then everything reads the snapshot</li>
       <li><b>COMPARE_DATA_DIR</b> - when set, a path on disk must sit under one of its folders</li>
     </ul>
@@ -388,7 +388,8 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
   <div class="body">
     <p>Under the key, the Rows page narrows what is compared. All of it is optional.</p>
     <ul class="pts">
-      <li><b>Rows to read</b> - per side, a DuckDB <code>WHERE</code>, <b>Order by</b> (with a <em>Descending</em> toggle) and <b>Top N</b>, applied at load. <b>Build a condition</b>, a link on the WHERE row, writes one for you - for <code>=</code>, <code>!=</code> and <code>in</code> <b>Pick from values</b> lists the column's values with their row counts, searchable, ticked one by one for <code>in</code>, or type the value; <b>Apply to HR</b> and <b>Copy to Payroll</b> under it.</li>
+      <li><b>Rows to read</b> - per side, a DuckDB <code>WHERE</code>, <b>Order by</b> (with a <em>Descending</em> toggle) and <b>Top N</b>, applied at load. <b>Build a condition</b>, a link on the WHERE row, writes one for you; <b>Apply to HR</b> and <b>Copy to Payroll</b> under it.</li>
+      <li><b>Pick from values</b> - beside the condition's Value box, once the side is loaded: the column's values with their row counts, searched as you type. For <code>=</code> and <code>!=</code> one value fills the box (null becomes <code>is null</code> / <code>is not null</code>); for <code>in</code> tick any number - each shows as a chip and <b>Add to filter</b> takes them all.</li>
       <li><b>Filters at compare</b> - one line, <em>No filter - every paired row takes part</em>, until <b>Add a filter</b>; then on the common names, for both sides or one: <code>=</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>in</code> <code>between</code> <code>like</code> <code>is null</code>…</li>
       <li><b>Filter values</b> - matched exactly, read as the column's type; a bad date or number is refused in a sentence.</li>
       <li><b>Profile by bucket</b> - count a column in every bucket; the Summary then shows which rows match worst.</li>
@@ -411,8 +412,9 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <li><b>Headline</b> - rows matched on the key, columns compared, rows and cells that differ, one-sided rows</li>
       <li><b>Row outcome</b> - one bar: fully matched 2,311 · differ 649 · only in HR 40 · only in Payroll 25</li>
       <li><b>Verdict</b> - <em>Identical</em>, <em>Small differences</em> (under 5% of matched rows differ, one-sided rows no more than matched), <em>Differences</em> or <em>Error</em></li>
-      <li><b>Summary tab</b> - count tiles with one caption under them (the key and what the match figures are measured on), then <em>Columns</em> across the page, every column with one match bar whose red end is its mismatches and its top values per side (a row opens to every side's top values as bars or a table), and under it <em>Why they differ</em>, the value pairs behind each count, the one-sided pattern and <b>See the 649 rows</b></li>
+      <li><b>Summary tab</b> - count tiles with one caption under them (the key and what the match figures are measured on), then <em>Columns</em> across the page, every column with one match bar whose red end is its mismatches and a strip per side of its top five values, the rest and null (a row opens to the top ten as bars, then every value as a table - rows and % per side, 25 a page; <em>Table</em> shows the table alone; <em>% of all rows</em> or <em>% of non-null</em>), and under it <em>Why they differ</em>, the value pairs behind each count, the one-sided pattern and <b>See the 649 rows</b></li>
       <li><b>Below</b> - <em>Profile by bucket</em> and <em>Columns &amp; values</em> (value pairs per column and the near-match analysis), two closed folds that stay as you left them</li>
+      <li><b>Profile by bucket</b> - <em>By key value</em> draws a bar pair per key value on one count axis: the matched rows and the rows that differ, with <em>N matched</em> and <em>N differ · P%</em> beside them and the cells and columns that differ under the value; then the top values of each column for the bucket</li>
       <li><b>Percentages</b> - two decimals, never rounded to 100% or 0% while one row disagrees</li>
       <li><b>Stale result</b> - <em>Re-run on every change</em> is off by default; a changed setting marks the result stale</li>
     </ul>
@@ -421,9 +423,10 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <figure class="shot"><img src="docs/app-onesided.png" alt="One-sided rows tab: the pattern note, then Only in HR and Only in Payroll side by side, each with a Columns (7 of 7) menu and its CSV" loading="lazy"><figcaption>One-sided rows - only in HR and only in Payroll, side by side</figcaption></figure>
     </div>
     <ul class="pts">
-      <li><b>Differing rows</b> - one row per key; chips filter by column (department 337, salary 319, active 31). The table scrolls in its panel with the header and the key column frozen. <em>Distinct values · count(*)</em> groups the rows by a column instead - a count per value, HR → Payroll pairs - with search and paging</li>
-      <li><b>Show</b> - <em>all compared columns</em> at first; the one-sided columns are one tick away under <em>On one side only</em></li>
-      <li><b>Search</b> - <em>Find a key or value</em> narrows the table, numbers as shown or as written; the CSV button downloads every differing cell</li>
+      <li><b>Differing rows</b> - one row per key; chips filter by column (department 337, salary 319, active 31). <em>Every row</em> shows the key and the columns that differ: with <em>All differing</em> every compared column that differs on at least one row (<code>hire_date</code>, with none, is left out), with a chip the key and that column. Columns on one side only are not shown. The table scrolls in its panel with the header and the key column frozen</li>
+      <li><b>Distinct values · count(*)</b> - groups the differing rows by any column instead - a count per value, read on HR, on Payroll or as HR → Payroll pairs - with search and paging</li>
+      <li><b>Columns: n of m</b> - a menu of the columns that differ, one tick each; hidden when a chip leaves one column</li>
+      <li><b>Search</b> - <em>Find a key or value</em> narrows the table on the key and the columns on screen, numbers as shown or as written; the CSV button downloads every differing cell</li>
       <li><b>One-sided rows</b> - a pattern note when the rows share values, then each side with every column, the key fixed on the left, Payroll under its own column names; <em>Distinct values · count(*)</em> counts a side's rows per value of a column, with search and paging</li>
       <li><b>Columns (n of m)</b> - a menu in each panel's head picks the columns shown; <b>left_only.csv</b> and <b>right_only.csv</b> beside it download every row</li>
       <li><b>Report</b> and <b>Downloads</b> - sections 09 and 10</li>
@@ -606,6 +609,8 @@ python -m tablecmp.run config.json --pairs pairs.csv --out results           # l
       <li><b>The note</b> - its first sentence, <b>how it was found</b> for the rest; <b>Profile again</b> sits beside it when the settings changed</li>
       <li><b>Sample</b> - <code>emp_id</code> unique by itself; <code>first_name + last_name + hire_date</code> unique together; the next three repeat on 3, 4 and 8 rows</li>
       <li><b>Never a key</b> - a combination with a null, or a checksum column such as <code>row_hash</code></li>
+      <li><b>Check a key</b> - a panel under Key candidates: add any columns, pick <em>Null: each its own key</em> or <em>Null = null</em>, press <strong>Check</strong>; each candidate's <b>check</b> link loads its columns there</li>
+      <li><b>Its answer</b> - <em>Unique</em> or <em>Not unique</em>, rows · distinct · duplicate rows · rows with a null, <em>Has nulls in</em> each key column with its count, and the most repeated values</li>
     </ul>
 
     <figure class="shot"><img src="docs/app-profile-deps.png" alt="Dependencies panel of hr_employees.csv: every cell is 0, said in one line, then No column determines another and No correlated number columns" loading="lazy"><figcaption>Dependencies, opened from its chip - every cell 0 on HR, so the matrix is one line</figcaption></figure>
@@ -783,7 +788,7 @@ docker run --rm -p 8501:8501 -v ./data:/data:ro -v ./out:/out --env-file .env cr
     <div class="run">
       <div class="row"><div class="k">01</div><div><div class="t">python -m pip install -r requirements-dev.txt</div><div class="d">Once - pytest and pytest-playwright.</div></div></div>
       <div class="row"><div class="k">02</div><div><div class="t">python -m playwright install chromium</div><div class="d">Once, for the browser runs; without it they skip.</div></div></div>
-      <div class="row"><div class="k">03</div><div><div class="t">python -m pytest tests -q</div><div class="d">560 tests; sample counts in <code>tests/COUNTS.md</code>.</div></div></div>
+      <div class="row"><div class="k">03</div><div><div class="t">python -m pytest tests -q</div><div class="d">719 tests; sample counts in <code>tests/COUNTS.md</code>.</div></div></div>
       <div class="row"><div class="k">04</div><div><div class="t">cd web &amp;&amp; npm install &amp;&amp; npm run dev</div><div class="d">Hot reload at <code>http://localhost:5173</code>, with <code>python compare_app.py --no-browser</code> beside it.</div></div></div>
       <div class="row"><div class="k">05</div><div><div class="t">cd web &amp;&amp; npm test &amp;&amp; npm run build</div><div class="d">Before committing - <code>tests/test_web_build.py</code> fails on a stale build.</div></div></div>
     </div>
