@@ -9,7 +9,7 @@ A page in the browser, served by FastAPI over DuckDB, that compares two tables r
 ![FastAPI + React](https://img.shields.io/badge/FastAPI%20%2B%20React-page-f4b87c?style=flat-square&labelColor=0e0d0b)
 ![DuckDB 1.3+](https://img.shields.io/badge/DuckDB-1.3%2B-f4b87c?style=flat-square&labelColor=0e0d0b)
 ![Python 3.12-3.14](https://img.shields.io/badge/Python-3.12--3.14-f4b87c?style=flat-square&labelColor=0e0d0b)
-![MIT](https://img.shields.io/badge/License-MIT-f4b87c?style=flat-square&labelColor=0e0d0b)
+![MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-f4b87c?style=flat-square&labelColor=0e0d0b)
 
 ## Contents
 
@@ -387,4 +387,6 @@ Node 24 is needed only to change the screens; running the app needs Python alone
 
 ## License
 
-MIT - see [LICENSE](LICENSE). Copyright (c) 2026 Darshan Singh / Crosshire.
+Dual-licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
+Unless you say otherwise, any contribution you submit is licensed the same way, with no extra terms.
+Copyright (c) 2026 Darshan Singh / Crosshire.
