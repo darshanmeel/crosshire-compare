@@ -177,6 +177,10 @@ button.chip { cursor: pointer; } button.chip:hover { color: var(--fs-accent); }
 .chip.a { background: var(--fs-side-a-bg); color: var(--fs-side-a); } .chip.b { background: var(--fs-side-b-bg); color: var(--fs-side-b); }
 .chip.neg { background: var(--fs-neg-bg); color: var(--fs-neg); } .chip.pos { background: var(--fs-pos-bg); color: var(--fs-pos); }
 .chip.warn { background: var(--fs-warn-bg); color: var(--fs-warn); }
+/* a chip's remove button: looks 22 px, hit area 36 px */
+.chip-x { position: relative; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; opacity: .75; }
+.chip-x::before { content: ""; position: absolute; inset: -7px; }
+.chip-x:hover { opacity: 1; background: var(--fs-surface2); color: var(--fs-text); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .sel { width: 100%; max-width: 190px; height: 32px; padding: 0 26px 0 10px; border: 1px solid var(--fs-border2); border-radius: var(--r-sm); background-color: var(--fs-panel); color: var(--fs-text); font-family: var(--font-mono); font-size: 12.5px; }
 .sel.a { border-color: var(--fs-side-a-edge); background-color: var(--fs-side-a-bg); color: var(--fs-side-a); }

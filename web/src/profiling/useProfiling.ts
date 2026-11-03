@@ -1,7 +1,7 @@
 // web/src/profiling/useProfiling.ts
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { CastsBody, FreqBody, HistBody, PartsBody, SpellingBody, ProfilingView, SaveDefaults } from "./types";
+import type { CastsBody, FreqBody, HistBody, KeyComboBody, PartsBody, SpellingBody, ProfilingView, SaveDefaults } from "./types";
 
 /** The held profile as the page draws it - it does not depend on the Name. */
 export function useProfiling(enabled: boolean) {
@@ -42,4 +42,10 @@ export function useParts(column: string, made: string, n: number, as = "") {
 export function useSpelling(column: string, made: string, on: boolean) {
   return useQuery({ queryKey: ["profiling-spelling", made, column], enabled: on, staleTime: Infinity,
                     queryFn: () => api.get<SpellingBody>(`/api/profiling/spelling?column=${encodeURIComponent(column)}`) });
+}
+
+/** Columns checked as a key on every row - asked when Check is pressed. */
+export function useKeyCombo(columns: string[], made: string) {
+  return useQuery({ queryKey: ["profiling-keycombo", made, ...columns], enabled: columns.length > 0, staleTime: Infinity,
+                    queryFn: () => api.get<KeyComboBody>(`/api/profiling/keycombo?${columns.map((c) => `columns=${encodeURIComponent(c)}`).join("&")}`) });
 }

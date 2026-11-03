@@ -22,6 +22,17 @@ export function fmt(v: unknown, numeric = true): string {
 
 export const pct = (v: unknown) => `${Number(v ?? 0).toFixed(2)}%`;
 
+/** A "Key columns" label ("a + b") split back into the profile's columns, so a name that itself holds
+ *  " + " stays whole; a plain split when the names do not fit. */
+export function splitKey(label: string, cols: string[]): string[] {
+  const go = (s: string): string[] | null => {
+    if (cols.includes(s)) return [s];
+    for (const c of cols) if (s.startsWith(`${c} + `)) { const rest = go(s.slice(c.length + 3)); if (rest) return [c, ...rest]; }
+    return null;
+  };
+  return go(label) ?? label.split(" + ");
+}
+
 /** The key's columns when the profile found one unique on every row, else []. */
 export function keyColumns(p: Profile): string[] {
   if (p.keys.tone !== "success") return [];

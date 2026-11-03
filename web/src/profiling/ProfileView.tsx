@@ -13,9 +13,10 @@ import { castsOf, castType } from "./casts";
 import { ColumnsTable, openColumn } from "./ColumnsTable";
 import { DepGraph } from "./DepGraph";
 import { DepMatrix, SHOWN as STRONG } from "./DepMatrix";
-import { keyColumns, madeAt, rowsOf } from "./frame";
+import { keyColumns, madeAt, rowsOf, splitKey } from "./frame";
 import { FrameTable } from "./FrameTable";
 import { FreqSection } from "./FreqSection";
+import { KeyCombo, useKeyComboPicks } from "./KeyCombo";
 import { KeySearch } from "./KeySearch";
 import { useKeySearch, useRunProfile } from "./actions";
 import { Findings } from "./column/Findings";
@@ -97,13 +98,14 @@ function KeyFigs({ r }: { r: Record<string, unknown> }) {
 
 /** One key candidate: its columns, whether they are unique and its counts on one line. The winner
  *  says its reasons in its box; the others keep their figures and reasons a "why" click away. */
-function KeyRow({ r, win }: { r: Record<string, unknown>; win: boolean }) {
+function KeyRow({ r, win, names }: { r: Record<string, unknown>; win: boolean; names: string[] }) {
   const [open, setOpen] = useState(false);
   const unique = r.Unique === "yes";
   const why = reasons(String(r.Why ?? ""));
   const d = Number(r.Distinct ?? 0), dup = Number(r["Duplicate rows"] ?? 0), nk = Number(r["Null keys"] ?? 0);
   const all = d + dup + nk;
   const cols = String(r["Key columns"]);
+  const { load } = useKeyComboPicks();
   return (
     <li className={win ? "win" : undefined}>
       <span className="head">
@@ -112,6 +114,7 @@ function KeyRow({ r, win }: { r: Record<string, unknown>; win: boolean }) {
         <span className="key-sum">· {num(d)} distinct of {num(all)} · {nk ? `${num(nk)} null keys` : "no nulls"}</span>
         {!win && <LinkButton className={open ? "why-btn open" : "why-btn"} iconAfter="chevron" aria-expanded={open}
                              aria-label={`why - ${cols}`} onClick={() => setOpen(!open)}>why</LinkButton>}
+        <LinkButton className="check-btn" aria-label={`Check ${cols}`} onClick={() => load(splitKey(cols, names))}>check</LinkButton>
       </span>
       {win && <span className="why-line">· {[`${num(dup)} duplicate rows`, ...why].map((w, k) => <span key={k}>{k > 0 && " · "}{marks(w)}</span>)}</span>}
       {!win && open && <div className="why-body">
@@ -127,6 +130,7 @@ function KeyRow({ r, win }: { r: Record<string, unknown>; win: boolean }) {
  *  again beside the note when the settings changed. */
 function KeyCandidates({ p, name }: { p: Profile; name: string }) {
   const rows = rowsOf(p.keys.table);
+  const names = rowsOf(p.stats).map((r) => String(r.Column));
   const [s] = useKeySearch();
   const { go, busy } = useRunProfile(name);
   const [more, setMore] = useState(false);
@@ -144,7 +148,7 @@ function KeyCandidates({ p, name }: { p: Profile; name: string }) {
       <div className="panel-body">
         {rows.length > 0 && (
           <ul className="prof-keys" aria-label="Key candidates">
-            {rows.map((r, i) => <KeyRow key={i} r={r} win={r.Unique === "yes" && i === 0} />)}
+            {rows.map((r, i) => <KeyRow key={i} r={r} win={r.Unique === "yes" && i === 0} names={names} />)}
           </ul>
         )}
         {p.keys.tone === "success"
@@ -288,6 +292,7 @@ export function ProfileView({ view, name }: { view: ProfilingView; name: string 
         </div>
         <div className="side">
           <KeyCandidates p={p} name={name} />
+          <KeyCombo p={p} made={view.made} />
           <Panel title="What stands out" sub="each finding once, with its columns">
             <div className="panel-body">
               {found.length

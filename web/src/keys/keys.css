@@ -14,8 +14,6 @@
 .pairup-line.warning b, .pairup-line.warning strong { color: var(--fs-warn); }
 .pairup .seg { max-width: 100%; flex-wrap: wrap; }
 .pairup .chip.key { height: 28px; padding: 0 4px 0 10px; }
-.chip-x { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; opacity: .75; }
-.chip-x:hover { opacity: 1; background: var(--fs-surface2); color: var(--fs-text); }
 .pairup-explain { font-size: 12.5px; }
 .pairup .callout .tips { margin: 6px 0 0; font-size: 12.5px; }
 .pairup-sugg, .pairup-formats { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--fs-border); }

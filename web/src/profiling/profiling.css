@@ -210,3 +210,13 @@ p.prof-keynote .link-btn { height: auto; min-height: 32px; padding: 0 4px; font-
 .key-differs { margin-top: 12px; gap: 8px 12px; }
 .dep-matrix-none { margin: 0 0 12px; }
 .panel-head .link-btn.open svg { transform: rotate(180deg); }
+
+/* check a key */
+.kcombo .panel-body > .row { gap: 8px; }
+.kcombo .chip { padding-right: 2px; }
+.kcombo select { height: 32px; max-width: 220px; }
+.kcombo-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: var(--fs-text2); font-variant-numeric: tabular-nums; }
+.kcombo-cap { margin: 0; }
+.kcombo .tblwrap { max-width: 100%; overflow-x: auto; }
+.prof-keys .check-btn { height: 32px; padding: 0 6px; margin-left: auto; font-size: 12.5px; }
+.prof-keys .why-btn + .check-btn { margin-left: 0; }

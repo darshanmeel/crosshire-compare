@@ -1,5 +1,5 @@
 // web/src/profiling/testkit.ts - what the profiling tests share (not a test file itself)
-import type { Frame, Profile, ProfilingView, SaveDefaults } from "./types";
+import type { Frame, KeyComboBody, Profile, ProfilingView, SaveDefaults } from "./types";
 
 export const T = (columns: string[], rows: unknown[][] = []): Frame => ({ columns, rows });
 
@@ -35,3 +35,11 @@ export const defaults = (over: Partial<SaveDefaults> = {}): SaveDefaults =>
 
 export const entry = (id: string, state: string, label: string, lines: string[] = []) =>
   ({ id, at: "10:00:00", kind: "Profile", label, state, seconds: null, lines, page: "Profiling" });
+
+/** GET /api/profiling/keycombo for the columns asked: emp_id unique, anything else repeating. */
+export function keyCombo(columns: string[]): KeyComboBody {
+  return columns.join() === "emp_id"
+    ? { columns, rows: 3000, distinct: 3000, duplicate_rows: 0, null_keys: 0, unique: true, top: [] }
+    : { columns, rows: 3000, distinct: 8, duplicate_rows: 2992, null_keys: 0, unique: false,
+        top: [{ values: columns.map((c) => `${c}-1`), n: 1355 }, { values: columns.map((c) => `${c}-2`), n: 412 }] };
+}
