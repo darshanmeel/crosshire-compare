@@ -1,0 +1,115 @@
+/* web/src/results/values.css - value counts in the results: the top values strips and the row
+   detail on the Summary, the distinct values tables on the Differing and One-sided rows tabs.
+   Colours only through the --fs-* tokens. */
+
+/* the shades: 1st to 3rd on each side's ramp, the rest one shade, other values grey, null hatched */
+.vc-seg { display: block; }
+.vc-seg.r1.a { background: var(--fs-rank-a1); } .vc-seg.r2.a, .vc-seg.rn.a { background: var(--fs-rank-a2); } .vc-seg.r3.a { background: var(--fs-rank-a3); }
+.vc-seg.r1.b { background: var(--fs-rank-b1); } .vc-seg.r2.b, .vc-seg.rn.b { background: var(--fs-rank-b2); } .vc-seg.r3.b { background: var(--fs-rank-b3); }
+.vc-seg.ro { background: var(--fs-rank-other); }
+.vc-seg.rp { background: var(--fs-accent-edge); }
+.vc-seg.rnull { background: repeating-linear-gradient(135deg, var(--fs-text4) 0 1.5px, var(--fs-surface2) 1.5px 4px); }
+.vc-null { font-style: italic; color: var(--fs-text3); font-family: var(--font-mono); }
+
+/* Summary: the strip per side */
+.tbl th.vc-top-h { min-width: 300px; }
+.vc-cell { display: flex; flex-direction: column; gap: 8px; min-width: 280px; padding: 4px 0; }
+.vc-side { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 8px; align-items: start; }
+.vc-side > .sw { display: block; width: 8px; height: 8px; border-radius: 2px; margin-top: 1px; }
+.vc-strip { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.vc-stack { display: flex; gap: 1px; height: 10px; border-radius: 2px; overflow: hidden; background: var(--fs-surface2); }
+.vc-stack .vc-seg { flex: none; height: 100%; min-width: 2px; }
+.vc-wait { display: block; height: 10px; border-radius: 2px; background: var(--fs-surface2); }
+.vc-legend { gap: 0 12px; font-family: var(--font-mono); font-size: 11px; line-height: 1.6; color: var(--fs-text); }
+.vc-legend li { gap: 5px; white-space: nowrap; }
+.vc-legend li.dim { color: var(--fs-text3); }
+.vc-legend i, .vc-key i { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+.vc-legend strong { font-weight: 600; }
+.vc-key { gap: 4px 14px; font-size: 12px; }
+.vc-key li { gap: 3px; }
+.vc-key li i + i { margin-right: 3px; }
+.vc-hist { display: flex; align-items: flex-end; gap: 2px; height: 24px; border-bottom: 1px solid var(--fs-border2); }
+.vc-hist i { flex: 1 1 0; display: block; border-radius: 1px 1px 0 0; }
+.vc-hist.a i { background: var(--fs-rank-a2); } .vc-hist.b i { background: var(--fs-rank-b2); }
+.vc-hist-axis { display: flex; justify-content: space-between; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--fs-text3); }
+.vc-none { font-size: 12px; }
+.vc-open { width: 32px; height: 32px; }
+.vc-open svg { transition: transform .15s; }
+.vc-open[aria-expanded="true"] svg { transform: rotate(180deg); }
+.tbl tr.vc-on td { background: var(--fs-surface); }
+.tbl tr.vc-detail > td { height: auto; padding: 16px 20px 18px 32px; background: var(--fs-surface); }
+.tbl tbody tr.vc-detail:hover td { background: var(--fs-surface); }
+
+/* Summary: the detail a row opens */
+.vc-detail-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-width: 1100px; }
+.vc-detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.vc-detail-head h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.vc-detail-head .sub { display: block; font-size: 12.5px; color: var(--fs-text3); }
+.vc-detail-body .caption { margin: 2px 0 0; }
+.vc-detail-head .seg button { display: inline-flex; align-items: center; gap: 6px; }
+.vc-list { display: flex; flex-direction: column; }
+.vc-row { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(180px, 3fr) 160px; gap: 16px; align-items: center; min-height: 40px; font-size: 12.5px; }
+.vc-row > .m { font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-row.vc-axis { min-height: 24px; font-family: var(--font-mono); font-size: 10.5px; color: var(--fs-text3); }
+.vc-row .num { text-align: right; font-variant-numeric: tabular-nums; }
+.vc-ticks { position: relative; height: 16px; }
+.vc-ticks b { position: absolute; top: 0; transform: translateX(-50%); font-weight: 400; }
+.vc-ticks b:first-child { transform: none; } .vc-ticks b:last-child { transform: translateX(-100%); }
+.vc-bars { display: flex; flex-direction: column; gap: 3px; }
+.vc-share { position: relative; display: block; height: 8px; border-radius: 2px; overflow: hidden; background: var(--fs-surface2); }
+.vc-share .vc-seg { height: 100%; }
+.vc-share.ticks, .vc-bars .vc-share {
+  background: linear-gradient(90deg, transparent calc(25% - 1px), var(--fs-border2) calc(25% - 1px) 25%, transparent 25% calc(50% - 1px),
+    var(--fs-border2) calc(50% - 1px) 50%, transparent 50% calc(75% - 1px), var(--fs-border2) calc(75% - 1px) 75%, transparent 75%), var(--fs-surface2);
+}
+.vc-nums { display: flex; flex-direction: column; font-family: var(--font-mono); font-size: 12px; line-height: 1.45; }
+/* the swatch at the column's left edge, the numbers right-aligned: swatches line up row to row */
+.vc-nums > span { display: grid; grid-template-columns: 7px minmax(0, 1fr); gap: 6px; align-items: center; }
+.vc-nums .sw { display: block; width: 7px; height: 7px; border-radius: 2px; }
+.vc-nums strong { font-weight: 600; }
+
+/* Differing / One-sided rows: Show every row | distinct values */
+.vc-groupbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 20px; background: var(--fs-surface); border-top: 1px solid var(--fs-border); border-bottom: 1px solid var(--fs-border); }
+.vc-lbl { font-size: 13px; color: var(--fs-text2); }
+.vc-groupbar .seg .m { font-family: var(--font-mono); font-size: 12px; }
+.vc-of { display: inline-flex; align-items: center; gap: 8px; }
+.vc-of .sel { max-width: 260px; width: auto; min-width: 140px; height: 34px; }
+.vc-of .sel.vc-size { min-width: 72px; }
+.vc-caption { font-family: var(--font-mono); font-size: 12px; color: var(--fs-text2); overflow-wrap: anywhere; }
+/* the caption on a line of its own under the controls, so they stay put whatever its length */
+.vc-groupbar .vc-caption { flex: 1 1 100%; order: 5; }
+.vc-search { flex: 0 1 220px; }
+.vc-tbl td { height: 36px; }
+.vc-tbl .vc-rank { width: 52px; color: var(--fs-text3); }
+.vc-tbl td.vc-n { font-weight: 600; }
+.vc-tbl th svg { vertical-align: -1px; }
+.vc-tbl .vc-val { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-tbl .vc-same { font-family: var(--font-sans); font-size: 12px; }
+.vc-tbl th.vc-share-h { width: 32%; min-width: 160px; }
+.vc-foot { border-top: 1px solid var(--fs-border); }
+.vc-pager { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.vc-pager [role=status] { padding: 0 8px; font-family: var(--font-mono); font-size: 12px; color: var(--fs-text); }
+.only .vc-groupbar { padding: 10px 16px; }
+.only .tbl.vc-tbl { min-width: 520px; }
+
+@media (max-width: 600px) {
+  .vc-cell { min-width: 0; flex: 1 1 100%; }
+  /* a value and its counts on one line, its bars under them */
+  .vc-row { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; padding: 6px 0; }
+  .vc-row > .vc-bars, .vc-row > .vc-ticks { grid-column: 1 / -1; order: 2; }
+  .vc-row.vc-axis > span:not(.vc-ticks) { display: none; }
+  .vc-groupbar { padding: 10px 16px; }
+  .vc-search { flex: 1 1 100%; max-width: none; }
+  .vc-groupbar .grow { display: none; }
+  /* the distinct table fits a phone: #, value, count and % of rows - no running total or bar */
+  .vc-tbl .vc-cum, .vc-tbl .vc-bar { display: none; }
+  .vc-tbl, .only .tbl.vc-tbl { table-layout: fixed; min-width: 0; }
+  .vc-tbl th, .vc-tbl td { padding-left: 8px; padding-right: 8px; }
+  .tbl.vc-tbl th { white-space: normal; }
+  .vc-tbl .vc-rank { width: 40px; }
+  .vc-tbl th:nth-child(3) { width: 80px; }
+  .vc-tbl th:nth-child(4) { width: 64px; }
+  /* a long value or an A -> B pair wraps rather than being cut */
+  .vc-tbl .vc-val { max-width: none; white-space: normal; overflow-wrap: anywhere; }
+  .vc-tbl .vc-val .diff { flex-wrap: wrap; white-space: normal; padding: 2px 8px; }
+}

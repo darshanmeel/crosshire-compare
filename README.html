@@ -411,7 +411,7 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <li><b>Headline</b> - rows matched on the key, columns compared, rows and cells that differ, one-sided rows</li>
       <li><b>Row outcome</b> - one bar: fully matched 2,311 · differ 649 · only in HR 40 · only in Payroll 25</li>
       <li><b>Verdict</b> - <em>Identical</em>, <em>Small differences</em> (under 5% of matched rows differ, one-sided rows no more than matched), <em>Differences</em> or <em>Error</em></li>
-      <li><b>Summary tab</b> - count tiles with one caption under them (the key and what the match figures are measured on), then two panels side by side: <em>Columns</em>, every column with one match bar whose red end is its mismatches, and <em>Why they differ</em>, the value pairs behind each count, the one-sided pattern and <b>See the 649 rows</b></li>
+      <li><b>Summary tab</b> - count tiles with one caption under them (the key and what the match figures are measured on), then <em>Columns</em> across the page, every column with one match bar whose red end is its mismatches and its top values per side (a row opens to every side's top values as bars or a table), and under it <em>Why they differ</em>, the value pairs behind each count, the one-sided pattern and <b>See the 649 rows</b></li>
       <li><b>Below</b> - <em>Profile by bucket</em> and <em>Columns &amp; values</em> (value pairs per column and the near-match analysis), two closed folds that stay as you left them</li>
       <li><b>Percentages</b> - two decimals, never rounded to 100% or 0% while one row disagrees</li>
       <li><b>Stale result</b> - <em>Re-run on every change</em> is off by default; a changed setting marks the result stale</li>
@@ -421,10 +421,10 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
       <figure class="shot"><img src="docs/app-onesided.png" alt="One-sided rows tab: the pattern note, then Only in HR and Only in Payroll side by side, each with a Columns (7 of 7) menu and its CSV" loading="lazy"><figcaption>One-sided rows - only in HR and only in Payroll, side by side</figcaption></figure>
     </div>
     <ul class="pts">
-      <li><b>Differing rows</b> - one row per key; chips filter by column (department 337, salary 319, active 31). The table scrolls in its panel with the header and the key column frozen</li>
+      <li><b>Differing rows</b> - one row per key; chips filter by column (department 337, salary 319, active 31). The table scrolls in its panel with the header and the key column frozen. <em>Distinct values · count(*)</em> groups the rows by a column instead - a count per value, HR → Payroll pairs - with search and paging</li>
       <li><b>Show</b> - <em>all compared columns</em> at first; the one-sided columns are one tick away under <em>On one side only</em></li>
       <li><b>Search</b> - <em>Find a key or value</em> narrows the table, numbers as shown or as written; the CSV button downloads every differing cell</li>
-      <li><b>One-sided rows</b> - a pattern note when the rows share values, then each side with every column, the key fixed on the left, Payroll under its own column names</li>
+      <li><b>One-sided rows</b> - a pattern note when the rows share values, then each side with every column, the key fixed on the left, Payroll under its own column names; <em>Distinct values · count(*)</em> counts a side's rows per value of a column, with search and paging</li>
       <li><b>Columns (n of m)</b> - a menu in each panel's head picks the columns shown; <b>left_only.csv</b> and <b>right_only.csv</b> beside it download every row</li>
       <li><b>Report</b> and <b>Downloads</b> - sections 09 and 10</li>
       <li><b>Rows to display per section</b> - caps the tables on screen and in the report; downloads hold every row</li>

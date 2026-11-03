@@ -1,10 +1,11 @@
 // web/src/results/detail.test.tsx - the Differing rows tab (SPEC §09): one row per key, filters,
 // search, the Show menu, paging and the near-match analysis.
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi } from "vitest";
 import type { RunView } from "../compare/types";
 import { json, mount, type Call } from "../sources/testkit";
+import { serveValues } from "./testkit";
 import { pivot, type DiffRowsPage } from "./detailApi";
 import { DiffRowsTab } from "./DiffRowsTab";
 
@@ -33,6 +34,8 @@ const PAGE2 = page({ offset: 2, frame: { columns: COLS, rows: pair("E10500", ["R
 function serve(calls: Call[]) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     calls.push([url, init]);
+    const vc = serveValues(url);
+    if (vc) return vc;
     const u = new URL(url, "http://x");
     if (u.pathname === "/api/results/r1/diff-rows") {
       const col = u.searchParams.get("column");
@@ -180,4 +183,62 @@ test("no differing rows says so", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => json(page({ total: 0, by_column: [], frame: { columns: [], rows: [] }, marks: [], cells: [] }))));
   mount(<DiffRowsTab run={{ ...RUN, diff_rows: 0 }} />);
   expect(await screen.findByText(/No rows differ/)).toBeInTheDocument();
+});
+
+/** The tab on Distinct values, and whether a values call carrying `part` was made. */
+async function distinct() {
+  const calls: Call[] = [];
+  vi.stubGlobal("fetch", serve(calls));
+  const asked = (part: string) => calls.some(([u]) => u.startsWith("/api/results/r1/values?") && u.includes(part));
+  mount(<DiffRowsTab run={RUN} />);
+  await screen.findByRole("table", { name: "Rows that differ" });
+  await userEvent.click(screen.getByRole("button", { name: "Distinct values · count(*)" }));
+  const t = await screen.findByRole("table", { name: "Distinct values of department" });
+  return { t, asked };
+}
+
+test("Distinct values: the differing rows grouped by a column, as A → B pairs", async () => {
+  const { t, asked } = await distinct();
+  expect(asked("column=department&subset=differ&side=pair&page=1&size=25")).toBe(true);
+  expect(screen.queryByRole("table", { name: "Rows that differ" })).toBeNull();
+  expect(screen.queryByRole("searchbox", { name: "Find a key or value" })).toBeNull();
+  expect(screen.getByText("GROUP BY department (HR → Payroll) → 41 distinct across 3,000 rows")).toBeInTheDocument();
+  expect(within(t).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(
+    ["#", "HR → Payroll", "Count(*) ", "% of rows", "Cumulative", "Share · axis 0–50%"]);
+  const first = within(t).getAllByRole("row")[1];
+  expect(first).toHaveTextContent("1AlphaAlpha EMEA90030.00%30.00%");
+  expect(first.querySelector(".diff")).not.toBeNull();
+  expect(within(t).getByText("null").tagName).toBe("EM");
+  expect(within(t).getAllByText("unchanged")).toHaveLength(2);           // Delta and null read the same on both sides
+});
+
+test("Distinct values: paging, rows per page and search", async () => {
+  const { asked } = await distinct();
+  const pages = screen.getByRole("navigation", { name: "Pages" });
+  expect(within(pages).getByRole("status")).toHaveTextContent("Page 1 of 2");
+  expect(within(pages).getByRole("button", { name: "Prev" })).toBeDisabled();
+  expect(screen.getByText(/^Values/)).toHaveTextContent("Values 1–25 of 41 distinct (3,000 rows)");
+  await userEvent.click(within(pages).getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(within(pages).getByRole("status")).toHaveTextContent("Page 2 of 2"));
+  expect(asked("side=pair&page=2&size=25")).toBe(true);
+  expect(within(pages).getByRole("button", { name: "Last" })).toBeDisabled();
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Rows per page" }), "50");
+  await waitFor(() => expect(asked("side=pair&page=1&size=50")).toBe(true));
+  await userEvent.type(screen.getByRole("searchbox", { name: "Find a value" }), "alp");
+  await waitFor(() => expect(asked("side=pair&search=alp&page=1&size=50")).toBe(true));
+  await waitFor(() => expect(within(screen.getByRole("table", { name: "Distinct values of department" })).getAllByRole("row")).toHaveLength(2));
+});
+
+test("Distinct values: the side, a column chip and the column grouped by", async () => {
+  const { asked } = await distinct();
+  await userEvent.click(within(screen.getByRole("group", { name: "Value from" })).getByRole("button", { name: "HR" }));
+  await waitFor(() => expect(asked("column=department&subset=differ&side=a&page=1&size=25")).toBe(true));
+  // a column chip narrows the rows grouped to those that differ on it, and groups by that column
+  await userEvent.click(screen.getByRole("button", { name: /^salary/ }));
+  await waitFor(() => expect(asked("column=salary&subset=differ&side=a&differs=salary")).toBe(true));
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Group by column" }), "emp_id");
+  await waitFor(() => expect(asked("column=emp_id&subset=differ&side=a&differs=salary")).toBe(true));
+  expect(screen.queryByRole("group", { name: "Value from" })).toBeNull();
+  await userEvent.click(screen.getByRole("button", { name: "Every row" }));
+  expect(await screen.findByRole("table", { name: "Rows that differ" })).toBeInTheDocument();
 });

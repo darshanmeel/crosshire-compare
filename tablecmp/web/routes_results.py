@@ -5,18 +5,22 @@ DuckDB connection serves one thread at a time. The wording is results.py's."""
 from __future__ import annotations
 
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import results as rs
 from ..columns import role_tone
 from ..column_facts import column_facts
-from ..compare import (bucket_profile, bucket_rows, cells_table, column_ledger, diffs_by_key_value, differing_rows,
-                       ledger_counts, near_match, side_labels, value_pairs)
+from ..compare import (bucket_profile, bucket_rows, cd_occ, cells_table, column_ledger, diffs_by_key_value,
+                       differing_rows, filter_sql, join_on, ledger_counts, near_match, pair_views, paired_where,
+                       row_key, side_labels, value_pairs)
 from ..profile import label
-from ..sql import ident, scratch
-from ..values import ColSpec
+from ..sql import ident, lit, memory_limit_bytes, scratch
+from ..values import BYTES_A_CELL, HOLD_SHARE, ColSpec
 from . import runs
 from . import setupws as sw
+from .routes_profiling import HIST_KINDS, _when, histogram
 from .workspace import Workspace, workspace
 
 router = APIRouter(prefix="/api/results")
@@ -337,3 +341,192 @@ def one_sided(run_id: str, which: str, offset: int = Query(0, ge=0), limit: int 
         raise HTTPException(404, "A side is A or B.")
     with runs.reading(ws, run_id, "One-sided rows") as run:
         return one_sided_body(run, which, offset, limit)
+
+
+# ---- value counts: how often each value occurs, on a side and a set of rows ----------------
+HELD_VALUES = 50_000          # more distinct values than this (an id) are counted per call, not held
+HELD_TABLES = 32              # counts held on a run at once, together within HOLD_SHARE of DuckDB's memory
+
+
+def _both_filter(filters: dict) -> str:
+    """The Both filters as the engine applies them: its != and not in keep a null row, where
+    filter_sql's <> and NOT IN drop it. A side's own filters reach the engine as filter_sql."""
+    parts = []
+    for col, spec in filters.items():
+        for op, v in spec.items():
+            if op != "type":
+                w = filter_sql({col: {"type": spec.get("type"), op: v}})
+                parts.append(f"({w}) IS NOT FALSE" if op in ("ne", "not_in") else w)
+    return " AND ".join(parts)
+
+
+def _value_rows(run: dict, subset: str, side: str, column: str, differs: str, need: bool = True) -> str | None:
+    """The SQL of the rows counted - the column as `v` (and B's as `b` for side "pair"): every row
+    of a side after the run's filters, the differing rows (only those where `differs` differs, when
+    given), or one side's one-sided rows. None, or 404 with `need`, when the side lacks the column."""
+    con, cfg, c = run["con"], run["cfg"], ident(column)
+    if subset == "differ":
+        keys = rs.run_keys(run)
+        pair_views(run, keys)
+        rel = {"a": ("cmp_l", "l"), "b": ("cmp_r", "r")}
+        picked = ("a", "b") if side == "pair" else (side,)
+        src = [f"SELECT * FROM {rel[s][0]}" for s in picked]
+        sel = ", ".join(f"{rel[s][1]}.{c} AS {name}" for s, name in zip(picked, ("v", "b")))
+        where = paired_where(run, keys, "differ")
+        if differs:
+            occ = cd_occ(run)
+            where += (f" AND {row_key(keys, 'l.', '__occ' if occ else None)} IN (SELECT {row_key(keys, '', occ)} "
+                      f"FROM cd WHERE column_name = {lit(differs)})")
+        sql = f"SELECT {sel} FROM cmp_l l JOIN cmp_r r ON {join_on(keys)}{where}"
+    elif subset == "all":
+        table = run["left"] if side == "a" else run["right"]
+        src = [f"SELECT * FROM {ident(table)}"]
+        where = " AND ".join(w for w in (_both_filter(cfg["filters"]),
+                                         filter_sql(cfg["left_filters" if side == "a" else "right_filters"])) if w)
+        sql = f"SELECT {c} AS v FROM {ident(table)}" + (f" WHERE {where}" if where else "")
+    else:
+        got = runs.one_sided_source(run, "left" if subset == "only_a" else "right")
+        if got is None:
+            raise HTTPException(404, "This run wrote no one-sided rows for this side.")
+        src = [f"SELECT * FROM {got[1]}"]
+        sql = f"SELECT {c} AS v FROM {got[1]}"
+    if all(column in {r[0] for r in con.execute(f"DESCRIBE {q}").fetchall()} for q in src):
+        return sql
+    if need:
+        raise HTTPException(404, f"No column called {column} on this side.")
+    return None
+
+
+def _counted_table(run: dict, subset: str, side: str, column: str, differs: str) -> str:
+    """The grouped counts (v, n) - (v, b, n) for a pair, (v, na, nb) for both - as a table held on
+    the run's connection: counted once, every page and search after that ranks the small table.
+    A count too big to hold (an id, long text) stays a view, so memory does not grow; both sides is
+    a view over the two. Only the HELD_TABLES used last are kept - the oldest is dropped."""
+    cache = run.setdefault("_values", {})
+    k = (subset, side, column, differs)
+    if k in cache:                # used last - both sides with the two it is built on
+        for t in [(subset, s, column, differs) for s in "ab" if side == "both"] + [k]:
+            if t in cache:
+                cache[t] = cache.pop(t)
+        return cache[k]
+    con = run["con"]
+    if side == "both":            # from the two sides' own tables - a side without the column counts nothing
+        x, y = (_counted_table(run, subset, s, column, differs)
+                if _value_rows(run, subset, s, column, differs, need=False) else None for s in "ab")
+        if not (x or y):
+            raise HTTPException(404, f"No column called {column} on either side.")
+        x, y = x or f"(SELECT * FROM {y} WHERE false)", y or f"(SELECT * FROM {x} WHERE false)"
+        sql = (f"SELECT coalesce(x.v, y.v) AS v, coalesce(x.n, 0) AS na, coalesce(y.n, 0) AS nb "
+               f"FROM {x} x FULL JOIN {y} y ON x.v IS NOT DISTINCT FROM y.v")
+        held = False
+    else:
+        rows = _value_rows(run, subset, side, column, differs)
+        sql = f"SELECT *, count(*) AS n FROM ({rows}) GROUP BY ALL"
+        parts = ["v", "b"] if side == "pair" else ["v"]
+        chars = " + ".join(f"coalesce(avg(strlen(CAST({p} AS VARCHAR))), 0)" for p in parts)
+        d, chars = con.execute(f"SELECT approx_count_distinct(({', '.join(parts)})), {chars} FROM ({rows})").fetchone()
+        held = d <= HELD_VALUES and d * (chars + BYTES_A_CELL) <= memory_limit_bytes(con) * HOLD_SHARE / HELD_TABLES
+    run["_values_made"] = n = run.get("_values_made", -1) + 1
+    name = f"{'vc' if held else 'vv'}_{n}"
+    con.execute(f"CREATE OR REPLACE {'TABLE' if held else 'VIEW'} {name} AS {sql}")
+    cache[k] = name
+    while len(cache) > HELD_TABLES:
+        _drop_counted(run, next(iter(cache)))
+    return name
+
+
+def _drop_counted(run: dict, k: tuple) -> None:
+    """Drops one count, and the both sides view built on it."""
+    name = run["_values"].pop(k, None)
+    if name is None:
+        return
+    run["con"].execute(f"DROP {'TABLE' if name.startswith('vc_') else 'VIEW'} IF EXISTS {name}")
+    if k[1] in ("a", "b"):
+        _drop_counted(run, (k[0], "both", *k[2:]))
+
+
+def _value_hist(run: dict, subset: str, side: str, column: str, differs: str, kind: str, bins: int) -> list[dict]:
+    """Equal-width bins and the median a side, for a number, date or timestamp column - held on the run."""
+    if not bins or kind not in HIST_KINDS or side == "pair":
+        return []
+    cache = run.setdefault("_values_hist", {})
+    k = (subset, side, column, differs, bins)
+    if k not in cache:
+        con, out = run["con"], []
+        x = "try_cast(v AS DOUBLE)" if kind == "number" else "epoch(try_cast(v AS TIMESTAMP))"
+        q = "quantile_cont" if kind == "number" else "quantile_disc"
+        for s in ("a", "b") if side == "both" else (side,):
+            rows = _value_rows(run, subset, s, column, differs, need=False)
+            if rows is None:
+                continue
+            got = histogram(con, f"({rows})", ColSpec("v", "v", "v", kind), bins)
+            m = con.execute(f"SELECT {q}({x}, 0.5) FROM ({rows}) WHERE isfinite({x})").fetchone()[0]
+            median = None if m is None else round(float(m), 6) if kind == "number" else _when(float(m), kind)
+            out.append({"side": s, "bins": got, "median": median})
+        cache[k] = out
+    return cache[k]
+
+
+def values_body(run: dict, column: str, subset: str, side: str, differs: str, basis: str, search: str,
+                page: int, size: int, bins: int) -> dict:
+    """One column's values counted over a set of rows, most frequent first, a page at a time:
+    per side the rows, nulls, distinct values and the largest count, then each value with its
+    count and running total per side - ranked on the whole set, so a search keeps the ranks."""
+    if subset == "only_a" and side != "a" or subset == "only_b" and side != "b":
+        raise HTTPException(400, f"The rows {subset} holds are counted on side {subset[-1]} only.")
+    if side == "pair" and subset != "differ":
+        raise HTTPException(400, "A to B pairs are counted on the differing rows only.")
+    if side == "both" and subset not in ("all", "differ"):
+        raise HTTPException(400, "Both sides are counted on all rows or the differing rows only.")
+    if differs and subset != "differ":
+        raise HTTPException(400, "differs narrows the differing rows only.")
+    if subset == "differ" and (run["mode"] != "key" or not rs.run_keys(run) or not cells_table(run)):
+        raise HTTPException(404, "This run has no differing rows to group.")
+    if differs and differs not in rs.run_columns(run):
+        raise HTTPException(404, f"This run did not compare a column called {differs}.")
+    con = run["con"]
+    kind = {d["canon"]: d for d in run["cfg"]["specs"]}.get(column, {}).get("kind", "text")
+    table = _counted_table(run, subset, side, column, differs)
+    ns = ["na", "nb"] if side == "both" else ["n"]
+    names = ["a", "b"] if side == "both" else [side]
+    null = "v IS NULL AND b IS NULL" if side == "pair" else "v IS NULL"
+    keep = f"NOT ({null})" if basis == "nonnull" else "TRUE"
+    order = f"{' + '.join(ns)} DESC, v NULLS LAST" + (", b NULLS LAST" if side == "pair" else "")
+    stats = ", ".join(f"coalesce(sum({n}), 0)::BIGINT, coalesce(sum({n}) FILTER (WHERE {null}), 0)::BIGINT, "
+                      f"count(*) FILTER (WHERE NOT ({null}) AND {n} > 0), coalesce(max({n}) FILTER (WHERE {keep}), 0)"
+                      for n in ns)
+    got = con.execute(f"SELECT {stats} FROM {table}").fetchone()
+    sides = [{"side": s, "rows": int(got[4 * i]), "nulls": int(got[4 * i + 1]), "distinct": int(got[4 * i + 2]),
+              "top": int(got[4 * i + 3])} for i, s in enumerate(names)]
+    hit, params = "TRUE", []
+    if search:
+        parts = ["v", "b"] if side == "pair" else ["v"]
+        # matched as the page shows it: a null reads "null", an empty text "empty"
+        hit = " OR ".join(f"contains(CASE WHEN {p} IS NULL THEN 'null' WHEN CAST({p} AS VARCHAR) = '' THEN 'empty' "
+                          f"ELSE lower(CAST({p} AS VARCHAR)) END, lower(?))" for p in parts)
+        params = [search] * len(parts)
+    cums = ", ".join(f"sum({n}) OVER (ORDER BY {order} ROWS UNBOUNDED PRECEDING)::BIGINT AS c_{n}" for n in ns)
+    ranked = f"SELECT *, row_number() OVER (ORDER BY {order}) AS __rank, {cums} FROM {table} WHERE {keep}"
+    total = con.execute(f"SELECT count(*) FROM {table} WHERE {keep} AND ({hit})", params).fetchone()[0]
+    f = sw.frame(con.execute(f"SELECT * FROM ({ranked}) WHERE {hit} ORDER BY __rank LIMIT ? OFFSET ?",
+                             params + [size, (page - 1) * size]).fetchdf())
+    ix = {c: i for i, c in enumerate(f["columns"])}
+    rows = [{"rank": r[ix["__rank"]], "value": r[ix["v"]], **({"b": r[ix["b"]]} if side == "pair" else {}),
+             "n": [r[ix[n]] for n in ns], "cum": [r[ix["c_" + n]] for n in ns]} for r in f["rows"]]
+    return {"column": column, "subset": subset, "side": side, "differs": differs, "basis": basis, "kind": kind,
+            "sides": [{**sides[0], "side": "pair"}] if side == "pair" else sides,
+            "values": int(total), "page": page, "size": size, "rows": rows,
+            "hist": _value_hist(run, subset, side, column, differs, kind, bins)}
+
+
+@router.get("/{run_id}/values")
+def values(run_id: str, column: str = Query(..., max_length=1000),
+           subset: Literal["all", "differ", "only_a", "only_b"] = "all",
+           side: Literal["a", "b", "both", "pair"] = "a", differs: str = Query("", max_length=1000),
+           basis: Literal["all", "nonnull"] = "all", search: str = Query("", max_length=200),
+           page: int = Query(1, ge=1, le=1_000_000), size: int = Query(25, ge=1, le=500), bins: int = Query(0, ge=0, le=50),
+           ws: Workspace = Depends(workspace)) -> dict:
+    """One column's value counts on a side and a set of rows - for the top values on the Summary
+    and the distinct values on the Differing and One-sided rows tabs. Read-only."""
+    with runs.reading(ws, run_id, "Values") as run:
+        return values_body(run, column, subset, side, differs, basis, search, page, size, bins)

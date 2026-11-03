@@ -9,6 +9,7 @@ import { goToSection } from "../shell/view";
 import { Button, Callout, grouped, LinkButton, Loading, MenuButton, num } from "../ui/kit";
 import { Icon } from "../ui/icons";
 import { ColumnPick, notCompared } from "./ColumnPick";
+import { DistinctTable, GroupBar, type GroupBarProps, type RowsView } from "./DistinctValues";
 import { Failed } from "./Failed";
 import { usePick } from "./pickStore";
 import { fileUrl } from "./detailApi";
@@ -60,6 +61,9 @@ function SidePanel({ run, side }: { run: RunView; side: "A" | "B" }) {
   const id = `h-only${side.toLowerCase()}`;
   const [picked, setPicked] = usePick<string[] | null>(`onesided_cols_${side}`, null);
   const label = useOwnNames(run, side);
+  const [view, setView] = usePick<RowsView>(`onesided_view_${side}`, "rows");
+  const [group, setGroup] = usePick<string | null>(`onesided_group_${side}`, null);
+  const ab = side === "A" ? "a" : "b";
   const keys = new Set(d?.keys ?? []);
   const nc = notCompared(d?.groups);
   const all = d?.columns ?? [];
@@ -67,6 +71,11 @@ function SidePanel({ run, side }: { run: RunView; side: "A" | "B" }) {
   const at = now.map((c) => all.indexOf(c));                // the ticked columns, in the order ticked
   const numeric = at.map((j) => d!.rows.length > 0 && d!.rows.every((r) => r[j] == null || NUMERIC.test(String(r[j]))));
   const left = d ? d.total - d.rows.length : 0;
+  const gcol = group && all.includes(group) ? group : d?.shown.find((c) => !keys.has(c)) ?? all[0] ?? "";
+  const bar: GroupBarProps = {
+    view, setView, columns: all.map((c) => ({ value: c, label: label(c) })), column: gcol, setColumn: setGroup,
+    sides: [], side: ab, setSide: () => {},
+  };
   const cls = (k: number, ...more: string[]) =>
     [numeric[k] ? "num" : "", keys.has(now[k]) ? "keycell" : "", nc.has(now[k]) ? "nc" : "", ...more].filter(Boolean).join(" ") || undefined;
   return (
@@ -94,8 +103,12 @@ function SidePanel({ run, side }: { run: RunView; side: "A" | "B" }) {
       {q.error && <div className="panel-body"><Failed error={q.error} /></div>}
       {!d && !q.error && <div className="panel-body"><Loading>Reading…</Loading></div>}
       {d && d.total === 0 && <div className="panel-body"><p className="caption">Every {name} row has a partner on the other side.</p></div>}
-      {d && d.total > 0 && (
+      {d && d.total > 0 && view === "distinct" && (
+        <DistinctTable key={gcol} runId={run.id} subset={side === "A" ? "only_a" : "only_b"} bar={bar} label={label(gcol)} names={run.names} />
+      )}
+      {d && d.total > 0 && view === "rows" && (
         <>
+          <GroupBar {...bar} />
           <div className={want > FIRST ? "tblwrap tall" : "tblwrap"}>
             <table className="tbl compact" aria-label={`Only in ${name}`}>
               <thead><tr>{now.map((c, k) => <th key={c} className={cls(k)} title={nc.has(c) ? "not compared - on this side only" : undefined}>{label(c)}</th>)}</tr></thead>

@@ -70,6 +70,10 @@
 .why-pair svg { color: var(--fs-text4); flex: none; }
 .why-text { margin: 0; font-size: 13px; color: var(--fs-text2); }
 .why-go { align-self: flex-start; }
+/* full width under the Columns: the columns' value pairs side by side */
+.summary > .why .panel-body { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(400px, 100%), 1fr)); gap: 18px 40px; align-items: start; }
+.summary > .why .why-col { padding-top: 0; border-top: 0; }
+.summary > .why .why-go { grid-column: 1 / -1; justify-self: start; }
 .why-text .why-link { padding: 0 4px; vertical-align: middle; }
 
 /* the Summary's two folds: Profile by bucket, Columns & values */

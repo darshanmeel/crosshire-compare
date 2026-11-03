@@ -6,7 +6,10 @@ import type { RunView } from "../compare/types";
 import { Icon } from "../ui/icons";
 import { Bar, Button, Callout, DiffCell, grouped, Loading, MenuButton, num } from "../ui/kit";
 import { fileUrl, pivot, useDiffRows, useNearMatch, type DiffRowsPage, type KeyRow } from "./detailApi";
+import { DistinctTable, GroupBar, type GroupBarProps, type RowsView } from "./DistinctValues";
 import { Failed } from "./Failed";
+import { usePick } from "./pickStore";
+import type { Side } from "./valuesApi";
 import "./detail.css";
 
 type Show = "all" | "differing" | "custom";
@@ -99,6 +102,9 @@ export function DiffRowsTab({ run }: { run: RunView }) {
   const [find, setFind] = useState("");
   const [picked, setHidden] = useState<Set<string> | null>(null);   // null: every compared column, none of the one-sided ones
   const [near, setNear] = useState(false);
+  const [view, setView] = usePick<RowsView>("rd_view", "rows");
+  const [groupCol, setGroupCol] = useState("");
+  const [groupSide, setGroupSide] = useState<Side | null>(null);
   const q = useDiffRows(run.id, column);
   const first: DiffRowsPage | undefined = q.data?.pages[0];
   const rows = useMemo(() => (q.data?.pages ?? []).flatMap(pivot), [q.data]);
@@ -123,6 +129,18 @@ export function DiffRowsTab({ run }: { run: RunView }) {
   const hidden = picked ?? new Set([...first.only_a, ...first.only_b]);
   const cols = all.filter((c) => !hidden.has(c.name));
   const total = first.total;
+  // Distinct values: any column of the differing rows; a compared one read on A, on B or as the A → B pair
+  const gcol = groupCol || column || first.by_column[0]?.column || first.columns[0] || first.keys[0];
+  const compared = first.columns.includes(gcol);
+  const sides: GroupBarProps["sides"] = compared
+    ? [{ value: "a", label: NA }, { value: "b", label: NB }, { value: "pair", label: `${NA} → ${NB}` }] : [];
+  const gside: Side = first.only_b.includes(gcol) ? "b" : !compared ? "a" : groupSide ?? (differing.has(gcol) ? "pair" : "a");
+  const bar: GroupBarProps = {
+    view, setView, column: gcol, setColumn: (c) => { setGroupCol(c); setGroupSide(null); }, sides, side: gside, setSide: setGroupSide,
+    columns: [...first.keys.map((k) => ({ value: k, label: `${k} · key` })), ...first.columns.map((c) => ({ value: c, label: c })),
+              ...first.only_a.map((c) => ({ value: c, label: `${c} · only in ${NA}` })), ...first.only_b.map((c) => ({ value: c, label: `${c} · only in ${NB}` }))],
+  };
+  const distinct = run.mode === "key" && view === "distinct";
   const cell = (r: KeyRow, c: Col) => {
     if (c.side === "a") return <td key={c.name} className="m rd-one"><Value v={r.a[c.name]} /></td>;
     if (c.side === "b") return <td key={c.name} className="m rd-one"><Value v={r.b[c.name]} /></td>;
@@ -144,12 +162,14 @@ export function DiffRowsTab({ run }: { run: RunView }) {
             </button>
           ))}
         </div>
-        <label className="search">
-          <Icon name="search" />
-          <input type="search" aria-label="Find a key or value" placeholder="Find a key or value" value={find} onChange={(e) => setFind(e.target.value)} />
-        </label>
+        {!distinct && (
+          <label className="search">
+            <Icon name="search" />
+            <input type="search" aria-label="Find a key or value" placeholder="Find a key or value" value={find} onChange={(e) => setFind(e.target.value)} />
+          </label>
+        )}
         <span className="grow" />
-        <ShowMenu all={all} differing={differing} hidden={hidden} setHidden={setHidden} />
+        {!distinct && <ShowMenu all={all} differing={differing} hidden={hidden} setHidden={setHidden} />}
         {first.file && (
           <a className="btn sm" href={fileUrl(run.id, first.file)} download title={first.file}>
             <Icon name="download" />cell_diffs.csv
@@ -158,54 +178,61 @@ export function DiffRowsTab({ run }: { run: RunView }) {
       </div>
 
       <section className="panel" aria-label="Differing rows">
-        <div className="panel-note">
-          <span>One row per key. A cell that differs reads</span>
-          <DiffCell a={`${NA} value`} b={`${NB} value`} />
-          <span>· matching cells stay plain · sorted by cells that differ, most first</span>
-        </div>
-        <div className="tblwrap rd-scroll">
-          <table className="tbl rd-tbl" aria-label="Rows that differ" style={{ minWidth: Math.max(720, 140 * (first.keys.length + cols.length) + 72) }}>
-            <thead><tr>
-              {first.keys.map((k) => <th key={k} scope="col" className="rd-key"><Icon name="key" size="sm" /> {k}</th>)}
-              {cols.map((c) => <th key={c.name} scope="col" className={c.side ? `rd-only-h ${c.side}` : undefined}>{c.name}{c.tag && <> {c.tag}</>}</th>)}
-              <th scope="col" className="num">Cells</th>
-            </tr></thead>
-            <tbody>
-              {seen.map((r, i) => (
-                <tr key={`${r.key.map(String).join("\u0001")}-${i}`}>
-                  {r.key.map((k, j) => <td key={j} className="m rd-key"><Value v={k} raw /></td>)}
-                  {cols.map((c) => cell(r, c))}
-                  <td className="num m neg-n">{num(r.n)}</td>
-                </tr>
-              ))}
-              {seen.length === 0 && (
-                <tr><td className="dim" colSpan={first.keys.length + cols.length + 1}>
-                  {needle ? `Nothing in the ${num(rows.length)} loaded rows matches "${find.trim()}".` : "No rows."}
-                </td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="panel-foot">
-          <span role="status">
-            {needle
-              ? <><strong>{num(seen.length)}</strong> of the {num(rows.length)} loaded rows match · {num(total)} {column ? `differ on ${column}` : "differ"}</>
-              : <>Showing <strong>{num(rows.length)}</strong> of {num(total)} rows{column && <> that differ on <span className="m">{column}</span></>}</>}
-          </span>
-          <span className="grow" />
-          {q.hasNextPage && (
-            <Button size="sm" disabled={q.isFetchingNextPage} onClick={() => q.fetchNextPage()}>
-              {q.isFetchingNextPage ? "Loading…" : `Load ${num(Math.min(50, total - rows.length))} more`}
-            </Button>
-          )}
-          {first.file && (
-            <Button size="sm" icon="sparkle" aria-expanded={near} aria-label="Near-match analysis - formatting or real?" onClick={() => setNear(!near)}>
-              Near-match analysis<span className="ph-hide"> - formatting or real?</span>
-            </Button>
-          )}
-        </div>
+        {distinct && (
+          <DistinctTable key={`${gcol}|${gside}|${column}`} runId={run.id} subset="differ" differs={column}
+                         bar={bar} label={gcol} names={run.names} />
+        )}
+        {!distinct && <>
+          {run.mode === "key" && <GroupBar {...bar} />}
+          <div className="panel-note">
+            <span>One row per key. A cell that differs reads</span>
+            <DiffCell a={`${NA} value`} b={`${NB} value`} />
+            <span>· matching cells stay plain · sorted by cells that differ, most first</span>
+          </div>
+          <div className="tblwrap rd-scroll">
+            <table className="tbl rd-tbl" aria-label="Rows that differ" style={{ minWidth: Math.max(720, 140 * (first.keys.length + cols.length) + 72) }}>
+              <thead><tr>
+                {first.keys.map((k) => <th key={k} scope="col" className="rd-key"><Icon name="key" size="sm" /> {k}</th>)}
+                {cols.map((c) => <th key={c.name} scope="col" className={c.side ? `rd-only-h ${c.side}` : undefined}>{c.name}{c.tag && <> {c.tag}</>}</th>)}
+                <th scope="col" className="num">Cells</th>
+              </tr></thead>
+              <tbody>
+                {seen.map((r, i) => (
+                  <tr key={`${r.key.map(String).join("\u0001")}-${i}`}>
+                    {r.key.map((k, j) => <td key={j} className="m rd-key"><Value v={k} raw /></td>)}
+                    {cols.map((c) => cell(r, c))}
+                    <td className="num m neg-n">{num(r.n)}</td>
+                  </tr>
+                ))}
+                {seen.length === 0 && (
+                  <tr><td className="dim" colSpan={first.keys.length + cols.length + 1}>
+                    {needle ? `Nothing in the ${num(rows.length)} loaded rows matches "${find.trim()}".` : "No rows."}
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="panel-foot">
+            <span role="status">
+              {needle
+                ? <><strong>{num(seen.length)}</strong> of the {num(rows.length)} loaded rows match · {num(total)} {column ? `differ on ${column}` : "differ"}</>
+                : <>Showing <strong>{num(rows.length)}</strong> of {num(total)} rows{column && <> that differ on <span className="m">{column}</span></>}</>}
+            </span>
+            <span className="grow" />
+            {q.hasNextPage && (
+              <Button size="sm" disabled={q.isFetchingNextPage} onClick={() => q.fetchNextPage()}>
+                {q.isFetchingNextPage ? "Loading…" : `Load ${num(Math.min(50, total - rows.length))} more`}
+              </Button>
+            )}
+            {first.file && (
+              <Button size="sm" icon="sparkle" aria-expanded={near} aria-label="Near-match analysis - formatting or real?" onClick={() => setNear(!near)}>
+                Near-match analysis<span className="ph-hide"> - formatting or real?</span>
+              </Button>
+            )}
+          </div>
+        </>}
       </section>
-      {near && <NearMatch runId={run.id} onClose={() => setNear(false)} />}
+      {near && !distinct && <NearMatch runId={run.id} onClose={() => setNear(false)} />}
     </div>
   );
 }

@@ -7,6 +7,7 @@ import type { CompareState, RunView } from "../compare/types";
 import { getView, setView } from "../shell/view";
 import { compareState } from "../setup/testkit";
 import { body, json, mount, type Call } from "../sources/testkit";
+import { serveValues } from "./testkit";
 import { marks } from "../ui/marks";
 import { ResultsPage } from "./ResultsPage";
 import { ResultsView } from "./ResultsView";
@@ -98,6 +99,8 @@ function state(over: Partial<CompareState> = {}): CompareState {
 function serve(calls: Call[], st: () => CompareState = () => state()) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     calls.push([url, init]);
+    const vc = serveValues(url);
+    if (vc) return vc;
     if (url === "/api/compare") return json(st());
     if (url === "/api/sources") return json(body());
     if (url === "/api/log") return json({ entries: [], last: {} });
@@ -359,4 +362,64 @@ test("Profile by bucket: Simple by default, Extended reads each column's facts a
   expect(b).toHaveTextContent("10 · 1.54%");
   expect(b).toHaveTextContent("2 spellingsFinance / finance");
   expect(within(depth).getByRole("button", { name: "Extended" })).toHaveAttribute("aria-pressed", "true");
+});
+
+const asked = (calls: Call[], part: string) => calls.some(([u]) => u.startsWith("/api/results/r1/values?") && u.includes(part));
+
+test("the Summary's top values: a strip a side, a histogram for numbers, and a row opens every value", async () => {
+  const calls: Call[] = [];
+  vi.stubGlobal("fetch", serve(calls));
+  mount(<ResultsView run={RUN} limit={1000} />);
+  const table = await screen.findByRole("table", { name: "Columns" });
+  expect(within(table).getByRole("columnheader", { name: "Top values · % of all rows" })).toBeInTheDocument();
+  expect(await within(table).findByRole("img", { name: "Top values of department on HR: Alpha 30.00%, Bravo 23.33%, Charlie 16.67%, 37 more 27.33%, null 2.67%" })).toBeInTheDocument();
+  expect(await within(table).findByRole("img", { name: /^Top values of department on Right: Alpha 29\.94%/ })).toBeInTheDocument();
+  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=department&side=a&basis=nonnull&size=3&bins=12");
+  const dept = within(table).getAllByRole("row")[2];
+  expect(within(dept).getByText("+37 more 27.33%")).toBeInTheDocument();
+  expect(within(dept).getByText("null 2.67%")).toBeInTheDocument();
+  expect(await within(table).findByRole("img", { name: "salary on HR: 2,152.33 to 14,979.57, median 8,672.87" })).toBeInTheDocument();
+  expect(within(table).getAllByText("median 8,672.87")).toHaveLength(2);
+  // a row opens its values: bars for both sides, % of non-null, then as a table
+  const open = within(dept).getByRole("button", { name: "Values of department" });
+  expect(open).toHaveAttribute("aria-expanded", "false");
+  await userEvent.click(open);
+  expect(open).toHaveAttribute("aria-expanded", "true");
+  const list = await screen.findByRole("list", { name: "Top values of department" });
+  expect(within(list).getAllByRole("listitem")).toHaveLength(10);
+  expect(within(list).getAllByRole("listitem")[0]).toHaveTextContent("Alpha900 · 30.00%880 · 29.94%");
+  expect(screen.getByText(/^Top 10 of 41 values cover 87\.60% of HR rows and/)).toHaveTextContent("Axis scaled to 50%.");
+  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=department&side=both&basis=all&size=10");
+  await userEvent.click(screen.getByRole("button", { name: "% of non-null" }));
+  await waitFor(() => expect(asked(calls, "column=department&side=both&basis=nonnull&size=10")).toBe(true));
+  await userEvent.click(within(screen.getByRole("group", { name: "Show values as" })).getByRole("button", { name: "Table" }));
+  const values = await screen.findByRole("table", { name: "Values of department" });
+  expect(within(values).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Value", "HR rows", "HR %", "Right rows", "Right %"]);
+  expect(within(values).getAllByRole("row")[1]).toHaveTextContent("Alpha90030.82%88030.61%");
+  await userEvent.click(open);
+  expect(screen.queryByRole("table", { name: "Values of department" })).toBeNull();
+});
+
+test("One-sided rows: each panel groups its rows by a column", async () => {
+  const calls: Call[] = [];
+  vi.stubGlobal("fetch", serve(calls));
+  setView({ tab: "onesided" });
+  mount(<ResultsView run={RUN} limit={1000} />);
+  const a = await screen.findByRole("region", { name: "Only in HR" });
+  await within(a).findByText("40", { selector: ".count" });
+  await userEvent.click(within(within(a).getByRole("group", { name: "Rows view" })).getByRole("button", { name: "Distinct values · count(*)" }));
+  const t = await within(a).findByRole("table", { name: "Distinct values of first_name" });
+  expect(asked(calls, "column=first_name&subset=only_a&side=a&page=1&size=25")).toBe(true);
+  expect(within(t).getAllByRole("row")).toHaveLength(26);
+  expect(within(a).getByText("GROUP BY first_name → 41 distinct across 3,000 rows")).toBeInTheDocument();
+  expect(within(a).queryByRole("table", { name: "Only in HR" })).toBeNull();
+  await userEvent.selectOptions(within(a).getByRole("combobox", { name: "Group by column" }), "department");
+  expect(await within(a).findByRole("table", { name: "Distinct values of department" })).toBeInTheDocument();
+  const b = screen.getByRole("region", { name: "Only in Right" });
+  await within(b).findByText("25", { selector: ".count" });
+  await userEvent.click(within(b).getByRole("button", { name: "Distinct values · count(*)" }));
+  expect(await within(b).findByRole("table", { name: "Distinct values of FullName" })).toBeInTheDocument();
+  expect(asked(calls, "column=FullName&subset=only_b&side=b")).toBe(true);
+  await userEvent.click(within(a).getByRole("button", { name: "Every row" }));
+  expect(within(a).getByRole("table", { name: "Only in HR" })).toBeInTheDocument();
 });

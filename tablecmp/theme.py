@@ -75,6 +75,9 @@ PAPER_LIGHT: dict[str, Any] = {            # the default look: warm paper, burnt
     "diff_bg": "#FFF1E0", "diff_edge": "#F3D9B4",
     "bar_ok": "#3F9D6B", "bar_good": "#7FB069", "bar_warn": "#E0A24A",
     "out_full": "#3F9D6B", "out_diff": "#E0A24A", "out_a": "#3B6FC0", "out_b": "#8E5B3A",
+    # top values per side: 1st, 2nd, 3rd most frequent, darkest first; the other values (3:1 on surface2)
+    "rank_a1": "#1D4F91", "rank_a2": "#4F7FC4", "rank_a3": "#A9C1E6",
+    "rank_b1": "#8F4A12", "rank_b2": "#C97A35", "rank_b3": "#EDB77F", "rank_other": "#8C8577",
     "on_fill": "#1B1915", "on_badge": "#FFFFFF",      # text on the accent fill, on the A / B badges
     # shadows, the drawer's backdrop, a count on a dark or an accent button
     "shadow": "rgba(0,0,0,0.12)", "shadow_lg": "rgba(0,0,0,0.14)", "scrim": "rgba(0,0,0,0.22)",
@@ -100,6 +103,8 @@ PAPER_DARK: dict[str, Any] = {             # the same design on aurora's dark gr
     "diff_bg": "rgba(224,162,74,0.16)", "diff_edge": "rgba(224,162,74,0.35)",
     "bar_ok": "#3F9D6B", "bar_good": "#7FB069", "bar_warn": "#E0A24A",
     "out_full": "#3F9D6B", "out_diff": "#E0A24A", "out_a": "#5A8DE0", "out_b": "#B07A4F",
+    "rank_a1": "#A9C8F5", "rank_a2": "#6E9BE0", "rank_a3": "#3D5F94",
+    "rank_b1": "#F4C49A", "rank_b2": "#D08A52", "rank_b3": "#8A5A33", "rank_other": "#7A7360",
     "on_fill": "#1B1915", "on_badge": "#FFFFFF",
     "shadow": "rgba(0,0,0,0.40)", "shadow_lg": "rgba(0,0,0,0.50)", "scrim": "rgba(0,0,0,0.55)",
     "count_dark": "rgba(127,127,127,0.25)", "count_fill": "rgba(27,25,21,0.12)",
@@ -115,6 +120,9 @@ EXTRA_VARS = (
     ("diff_bg", "--fs-diff-bg"), ("diff_edge", "--fs-diff-edge"),
     ("bar_ok", "--fs-bar-ok"), ("bar_good", "--fs-bar-good"), ("bar_warn", "--fs-bar-warn"),
     ("out_full", "--fs-out-full"), ("out_diff", "--fs-out-diff"), ("out_a", "--fs-out-a"), ("out_b", "--fs-out-b"),
+    ("rank_a1", "--fs-rank-a1"), ("rank_a2", "--fs-rank-a2"), ("rank_a3", "--fs-rank-a3"),
+    ("rank_b1", "--fs-rank-b1"), ("rank_b2", "--fs-rank-b2"), ("rank_b3", "--fs-rank-b3"),
+    ("rank_other", "--fs-rank-other"),
     ("on_fill", "--fs-on-fill"), ("on_badge", "--fs-on-badge"),
     ("shadow", "--fs-shadow"), ("shadow_lg", "--fs-shadow-lg"), ("scrim", "--fs-scrim"),
     ("count_dark", "--fs-count-dark"), ("count_fill", "--fs-count-fill"),

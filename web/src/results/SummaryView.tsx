@@ -4,12 +4,14 @@
 import type { ReactNode } from "react";
 import type { RunView } from "../compare/types";
 import { Expander } from "../ui/Expander";
+import { Icon } from "../ui/icons";
 import { Chip, ErrorNote, Loading, num, pctText, Tile } from "../ui/kit";
 import { marks } from "../ui/marks";
 import { BucketProfile } from "./BucketProfile";
 import { ColumnsView } from "./ColumnsView";
 import { Failed } from "./Failed";
-import { usePick } from "./pickStore";
+import { NONE, usePick } from "./pickStore";
+import { RankKey, TopCell, ValueDetail } from "./TopValues";
 import { useSummary } from "./useSummary";
 import { WhyTheyDiffer } from "./WhyTheyDiffer";
 import { countsOf, ledgerRows, type LedgerRow, type Summary } from "./types";
@@ -40,8 +42,9 @@ function MatchBars({ ok, bad, pct }: { ok: number; bad: number; pct: number }) {
   );
 }
 
-function ColumnsPanel({ s, names, matched }: { s: Summary; names: [string, string]; matched: number }) {
+function ColumnsPanel({ s, names, matched, runId }: { s: Summary; names: [string, string]; matched: number; runId: string }) {
   const [NA, NB] = names;
+  const [open, setOpen] = usePick<string[]>("vc_open", NONE);
   const rows = ledgerRows(s.ledger);
   const shown = rows.filter((r) => !r.Role.startsWith("only in"));
   const onlyA = rows.filter((r) => r.Role === `only in ${NA}`), onlyB = rows.filter((r) => r.Role === `only in ${NB}`);
@@ -72,7 +75,8 @@ function ColumnsPanel({ s, names, matched }: { s: Summary; names: [string, strin
     <section className="panel" aria-labelledby="h-cols">
       <div className="panel-head">
         <h2 id="h-cols">Columns</h2>
-        <span className="sub">{hash ? "values present on one side only, per compared column" : `match measured on the ${num(matched)} paired rows`}</span>
+        <span className="sub">{hash ? "values present on one side only, per compared column" : `match measured on the ${num(matched)} paired rows`} · open a row for every value</span>
+        <div className="actions"><RankKey /></div>
       </div>
       <div className="tblwrap">
         <table className="tbl cards" aria-label="Columns">
@@ -81,14 +85,31 @@ function ColumnsPanel({ s, names, matched }: { s: Summary; names: [string, strin
             {hash
               ? <><th className="num">Only in {NA}</th><th className="num">Only in {NB}</th><th /></>
               : <><th className="num">Matched</th><th className="num">Mismatched</th><th className="match-col">Match %</th></>}
+            <th className="vc-top-h">Top values · % of all rows</th><th><span className="sr-only">Open</span></th>
           </tr></thead>
-          <tbody>{shown.map((r) => (
-            <tr key={r.Column} className={r.Role === "paired, not compared" ? "muted" : undefined}>
-              <td className="m ca" data-label={NA}>{String(r[NA] ?? "-")}</td><td className="m cb" data-label={NB}>{String(r[NB] ?? "-")}</td>
-              <td data-label="Read as"><ReadAs text={String(r["Read as"] ?? "")} /></td>
-              {cell(r)}
-            </tr>
-          ))}</tbody>
+          <tbody>{shown.map((r, i) => {
+            const on = open.includes(r.Column);
+            return [
+              <tr key={r.Column} className={[r.Role === "paired, not compared" ? "muted" : "", on ? "vc-on" : ""].filter(Boolean).join(" ") || undefined}>
+                <td className="m ca" data-label={NA}>{String(r[NA] ?? "-")}</td><td className="m cb" data-label={NB}>{String(r[NB] ?? "-")}</td>
+                <td data-label="Read as"><ReadAs text={String(r["Read as"] ?? "")} /></td>
+                {cell(r)}
+                <td data-label="Top values"><TopCell runId={runId} column={r.Column} names={names} /></td>
+                <td>
+                  <button type="button" className="icon-btn vc-open" aria-expanded={on} aria-controls={on ? `vc-${i}` : undefined}
+                          aria-label={`Values of ${r.Column}`} title={`Values of ${r.Column}`}
+                          onClick={() => setOpen(on ? open.filter((c) => c !== r.Column) : [...open, r.Column])}>
+                    <Icon name="chevron" />
+                  </button>
+                </td>
+              </tr>,
+              on && (
+                <tr key={"vc:" + r.Column} id={`vc-${i}`} className="vc-detail">
+                  <td colSpan={8}><ValueDetail runId={runId} column={r.Column} names={names} /></td>
+                </tr>
+              ),
+            ];
+          })}</tbody>
         </table>
       </div>
       {(onlyA.length > 0 || onlyB.length > 0) && (
@@ -136,14 +157,9 @@ export function SummaryView({ run }: { run: RunView }) {
         <p className="caption">{s.key_line && marks(s.key_line)}{s.key_line && s.overall_caption && " · "}{s.overall_caption}</p>
       )}
       {s.hash_caption && <p className="caption">{s.hash_caption}</p>}
-      <div className="split">
-        <div className="main">
-          <ColumnsPanel s={s} names={run.names} matched={c.matched} />
-        </div>
-        <div className="side">
-          <WhyTheyDiffer run={run} s={s} />
-        </div>
-      </div>
+      {/* the top values need the page's width, so Why they differ sits under the Columns, its parts side by side */}
+      <ColumnsPanel s={s} names={run.names} matched={c.matched} runId={run.id} />
+      <WhyTheyDiffer run={run} s={s} />
       <BucketProfile run={run} buckets={s.buckets} first={s.default_bucket} sidedTip={s.sided_tip} />
       {s.mode !== "hash" && (
         <section className="panel fold cols-values" aria-label="Columns & values">
