@@ -45,7 +45,7 @@ export function useSpelling(column: string, made: string, on: boolean) {
 }
 
 /** Columns checked as a key on every row - asked when Check is pressed. */
-export function useKeyCombo(columns: string[], made: string) {
-  return useQuery({ queryKey: ["profiling-keycombo", made, ...columns], enabled: columns.length > 0, staleTime: Infinity,
-                    queryFn: () => api.get<KeyComboBody>(`/api/profiling/keycombo?${columns.map((c) => `columns=${encodeURIComponent(c)}`).join("&")}`) });
+export function useKeyCombo(columns: string[], made: string, nulls: "apart" | "same" = "apart") {
+  return useQuery({ queryKey: ["profiling-keycombo", made, nulls, ...columns], enabled: columns.length > 0, staleTime: Infinity,
+                    queryFn: () => api.get<KeyComboBody>(`/api/profiling/keycombo?${columns.map((c) => `columns=${encodeURIComponent(c)}`).join("&")}&nulls=${nulls}`) });
 }

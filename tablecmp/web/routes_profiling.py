@@ -468,27 +468,33 @@ KEYCOMBO_MAX = 10
 KEYCOMBO_TOP = 10
 
 
-def key_combo(con, rel: str, cols: list[str]) -> dict:
-    """How unique a combination of columns is, counted as keys.key_uniqueness counts it: a row
-    with a null in any of the columns is a null key, neither distinct nor a duplicate - and
-    the most repeated key values."""
+def key_combo(con, rel: str, cols: list[str], nulls_same: bool = False) -> dict:
+    """How unique a combination of columns is, and the most repeated key values. A row with a
+    null in any of the columns is, by default, a key of its own - distinct, never a duplicate -
+    as a UNIQUE constraint reads it; with `nulls_same` a null equals a null, as Compare pairs
+    rows (IS NOT DISTINCT FROM), so two rows with the same values and nulls repeat."""
     missing = any_null(cols)
-    n, d, nulls = con.execute(
-        f"SELECT count(*), count(DISTINCT {combo(cols)}) FILTER (WHERE NOT ({missing})), "
-        f"count(*) FILTER (WHERE {missing}) FROM {rel}").fetchone()
     names = ", ".join(ident(c) for c in cols)
+    keep = "" if nulls_same else f"WHERE NOT ({missing})"
+    n, nulls = con.execute(f"SELECT count(*), count(*) FILTER (WHERE {missing}) FROM {rel}").fetchone()
+    groups = con.execute(f"SELECT count(*) FROM (SELECT 1 FROM {rel} {keep} GROUP BY {names})").fetchone()[0]
     text = ", ".join(f"CAST({ident(c)} AS VARCHAR)" for c in cols)
     top = con.execute(
-        f"SELECT {text}, count(*) AS n FROM {rel} WHERE NOT ({missing}) GROUP BY {names} "
+        f"SELECT {text}, count(*) AS n FROM {rel} {keep} GROUP BY {names} "
         f"HAVING count(*) > 1 ORDER BY n DESC, {names} LIMIT {KEYCOMBO_TOP}").fetchall()
-    dup = n - nulls - d
+    d = groups if nulls_same else groups + nulls
+    dup = n - d
+    per = con.execute("SELECT " + ", ".join(f"count(*) FILTER (WHERE {ident(c)} IS NULL)" for c in cols)
+                      + f" FROM {rel}").fetchone()
     return {"columns": cols, "rows": int(n), "distinct": int(d), "duplicate_rows": int(dup),
-            "null_keys": int(nulls), "unique": not dup and not nulls,
+            "null_keys": int(nulls), "nulls_same": nulls_same, "unique": not dup,
+            "nulls_by_column": {c: int(k) for c, k in zip(cols, per) if k},
             "top": [{"values": list(r[:-1]), "n": int(r[-1])} for r in top]}
 
 
 @router.get("/keycombo")
-def keycombo(columns: list[str] = Query(..., max_length=1000), ws: Workspace = Depends(workspace)) -> dict:
+def keycombo(columns: list[str] = Query(..., max_length=1000), nulls: str = Query("apart", pattern="^(apart|same)$"),
+             ws: Workspace = Depends(workspace)) -> dict:
     """Any combination of the profiled columns checked as a key on every row - read-only."""
     _, prof, _ = _held(ws)
     cols = list(dict.fromkeys(columns))
@@ -498,7 +504,8 @@ def keycombo(columns: list[str] = Query(..., max_length=1000), ws: Workspace = D
     bad = [c for c in cols if c not in have]
     if bad:
         raise HTTPException(400, f"No column called {bad[0]} in this profile.")
-    return held_answer(ws, prof, ("keycombo", tuple(cols)), lambda con: key_combo(con, "prof", cols))
+    same = nulls == "same"
+    return held_answer(ws, prof, ("keycombo", tuple(cols), same), lambda con: key_combo(con, "prof", cols, same))
 
 
 @router.get("/profile.csv")

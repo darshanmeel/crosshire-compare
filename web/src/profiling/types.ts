@@ -26,8 +26,10 @@ export type CastsBody = { columns: CastRow[] };
 /** One column taken apart (GET /api/profiling/parts). */
 export type PartGroup = { title: string; total: number; rows: { label: string; n: number }[] };
 export type SpellingBody = { column: string; distinct: number; folded: number; padded: number };
-/** A combination of columns checked as a key on every row (GET /api/profiling/keycombo): a row with a
- *  null in any of them is a null key, neither distinct nor a duplicate; top - the most repeated values. */
-export type KeyComboBody = { columns: string[]; rows: number; distinct: number; duplicate_rows: number; null_keys: number;
+/** A combination of columns checked as a key on every row (GET /api/profiling/keycombo). nulls=apart: a row
+ *  with a null in any of them is a key of its own, distinct, never a duplicate; nulls=same (nulls_same): null
+ *  equals null, as Compare pairs rows. null_keys - rows with a null; nulls_by_column - the nulls per column
+ *  (only those with any); top - the most repeated values. */
+export type KeyComboBody = { columns: string[]; rows: number; distinct: number; duplicate_rows: number; null_keys: number; nulls_same?: boolean; nulls_by_column?: Record<string, number>;
   unique: boolean; top: { values: (string | null)[]; n: number }[] };
 export type PartsBody = { column: string; kind: string; reads_as?: string; groups: PartGroup[] };
