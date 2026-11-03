@@ -35,6 +35,7 @@ class Panel:
     staged: str = ""                  # the upload, written to the work folder
     staged_label: str = ""            # its own file name
     fetched: Fetched | None = None
+    values: dict = field(default_factory=dict)      # (column, search, limit) -> a column's values, for this side
 
 
 def panels(ws: Workspace) -> dict[str, Panel]:
@@ -61,6 +62,7 @@ def put_side(ws: Workspace, tag: str, new: Side) -> None:
     p = panel(ws, tag)
     retire(p.side, new, p.fetched.path if p.fetched else "")
     p.side = new
+    p.values = {}
     if tag != "P":
         close_run(ws.data.get("result"))
     else:                                          # the profile's held table (profile_held.DB)

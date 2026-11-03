@@ -17,8 +17,8 @@ from .. import connections as cx
 from .. import databases as db
 from .. import excel, filepick, loading
 from ..connforms import CAP_DEFAULT
-from ..sources import (Side, add_derived, file_stamp, folder_files, in_folder, kind_of, path_allowed, preview_rows, quick_clause,
-                       read_opts, source_schema, work_dir)
+from ..sources import (FileChanged, Side, add_derived, column_values, file_stamp, folder_files, in_folder, kind_of, path_allowed, preview_rows,
+                       quick_clause, read_opts, source_schema, work_dir)
 from .. import setup as su
 from . import jobs, runs
 from . import setupws as sw
@@ -246,6 +246,7 @@ class ClauseIn(BaseModel):
     column: str
     op: str
     value: str = ""
+    values: list[str] | None = Field(None, max_length=1000)    # picked from the column's values, taken as they are
     where: str = ""
 
 
@@ -255,7 +256,7 @@ def add_clause(body: ClauseIn) -> dict:
     here, where the SQL quoting lives."""
     if body.op not in loading.QUICK_OPS:
         raise HTTPException(400, "Pick a condition from the list.")
-    clause = quick_clause(body.column, body.op, body.value)
+    clause = quick_clause(body.column, body.op, body.value, body.values)
     cur = body.where.strip()
     return {"where": f"{cur}\nAND {clause}" if cur else clause}
 
@@ -317,6 +318,38 @@ def preview(tag: str, n: int = Query(10, ge=1, le=100), ws: Workspace = Depends(
     except duckdb.Error as exc:
         raise HTTPException(400, str(exc)) from exc
     return sw.frame(df)
+
+
+VALUES_CACHE = 64                     # a panel's cached value lists; more and it starts again
+
+
+@router.get("/{tag}/values")
+def values(tag: str, column: str = Query(..., max_length=500), search: str = Query("", max_length=200),
+           limit: int = Query(200, ge=1, le=1000), ws: Workspace = Depends(workspace)) -> dict:
+    """A column's distinct values with their row counts, over every row the side read - before
+    its WHERE, order and top N - for picking a filter's value. Kept until the side is loaded again."""
+    p = panel(ws, _tag(tag))
+    s = p.side
+    if not s.loaded:
+        raise HTTPException(409, "Load this side first.")
+    key = (column, search.lower(), limit)          # lower() as DuckDB's, so one key is one result
+    got = p.values.get(key)
+    if got is None:
+        try:
+            got = column_values(s, column, search, limit)
+        except KeyError:
+            raise HTTPException(400, f"{s.name or tag} has no column {column}.") from None
+        except FileChanged:
+            raise HTTPException(409, "The file changed since Load - load this side again.") from None
+        except (duckdb.Error, ValueError) as exc:
+            if p.side is not s:                     # loaded again mid-read, its old snapshot gone
+                raise HTTPException(409, "This side was loaded again - pick again.") from None
+            raise HTTPException(400, f"Could not read the values: {exc}") from exc
+        if p.side is s:                             # not a list of the side a Load just replaced
+            if len(p.values) >= VALUES_CACHE:
+                p.values.clear()
+            p.values[key] = got
+    return got
 
 
 def _connection(name: str) -> cx.Connection:

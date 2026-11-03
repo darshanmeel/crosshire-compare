@@ -43,6 +43,7 @@ class Side:
     capped: bool = False    # the fetch hit the cap
     folder: str = ""        # the folder connection a Path on disk side was picked from
     derived: dict[str, str] = field(default_factory=dict)   # added column -> DuckDB expression on the file's columns
+    stamp: str = ""         # the file's size:mtime at Load (file_stamp), "" when not taken
 
     @property
     def loaded(self) -> bool:
@@ -291,6 +292,41 @@ def snapshot(side: Side, path: str) -> None:
     side.cache_path = path
 
 
+class FileChanged(Exception):
+    """The side's file is gone or was saved again after Load - what it holds can no longer be read again."""
+
+
+def whole_expr(side: Side) -> str:
+    """The side's rows before its WHERE, order and top N, under the file's own column names: the
+    snapshot when there was no cut to take, else the file read again - for a database side that
+    is the fetched Parquet, never the database. FileChanged when the file is not the one loaded."""
+    if side.cache_path and not side.where.strip() and not side.limit:
+        return f"read_parquet({lit(side.cache_path)})"
+    now = file_stamp(side.csv_path)
+    if not now or (side.stamp and now != side.stamp):
+        raise FileChanged(side.csv_path)
+    return read_expr(side.csv_path, side.kind, side.delimiter, side.header, **side.read_opts)
+
+
+def column_values(side: Side, column: str, search: str = "", limit: int = 200) -> dict:
+    """A column's distinct values (as text, null kept) over the whole side, the most frequent
+    first, then by value. `search` keeps those containing it, any case, taken literally.
+    KeyError for a column the file does not have (a shown name is mapped to the file's)."""
+    src = column if column in side.source_columns else side.source_of.get(column)
+    if src is None or src not in (side.source_columns or side.columns):
+        raise KeyError(column)
+    frm = whole_expr(side)
+    con = scratch()
+    rows = int(con.execute(f"SELECT count(*) FROM {frm}").fetchone()[0])
+    cond, args = ("WHERE contains(lower(v), lower(?))", [search]) if search else ("", [])
+    got = con.execute(f"SELECT v, count(*) AS n, count(*) OVER () AS groups "
+                      f"FROM (SELECT {ident(src)}::VARCHAR AS v FROM {frm}) {cond} "
+                      f"GROUP BY v ORDER BY n DESC, v ASC NULLS LAST LIMIT {int(limit)}", args).fetchall()
+    distinct = int(got[0][2]) if got else 0
+    return {"column": column, "rows": rows, "distinct": distinct,
+            "values": [{"value": v, "n": int(n)} for v, n, _ in got], "more": distinct > len(got)}
+
+
 def row_count(side: Side) -> int:
     return int(scratch().execute(f"SELECT count(*) FROM {source_expr(side)}").fetchone()[0])
 
@@ -302,16 +338,21 @@ def preview_rows(side: Side, n: int = 10) -> pd.DataFrame:
     return df.rename(columns=back)
 
 
-def quick_clause(col: str, op: str, value: str) -> str:
-    """One condition from the sidebar's column / condition / value pickers."""
+def quick_clause(col: str, op: str, value: str, values: list[str] | None = None) -> str:
+    """One condition from the sidebar's column / condition / value pickers. `values` are values
+    picked from the column's own, taken exactly as they are (a comma or a quote in one is fine):
+    all of them for "in", ahead of what is typed; the first one in place of the typed text otherwise."""
     c, v = ident(col), value.strip()
+    picked = list(values or [])
     if op == "is null":
         return f"{c} IS NULL"
     if op == "is not null":
         return f"{c} IS NOT NULL"
     if op.startswith("in"):
-        items = [x.strip() for x in v.split(",") if x.strip()]
+        items = list(dict.fromkeys(picked + [x.strip() for x in v.split(",") if x.strip()]))
         return f"{c} IN ({', '.join(lit(x) for x in items) or lit('')})"
+    if picked:
+        v = picked[0]
     if op == "contains":
         return f"{c} ILIKE {lit('%' + v + '%')}"
     if op == "starts with":

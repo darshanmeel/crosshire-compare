@@ -10,6 +10,7 @@ import { getForm, setForm, useSideForm } from "../sources/formStore";
 import { useSources } from "../sources/useSources";
 import { loadBody, type SideView, type Tag } from "../sources/types";
 import { useQuickClause } from "../sources/useQuickClause";
+import { PickedChips, ValuePicker } from "../sources/ValuePicker";
 import { Icon } from "../ui/icons";
 import { Button, ErrorNote, LinkButton, num, Pill, SideBadge } from "../ui/kit";
 import { marks } from "../ui/marks";
@@ -53,6 +54,7 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
       setSaid({ warnings: r.warnings, error: "", done: true });
       qc.invalidateQueries({ queryKey: ["sources"] });
       qc.invalidateQueries({ queryKey: ["preview", tag] });
+      qc.removeQueries({ queryKey: ["values", tag] });      // the value lists were of the side before
       refreshSetup(qc);
     },
     onError: (e) => setSaid({ warnings: [], error: errorText(e), done: false }),
@@ -85,9 +87,11 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
         <div className="row rtr-build" id={`${id}-b`}>
           <select className="in mono" aria-label="Column" value={q.col} onChange={(e) => q.setCol(e.target.value)}>{cols.map((c) => <option key={c}>{c}</option>)}</select>
           <select className="in" aria-label="Condition" value={q.op} onChange={(e) => q.setOp(e.target.value)}>{ops.map((o) => <option key={o}>{o}</option>)}</select>
-          <input type="text" className="in mono grow" aria-label="Value" disabled={q.noValue} placeholder="2026-07-20 · Finance · 100"
+          <input type="text" className="in mono grow" aria-label="Value" disabled={q.noValue} placeholder={q.hint}
                  value={q.value} onChange={(e) => q.setValue(e.target.value)} />
+          <ValuePicker tag={tag} q={q} />
           <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
+          <PickedChips q={q} />
         </div>
       )}
       <div className="row spread rtr-order">

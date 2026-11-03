@@ -108,7 +108,7 @@ python compare_app.py             # the page at http://127.0.0.1:8501</code></pr
       <li><b>Python</b> - 3.12 to 3.14, DuckDB 1.3 or newer. No Node needed: the built page is in <code>tablecmp/web_dist/</code>.</li>
       <li><b>Drivers</b> - all plain wheels, nothing outside pip; a missing one stops only its own connection kind.</li>
       <li><b>Pinned set</b> - <code>pip install -r requirements.lock</code> reproduces the Docker image exactly.</li>
-      <li><b>Name and look</b> - <code>COMPARE_APP_NAME</code> renames the app; <code>COMPARE_THEME=aurora</code> or <code>violet</code> swaps the default <b>paper</b> look.</li>
+      <li><b>Name and look</b> - <code>COMPARE_APP_NAME</code> renames the app (default <code>CrossHire Compare</code>, in <code>tablecmp/theme.py</code>); <code>COMPARE_THEME=aurora</code> or <code>violet</code> swaps the default <b>paper</b> look.</li>
       <li><b>No page at all</b> - see <a href="#rerun">Run it again from a config</a>, section 12.</li>
     </ul>
     <figure class="shot"><img src="docs/app-home.png" alt="The empty Compare page: header, step rail, a welcome panel and the two source cards" loading="lazy"><figcaption>The page before anything is loaded - header, step rail, welcome panel, source cards A and B</figcaption></figure>
@@ -388,7 +388,7 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
   <div class="body">
     <p>Under the key, the Rows page narrows what is compared. All of it is optional.</p>
     <ul class="pts">
-      <li><b>Rows to read</b> - per side, a DuckDB <code>WHERE</code>, <b>Order by</b> (with a <em>Descending</em> toggle) and <b>Top N</b>, applied at load. <b>Build a condition</b>, a link on the WHERE row, writes one for you; <b>Apply to HR</b> and <b>Copy to Payroll</b> under it.</li>
+      <li><b>Rows to read</b> - per side, a DuckDB <code>WHERE</code>, <b>Order by</b> (with a <em>Descending</em> toggle) and <b>Top N</b>, applied at load. <b>Build a condition</b>, a link on the WHERE row, writes one for you - for <code>=</code>, <code>!=</code> and <code>in</code> <b>Pick from values</b> lists the column's values with their row counts, searchable, ticked one by one for <code>in</code>, or type the value; <b>Apply to HR</b> and <b>Copy to Payroll</b> under it.</li>
       <li><b>Filters at compare</b> - one line, <em>No filter - every paired row takes part</em>, until <b>Add a filter</b>; then on the common names, for both sides or one: <code>=</code> <code>!=</code> <code>&gt;</code> <code>&lt;</code> <code>in</code> <code>between</code> <code>like</code> <code>is null</code>…</li>
       <li><b>Filter values</b> - matched exactly, read as the column's type; a bad date or number is refused in a sentence.</li>
       <li><b>Profile by bucket</b> - count a column in every bucket; the Summary then shows which rows match worst.</li>

@@ -292,7 +292,7 @@ test("the rows page: Downloads' Run settings link opens More on Run settings", a
   const line = await screen.findByText(/not profiled · .* · tables as CSV/);
   expect(line.closest("details")).toHaveAttribute("open");
   expect(await screen.findByRole("radiogroup", { name: "Tables as" })).toBeInTheDocument();
-});
+}, 15_000);   // the cold dynamic import of DownloadsTab can pass 5s when every file runs at once
 
 // ---- the setup's Rows card and the rows page ------------------------------------------------
 test("the Rows card: hidden until a pair is set up, then the key, no filter, bucket off, and Edit rows", async () => {

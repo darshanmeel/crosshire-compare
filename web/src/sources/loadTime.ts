@@ -15,6 +15,14 @@ export function changedSinceLoad(tag: Tag, v: SideView | undefined, asked: strin
   return !!(v?.loaded && t && t.sig === sigOf(v) && t.asked && t.asked !== asked);
 }
 
+const uncut = (asked: string) => JSON.stringify({ ...JSON.parse(asked), where: "", order_by: [], desc: false, limit: 0, snapshot: false });
+
+/** True when the file picked (path, sheet, lines skipped...) is not the one this page loaded - the cut left out. */
+export function pickChangedSinceLoad(tag: Tag, v: SideView | undefined, asked: string): boolean {
+  const t = times.get(tag);
+  return !!(v?.loaded && t && t.sig === sigOf(v) && t.asked && uncut(t.asked) !== uncut(asked));
+}
+
 /** The seconds the Load that read this very side took, or null when this page did not time it. */
 export function loadTime(tag: Tag, v?: SideView): number | null {
   const t = times.get(tag);

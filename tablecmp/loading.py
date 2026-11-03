@@ -15,7 +15,7 @@ import pandas as pd
 
 from . import connections as cx
 from . import databases as db
-from .sources import (FOLDER_LIST_MAX, Side, apply_names, looks_headerless, path_allowed,
+from .sources import (FOLDER_LIST_MAX, Side, apply_names, file_stamp, looks_headerless, path_allowed,
                       row_count, short_header, snapshot, work_dir)
 
 DEFAULT_NAMES = {"A": "Left", "B": "Right", "P": "Table"}    # what a side is called until it is named
@@ -154,6 +154,7 @@ def build_side(tag: str, ask: ReadAsked, schema: dict[str, str], db_side: Side |
     names = ask.names_text.split(",") if ask.names_text.strip() else []
     side.schema = apply_names(schema, names) if names else dict(schema)
     side.source_columns = list(schema)
+    side.stamp = file_stamp(side.csv_path)
     # a Parquet source with no cut is already what a snapshot would be - no second copy. An Excel
     # sheet is snapshotted like a CSV: its conversion follows the workbook, and a workbook saved
     # again after Load must not change what this side holds

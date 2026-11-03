@@ -12,7 +12,7 @@ import { DatabaseBox, FetchCap, useDbSide } from "./DatabaseBox";
 import { getForm, setForm, useSideForm } from "./formStore";
 import { LoadedLine } from "./LoadedLine";
 import { boxAfterLoad } from "./names";
-import { changedSinceLoad, loadTime, noteLoadTime, secs } from "./loadTime";
+import { changedSinceLoad, loadTime, noteLoadTime, pickChangedSinceLoad, secs } from "./loadTime";
 import { PathBox } from "./PathBox";
 import { PreviewTable } from "./PreviewTable";
 import { RowsToRead, rowsSummary } from "./RowsToRead";
@@ -93,6 +93,7 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
       }
       qc.invalidateQueries({ queryKey: ["sources"] });
       qc.invalidateQueries({ queryKey: ["preview", tag] });
+      qc.removeQueries({ queryKey: ["values", tag] });      // the value lists were of the side before
     },
     onError: (e) => setSaid({ warnings: [], error: errorText(e) }),
   });
@@ -169,10 +170,12 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
   const close = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(null); };
   const newCols = cols.length > 0 && (!loaded || cols.join("\u0000") !== view!.columns.join("\u0000"));
   const dirty = loaded && (newCols || changedSinceLoad(tag, view, askedNow));   // Load comes back to the fore
+  // the values on offer would be the loaded file's, not this one's (renamed columns differ from the file's by design)
+  const stale = (newCols && !f.column_names.trim()) || pickChangedSinceLoad(tag, view, askedNow);
   const panels = <>
     {open === "rows" && (
       <div className="card-panel" id={`${id}-rows`} role="group" aria-label="Rows to read" onKeyDown={close}>
-        <RowsToRead tag={tag} cols={cols} quickOps={src?.quick_ops ?? []} />
+        <RowsToRead tag={tag} cols={cols} quickOps={src?.quick_ops ?? []} stale={stale} />
       </div>
     )}
     {open === "advanced" && (

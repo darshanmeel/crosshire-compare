@@ -129,7 +129,7 @@ The DuckDB file holds every column as text, so here the column table's *looks li
 
 The page is a header and a step rail. The header holds the **Compare** | **Profile** switch, **Connections**, **Run from config**, the **Log** and the light / dark button; the rail under it says where things stand - *Sources*, *Columns*, *Rows*, *Results* - each with a one-line summary, and carries **Auto · figure it all out** and **Compare** on the right (**Edit setup** and **Download report** once the results are on screen). **Connections** opens a drawer that docks beside the page from 1100 px wide, so the page stays usable, and is a modal below that. Before anything is loaded the page is a welcome panel with **Try the HR vs Payroll example**, and the two source cards.
 
-1. **Load A and B on the source cards.** Upload, give a path, or fetch from a database. Each side has a name (Left and Right by default) that is shown everywhere and names every output file - `<left>_compare_<right>__report.html` - so name them; the card reminds you while a side is still called Left or Right. For a big file open *Rows to read* first and cut it down. Each card offers a 10-row preview and nothing else runs.
+1. **Load A and B on the source cards.** Upload, give a path, or fetch from a database. Each side has a name (Left and Right by default) that is shown everywhere and names every output file - `<left>_compare_<right>__report.html` - so name them; the card reminds you while a side is still called Left or Right. For a big file open *Rows to read* first and cut it down; *Build a condition* there offers **Pick from values** for `=`, `!=` and `in` - the column's own values with their row counts, searchable, ticked one by one for `in` - or type the value yourself. Each card offers a 10-row preview and nothing else runs.
 
 2. **Check the column table** under the cards. Pairs by name are already made. Fix the rest with the dropdowns, set *Read as*, and set each row to **Key**, **Compare** or **Skip**. The line under the table says what it amounts to: the key, how many columns are compared, what is skipped and which pairs are guesses to check.
 3. **Transform where a side needs it.** Click a pair's Transform cell and add steps - trim, left 10, to date (%d/%m/%Y) - previewed on the first five rows, on one side or on both at once. **Add a column** makes a new one from an expression, such as the date out of a datetime.
@@ -210,7 +210,19 @@ Nothing heavy runs unless you press it.
 
 ## Settings
 
-There is no settings file. Everything is either in the page or an environment variable read when the app starts:
+There is no settings file. Everything is either in the page or an environment variable read when the app starts.
+
+**The app's name.** `COMPARE_APP_NAME`, default `CrossHire Compare` (set in `tablecmp/theme.py`, `APP_NAME`). Set it before starting to rename the app - unset, the default is used:
+
+```
+set COMPARE_APP_NAME=My Compare                       (Windows cmd)
+$env:COMPARE_APP_NAME="My Compare"                    (PowerShell)
+export COMPARE_APP_NAME="My Compare"                  (macOS / Linux)
+```
+
+To check which name is in use: the browser tab, the page header, or the line the server prints at start (`My Compare at http://127.0.0.1:8501`).
+
+All the variables:
 
 | Variable | Default | What it does |
 |---|---|---|

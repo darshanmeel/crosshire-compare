@@ -4,6 +4,7 @@ import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Meta } from "../api/client";
 import type { SideView, SourcesBody, Tag } from "./types";
+import type { ColumnValues } from "./ValuePicker";
 
 export type Call = [string, RequestInit | undefined];
 export const META: Meta = { app_name: "X", tagline: "", theme: "aurora", kinds: {}, form: {} as Meta["form"], filepick: false };
@@ -26,4 +27,10 @@ export const json = (b: unknown, status = 200) =>
 // render()'s result, so a test can unmount and draw the same component again on new data
 export function mount(ui: ReactElement) {
   return render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{ui}</QueryClientProvider>);
+}
+
+/** GET /api/sources/{tag}/values - a column's values with their row counts. */
+export function values(over: Partial<ColumnValues> = {}): ColumnValues {
+  return { column: "department", rows: 3000, distinct: 3,
+           values: [{ value: "Engineering", n: 1204 }, { value: "Finance", n: 380 }, { value: null, n: 2 }], more: false, ...over };
 }

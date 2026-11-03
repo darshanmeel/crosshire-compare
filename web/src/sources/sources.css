@@ -36,6 +36,7 @@
 .card-panel .tips li::marker { color: var(--fs-accent); }
 .card-panel .quick { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
 .card-panel .quick .field { flex: 1 1 140px; }
+.card-panel .quick .field:has(.vpick-row) { flex: 2 1 240px; }      /* Value shares its row with Pick - room to read a picked value */
 .card-panel select[multiple].order { height: auto; min-height: 88px; padding: 4px; background-image: none; }
 .card-panel textarea { min-height: 64px; }
 
@@ -90,3 +91,30 @@
 .source-meta strong { color: var(--fs-text); font-weight: 600; }
 .source-meta .side-badge { width: 24px; height: 24px; }
 .source-meta .link-btn { min-height: 36px; }
+
+/* Pick from values, beside a filter's Value box (both Rows to read editors) */
+.vpick-row { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.vpick-row > input { flex: 1 1 auto; min-width: 0; }
+.vpick { flex: none; }
+.vpick-btn { padding: 0 12px; }
+.vpick-btn:disabled { opacity: .5; cursor: default; color: var(--fs-text3); border-color: var(--fs-border2); }
+.vpick-pop { width: min(360px, calc(100vw - 32px)); max-height: none; gap: 8px; }
+.vpick-pop:focus { outline: none; }                                 /* focusable only so a click inside keeps it open */
+.vpick-pop .caption { margin: 0; }
+.vpick-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; max-height: 280px; overflow: auto; }
+.vpick-item { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 4px 8px; border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--fs-text); font-family: var(--font-mono); font-size: 12.5px; text-align: left; cursor: pointer; }
+.vpick-item:hover, .vpick-item:focus-visible, .vpick-item:has(input:focus-visible) { background: var(--fs-surface2); outline: none; }
+.vpick-item:disabled, .vpick-item:has(input:disabled) { color: var(--fs-text3); cursor: default; }
+.vpick-item input { flex: none; margin: 0; }
+.vpick-v { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.vpick-v em, .vpick-chips em { color: var(--fs-text3); }
+.vpick-n { flex: none; margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; color: var(--fs-text3); }
+.vpick-chips { list-style: none; margin: 0; padding: 0; flex: 1 1 100%; }
+.vpick-chips .chip { height: auto; min-height: 28px; white-space: normal; overflow-wrap: anywhere; color: var(--fs-text); }
+/* on a phone the list spans the builder's row, so it never runs off the screen */
+@media (max-width: 760px) {
+  .card-panel .quick, .rtr .rtr-build { position: relative; }
+  .vpick { position: static; }
+  .vpick-pop { left: 0; right: 0; width: auto; }
+}

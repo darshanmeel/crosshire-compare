@@ -7,6 +7,7 @@ import { Tips } from "../ui/Tips";
 import { useSideForm } from "./formStore";
 import type { SideForm, Tag } from "./types";
 import { useQuickClause } from "./useQuickClause";
+import { PickedChips, ValuePicker } from "./ValuePicker";
 
 /** The link's text: "all", or what cuts the rows ("filtered · top 1,000"). */
 export function rowsSummary(f: SideForm): string {
@@ -15,7 +16,8 @@ export function rowsSummary(f: SideForm): string {
   return parts.length ? parts.join(" · ") : "all";
 }
 
-export function RowsToRead({ tag, cols, quickOps }: { tag: Tag; cols: string[]; quickOps: string[] }) {
+/** `stale`: the card points at another file than the one loaded, so its values are not offered. */
+export function RowsToRead({ tag, cols, quickOps, stale = false }: { tag: Tag; cols: string[]; quickOps: string[]; stale?: boolean }) {
   const id = useId();
   const [f, set] = useSideForm(tag);
   const q = useQuickClause(tag, cols);
@@ -36,13 +38,17 @@ export function RowsToRead({ tag, cols, quickOps }: { tag: Tag; cols: string[]; 
           <label className="field"><span className="lbl">Condition</span>
             <select className="in" aria-label="Condition" value={q.op} onChange={(e) => q.setOp(e.target.value)}>{quickOps.map((o) => <option key={o}>{o}</option>)}</select>
           </label>
-          <label className="field"><span className="lbl">Value</span>
-            <input type="text" className="in mono" aria-label="Value" disabled={q.noValue} placeholder="2026-07-20 · Finance · 100"
-                   value={q.value} onChange={(e) => q.setValue(e.target.value)} />
-          </label>
+          <div className="field"><label className="lbl" htmlFor={`${id}-v`}>Value</label>
+            <span className="vpick-row">
+              <input id={`${id}-v`} type="text" className="in mono" aria-label="Value" disabled={q.noValue} placeholder={q.hint}
+                     value={q.value} onChange={(e) => q.setValue(e.target.value)} />
+              <ValuePicker tag={tag} q={q} stale={stale} />
+            </span>
+          </div>
           <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
         </div>
       )}
+      <PickedChips q={q} />
       {q.add.isError && <ErrorNote role="alert">{errorText(q.add.error)}</ErrorNote>}
       <label className="field"><span className="lbl">Filter (WHERE)</span>
         <textarea className="in mono" aria-label="Filter (WHERE)" rows={3} placeholder={"hire_date >= '2026-07-20'\nAND department = 'Finance'"}
