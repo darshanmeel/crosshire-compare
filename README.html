@@ -787,7 +787,7 @@ docker run --rm -p 8501:8501 -v ./data:/data:ro -v ./out:/out --env-file .env cr
   <div class="body">
     <div class="run">
       <div class="row"><div class="k">01</div><div><div class="t">python -m pip install -r requirements-dev.txt</div><div class="d">Once - pytest and pytest-playwright.</div></div></div>
-      <div class="row"><div class="k">02</div><div><div class="t">python -m playwright install chromium</div><div class="d">Once, for the browser runs; without it they skip.</div></div></div>
+      <div class="row"><div class="k">02</div><div><div class="t">python -m playwright install chromium</div><div class="d">Once, for the browser runs; without it they skip - or use an installed Edge: <code>python -m pytest tests/e2e --browser-channel msedge</code>.</div></div></div>
       <div class="row"><div class="k">03</div><div><div class="t">python -m pytest tests -q</div><div class="d">719 tests; sample counts in <code>tests/COUNTS.md</code>.</div></div></div>
       <div class="row"><div class="k">04</div><div><div class="t">cd web &amp;&amp; npm install &amp;&amp; npm run dev</div><div class="d">Hot reload at <code>http://localhost:5173</code>, with <code>python compare_app.py --no-browser</code> beside it.</div></div></div>
       <div class="row"><div class="k">05</div><div><div class="t">cd web &amp;&amp; npm test &amp;&amp; npm run build</div><div class="d">Before committing - <code>tests/test_web_build.py</code> fails on a stale build.</div></div></div>

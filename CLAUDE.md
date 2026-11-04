@@ -10,7 +10,7 @@ TypeScript in `web/`, built into `tablecmp/web_dist/` and served by FastAPI.
 ```bash
 # once
 python -m pip install -r requirements-dev.txt          # app + pytest + pytest-playwright
-python -m playwright install chromium                   # for tests/e2e (they skip without it)
+python -m playwright install chromium                   # for tests/e2e (they skip without it), or: pytest tests/e2e --browser-channel msedge
 cd web && npm install && cd ..
 
 # develop

@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture(scope="session", autouse=True)
-def _need_a_browser():
-    why = browser_missing()
+def _need_a_browser(request):
+    why = browser_missing(request.config.getoption("--browser-channel", None))
     if why:
         pytest.skip(why)
 

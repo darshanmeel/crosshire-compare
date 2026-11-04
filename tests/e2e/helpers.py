@@ -9,12 +9,15 @@ EX = Path(__file__).resolve().parents[2] / "examples"
 FAKE_PW = "example-not-a-real-password"
 
 
-def browser_missing() -> str:
-    """'' when Playwright and its Chromium are both here, else the sentence the skip shows."""
+def browser_missing(channel: str | None = None) -> str:
+    """'' when Playwright and its Chromium (or the installed browser named by --browser-channel)
+    are both here, else the sentence the skip shows."""
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         return f"Playwright is not installed - {INSTALL}"
+    if channel:                                  # an installed browser such as msedge; Playwright finds it
+        return ""
     try:
         with sync_playwright() as p:
             exe = p.chromium.executable_path
