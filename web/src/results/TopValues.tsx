@@ -1,12 +1,13 @@
 // web/src/results/TopValues.tsx - a column's values on the Summary's Columns table: per side a strip
 // of its top five values, the rest and null as shares of all rows (a histogram for numbers and
-// dates), and the detail a row opens - the top ten as bars, every value as a paged table.
-import { useEffect, useRef, useState } from "react";
+// dates), and the detail a row opens - the top ten as bars, every value as a paged table (also
+// Profile by bucket's view of a column, on one bucket's rows).
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import { errorText } from "../api/client";
 import { Loading, num, pctText, Seg } from "../ui/kit";
 import { Pager } from "./DistinctValues";
 import { Failed } from "./Failed";
-import { HIST_KINDS, axisMax, useValues, type Basis, type HistSide, type ValueRow, type ValuesBody } from "./valuesApi";
+import { HIST_KINDS, axisMax, useValues, type Basis, type HistSide, type Side, type Subset, type ValueRow, type ValuesBody } from "./valuesApi";
 import "./values.css";
 
 const CLIP = 24;
@@ -133,20 +134,27 @@ export function RankKey() {
   return <ul className="legend vc-key" aria-label="Top values key">{[item("r1", "1st"), item("r2", "2nd"), item("r3", "3rd"), item("r4", "4th"), item("r5", "5th"), item("ro", "other values"), item("rnull", "null")]}</ul>;
 }
 
-/** Every side's top ten values of a column as bars on one axis, and every value as a paged table. */
-export function ValueDetail({ runId, column, names }: { runId: string; column: string; names: [string, string] }) {
+/** Every side's top ten values of a column as bars on one axis, and every value as a paged table -
+ *  over all rows, or a bucket's rows (`subset`); `sides` narrows it to the one side a set of rows has.
+ *  `where` (the bucket) goes into its names, so a bucket's column is told apart from the Summary's. */
+export function ValueDetail({ runId, column, names, subset, sides = ["a", "b"], title, where }: {
+  runId: string; column: string; names: [string, string]; subset?: Subset; sides?: ("a" | "b")[]; title?: ReactNode; where?: string;
+}) {
+  const of = where ? `${column} in ${where}` : column;
   const [basis, setBasis] = useState<Basis>("all");
   const [view, setView] = useState<"chart" | "table">("chart");
   const [page, setPage] = useState(1);                 // the all-values table's page
-  const q = useValues(runId, { column, side: "both", size: 10, basis });
+  const side: Side = sides.length > 1 ? "both" : sides[0];
+  const q = useValues(runId, { column, subset, side, size: 10, basis });
   const d = q.data;
-  const [NA, NB] = names;
+  const ix = sides.map((_, i) => i);
+  const nm = (i: number) => names[sides[i] === "a" ? 0 : 1];
   // the body's own basis: while the other basis loads, the last body stays on screen
   const whole = (i: number) => (d ? d.sides[i].rows - (d.basis === "nonnull" ? d.sides[i].nulls : 0) : 0);
   const share = (r: { n: number[] }, i: number) => (whole(i) ? (100 * r.n[i]) / whole(i) : 0);
-  const max = d ? axisMax(Math.max(0, ...d.rows.flatMap((r) => [share(r, 0), share(r, 1)]))) : 100;
+  const max = d ? axisMax(Math.max(0, ...d.rows.flatMap((r) => ix.map((i) => share(r, i))))) : 100;
   const last = d?.rows[d.rows.length - 1];
-  const ranks = d ? [sideRanks(d.rows, 0), sideRanks(d.rows, 1)] : [];
+  const ranks = d ? ix.map((i) => sideRanks(d.rows, i)) : [];
   const tone = (r: ValueRow, i: number) => (r.value == null ? "rnull" : topCls(ranks[i].get(r.rank) ?? TOP));
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((t) => t * max);
   const tick = (t: number) => (ticks.every(Number.isInteger) ? `${t}%` : `${t.toFixed(2)}%`);
@@ -155,19 +163,19 @@ export function ValueDetail({ runId, column, names }: { runId: string; column: s
     <div className="vc-detail-body">
       <div className="vc-detail-head">
         <div>
-          <h3>{column}</h3>
-          {d && <span className="sub">{num(d.sides[0].distinct)} distinct in {NA} · {num(d.sides[1].distinct)} in {NB} · nulls {num(d.sides[0].nulls)} / {num(d.sides[1].nulls)}</span>}
+          <h3>{title ?? column}</h3>
+          {d && <span className="sub">{ix.map((i) => `${num(d.sides[i].distinct)} distinct in ${nm(i)}`).join(" · ")} · nulls {ix.map((i) => num(d.sides[i].nulls)).join(" / ")}</span>}
         </div>
         <span className="grow" />
-        <Seg label="Percent of" value={basis} onChange={(b) => { setBasis(b); setPage(1); }}
+        <Seg label={where ? `Percent of for ${of}` : "Percent of"} value={basis} onChange={(b) => { setBasis(b); setPage(1); }}
              options={[{ value: "all", label: "% of all rows" }, { value: "nonnull", label: "% of non-null" }]} />
-        <Seg label="Show values as" value={view} onChange={setView}
+        <Seg label={where ? `Show values as for ${of}` : "Show values as"} value={view} onChange={setView}
              options={[{ value: "chart", label: "Chart", icon: "bars" }, { value: "table", label: "Table", icon: "table" }]} />
       </div>
       {q.error && <Failed error={q.error} />}
       {!d && !q.error && <Loading>Counting values…</Loading>}
       {d && view === "chart" && (
-        <div className="vc-list" role="list" aria-label={`Top values of ${column}`}>
+        <div className="vc-list" role="list" aria-label={`Top values of ${of}`}>
           <div className="vc-row vc-axis" aria-hidden="true">
             <span>Value</span>
             <span className="vc-ticks">{ticks.map((t) => <b key={t} style={{ left: `${(100 * t) / max}%` }}>{tick(t)}</b>)}</span>
@@ -177,24 +185,24 @@ export function ValueDetail({ runId, column, names }: { runId: string; column: s
             <div className="vc-row" role="listitem" key={r.rank}>
               <span className={r.value == null ? "m vc-null" : "m"} title={r.value ?? undefined}>{clip(shown(r.value))}</span>
               <span className="vc-bars">
-                {[0, 1].map((i) => (
+                {ix.map((i) => (
                   <span key={i} className="vc-share">
-                    <i className={`vc-seg ${tone(r, i)} ${"ab"[i]}`} style={{ width: `${Math.min(100, (100 * share(r, i)) / max)}%` }} />
+                    <i className={`vc-seg ${tone(r, i)} ${sides[i]}`} style={{ width: `${Math.min(100, (100 * share(r, i)) / max)}%` }} />
                   </span>
                 ))}
               </span>
-              <span className="num vc-nums">{[0, 1].map((i) => <span key={i}><span className={`sw ${"ab"[i]}`} /><span>{cell(r, i)}</span></span>)}</span>
+              <span className="num vc-nums">{ix.map((i) => <span key={i}><span className={`sw ${sides[i]}`} /><span>{cell(r, i)}</span></span>)}</span>
             </div>
           ))}
         </div>
       )}
       {d && last && view === "chart" && (
         <p className="caption">
-          Top {num(d.rows.length)} of {num(d.values)} values cover {pct(last.cum[0], whole(0))} of {NA} rows and {pct(last.cum[1], whole(1))} of {NB} rows
+          Top {num(d.rows.length)} of {num(d.values)} values cover {ix.map((i) => `${pct(last.cum[i], whole(i))} of ${nm(i)} rows`).join(" and ")}
           {d.basis === "nonnull" ? " with a value" : ""}. Axis scaled to {max}%.
         </p>
       )}
-      <AllValues runId={runId} column={column} names={names} basis={basis} page={page} setPage={setPage} quiet={!!q.error} />
+      <AllValues runId={runId} column={column} of={of} subset={subset} sides={sides} names={ix.map(nm)} basis={basis} page={page} setPage={setPage} quiet={!!q.error} />
     </div>
   );
 }
@@ -202,11 +210,13 @@ export function ValueDetail({ runId, column, names }: { runId: string; column: s
 const PAGE = 25;
 
 /** Every value of a column with its rows and % on each side, a page at a time, scrolling inside the panel. */
-function AllValues({ runId, column, names, basis, page, setPage, quiet }:
-  { runId: string; column: string; names: [string, string]; basis: Basis; page: number; setPage: (p: number) => void; quiet: boolean }) {
-  const q = useValues(runId, { column, side: "both", basis, page, size: PAGE });
+function AllValues({ runId, column, of, subset, sides, names, basis, page, setPage, quiet }: {
+  runId: string; column: string; of: string; subset?: Subset; sides: ("a" | "b")[]; names: string[]; basis: Basis;
+  page: number; setPage: (p: number) => void; quiet: boolean;
+}) {
+  const q = useValues(runId, { column, subset, side: sides.length > 1 ? "both" : sides[0], basis, page, size: PAGE });
   const d = q.data;
-  const [NA, NB] = names;
+  const ix = sides.map((_, i) => i);
   const whole = (i: number) => (d ? d.sides[i].rows - (d.basis === "nonnull" ? d.sides[i].nulls : 0) : 0);
   const pages = d ? Math.max(1, Math.ceil(d.values / PAGE)) : 1;
   const from = d ? (d.page - 1) * d.size + 1 : 0;
@@ -215,13 +225,12 @@ function AllValues({ runId, column, names, basis, page, setPage, quiet }:
   return (
     <div className="vc-all">
       <div className="tblwrap vc-all-scroll">
-        <table className="tbl compact" aria-label={`Values of ${column}`} aria-busy={q.isFetching}>
-          <thead><tr><th>Value</th><th className="num">{NA} rows</th><th className="num">{NA} %</th><th className="num">{NB} rows</th><th className="num">{NB} %</th></tr></thead>
+        <table className="tbl compact" aria-label={`Values of ${of}`} aria-busy={q.isFetching}>
+          <thead><tr><th>Value</th>{ix.map((i) => <Fragment key={i}><th className="num">{names[i]} rows</th><th className="num">{names[i]} %</th></Fragment>)}</tr></thead>
           <tbody>{d.rows.map((r) => (
             <tr key={r.rank}>
               <td className="m vc-val" title={r.value ?? "null"}>{r.value == null ? <em className="vc-null">null</em> : shown(r.value)}</td>
-              <td className="num m">{num(r.n[0])}</td><td className="num m">{pct(r.n[0], whole(0))}</td>
-              <td className="num m">{num(r.n[1])}</td><td className="num m">{pct(r.n[1], whole(1))}</td>
+              {ix.map((i) => <Fragment key={i}><td className="num m">{num(r.n[i])}</td><td className="num m">{pct(r.n[i], whole(i))}</td></Fragment>)}
             </tr>
           ))}</tbody>
         </table>
@@ -229,7 +238,7 @@ function AllValues({ runId, column, names, basis, page, setPage, quiet }:
       <div className="vc-all-foot">
         <span>{d.rows.length ? <>Values <strong>{num(from)}–{num(from + d.rows.length - 1)}</strong> of {num(d.values)}</> : "No values."}</span>
         <span className="grow" />
-        {pages > 1 && <Pager page={page} pages={pages} setPage={setPage} label={`Pages of ${column}`} />}
+        {pages > 1 && <Pager page={page} pages={pages} setPage={setPage} label={`Pages of ${of}`} />}
       </div>
     </div>
   );

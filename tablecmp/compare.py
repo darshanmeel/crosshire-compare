@@ -430,16 +430,36 @@ def hash_compare(con, cfg: dict, folder: Path, say) -> Outcome:
 
 
 # ---- reading results back ------------------------------------------------------
-def ordered_view(con, table: str, name: str, keys: list[str] | None = None) -> None:
+def ordered_view(con, table: str, name: str, keys: list[str] | None = None, where: str = "") -> None:
     """Row number in file order plus, when there is a key, the occurrence index within that
     key - the same numbering the engine uses to pair duplicate keys (1st with 1st, 2nd with
-    2nd), so every follow-up query pairs exactly the rows the engine paired."""
+    2nd), so every follow-up query pairs exactly the rows the engine paired. `where` keeps the
+    rows the engine kept (the run's filters), before they are numbered."""
     occ = ""
     if keys:
         part = ", ".join(ident(k) for k in keys)
         occ = f", row_number() OVER (PARTITION BY {part} ORDER BY __rn) AS __occ"
     con.execute(f"CREATE OR REPLACE VIEW {ident(name)} AS "
-                f"SELECT *{occ} FROM (SELECT row_number() OVER () AS __rn, * FROM {ident(table)})")
+                f"SELECT *{occ} FROM (SELECT row_number() OVER () AS __rn, * FROM {ident(table)}"
+                + (f" WHERE {where}" if where else "") + ")")
+
+
+def both_filter(filters: dict) -> str:
+    """The Both filters as the engine applies them: its != and not in keep a null row, where
+    filter_sql's <> and NOT IN drop it. A side's own filters reach the engine as filter_sql."""
+    parts = []
+    for col, spec in filters.items():
+        for op, v in spec.items():
+            if op != "type":
+                w = filter_sql({col: {"type": spec.get("type"), op: v}})
+                parts.append(f"({w}) IS NOT FALSE" if op in ("ne", "not_in") else w)
+    return " AND ".join(parts)
+
+
+def side_filter(cfg: dict, side: str) -> str:
+    """The rows of a side ("left" / "right") the run compared: its Both and own filters as SQL."""
+    return " AND ".join(w for w in (both_filter(cfg.get("filters") or {}),
+                                    filter_sql(cfg.get(f"{side}_filters") or {})) if w)
 
 
 def pair_views(run: dict, keys: list[str]) -> None:
@@ -452,8 +472,8 @@ def pair_views(run: dict, keys: list[str]) -> None:
         return
     cols = len(run["cfg"].get("specs") or [])
     for side, name in (("left", "cmp_l"), ("right", "cmp_r")):
-        ordered_view(con, run[side], f"{name}_v", keys)
-        rows = int(con.execute(f"SELECT count(*) FROM {ident(run[side])}").fetchone()[0])
+        ordered_view(con, run[side], f"{name}_v", keys, side_filter(run["cfg"], side))
+        rows = int(con.execute(f"SELECT count(*) FROM {ident(name + '_v')}").fetchone()[0])
         what = "TABLE" if fits_held(con, rows, cols + 2) else "VIEW"
         con.execute(f"CREATE OR REPLACE {what} {ident(name)} AS SELECT * FROM {ident(name + '_v')}")
     run["_pair_keys"] = tuple(keys)
@@ -581,6 +601,21 @@ def ledger_counts(df: pd.DataFrame, name_a: str, name_b: str) -> dict[str, int]:
             f"only in {name_b}": roles.count(f"only in {name_b}")}
 
 
+def key_value_sql(run: dict, keys: list[str], k: str) -> str:
+    """For one key column, every value the differing rows sit under: v, matched, diff_rows, pct,
+    diff_cells and cols (the columns that differ there, sorted) - call pair_views first."""
+    kq = ident(k)
+    return f"""
+        WITH d AS (SELECT {kq} AS v, count(DISTINCT {row_key(keys, '', cd_occ(run))}) AS diff_rows,
+                          count(*) AS diff_cells, list_sort(list_distinct(list(column_name))) AS cols
+                   FROM cd GROUP BY 1),
+             m AS (SELECT l.{kq} AS v, count(*) AS matched
+                   FROM cmp_l l JOIN cmp_r r ON {join_on(keys)} GROUP BY 1)
+        SELECT d.v, m.matched, d.diff_rows, round(100.0 * d.diff_rows / greatest(m.matched, 1), 2) AS pct,
+               d.diff_cells, d.cols
+        FROM d LEFT JOIN m ON d.v IS NOT DISTINCT FROM m.v"""
+
+
 def diffs_by_key_value(run: dict, keys: list[str], n: int = 10) -> dict[str, pd.DataFrame]:
     """For each key column: the values the differing rows sit under."""
     con = run["con"]
@@ -592,22 +627,11 @@ def diffs_by_key_value(run: dict, keys: list[str], n: int = 10) -> dict[str, pd.
     if not all(k in have for k in keys):
         return {}
     pair_views(run, keys)
-    rowkey = row_key(keys, "", cd_occ(run))
     out = {}
     for k in keys:
-        kq = ident(k)
-        df = con.execute(f"""
-            WITH d AS (SELECT {kq} AS v, count(DISTINCT {rowkey}) AS diff_rows,
-                              count(*) AS diff_cells,
-                              list_slice(list_distinct(list(column_name)), 1, 6) AS cols
-                       FROM cd GROUP BY 1),
-                 m AS (SELECT l.{kq} AS v, count(*) AS matched
-                       FROM cmp_l l JOIN cmp_r r ON {join_on(keys)} GROUP BY 1)
-            SELECT d.v, m.matched, d.diff_rows,
-                   round(100.0 * d.diff_rows / greatest(m.matched, 1), 2) AS pct,
-                   d.diff_cells, array_to_string(d.cols, ', ') AS cols
-            FROM d LEFT JOIN m ON d.v IS NOT DISTINCT FROM m.v
-            ORDER BY d.diff_rows DESC, d.v LIMIT {int(n)}""").fetchdf()
+        df = con.execute(f"SELECT v, matched, diff_rows, pct, diff_cells, "
+                         f"array_to_string(list_slice(cols, 1, 6), ', ') AS cols "
+                         f"FROM ({key_value_sql(run, keys, k)}) ORDER BY diff_rows DESC, v LIMIT {int(n)}").fetchdf()
         df.columns = [k, "Matched rows", "Rows that differ", "% of those rows",
                       "Cells that differ", "Columns that differ"]
         df[k] = df[k].map(label)

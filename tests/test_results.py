@@ -114,10 +114,12 @@ def test_which_cards_and_buckets_a_run_opens_with(tmp_path, monkeypatch):
     assert rs.first_bucket(buckets, "gone") == ("differ" if "differ" in buckets else "matched")
     assert dict(rs.bucket_list(res, ["emp_id"], "X", "X"))["left"].startswith("Only in A · X")
     own, shown_cols, others = rs.bucket_plan(run, "left", ["emp_id"], ["department", "active"])
-    assert own == {"salary": "A"} and shown_cols == ["emp_id", "department", "active"]      # the side's own column waits until ticked
-    _, shown_cols, others = rs.bucket_plan(run, "differ", ["emp_id"], ["department", "active"], keys_apart=True)
-    assert "emp_id" not in shown_cols + others and set(shown_cols + others) >= {"department", "active"}
-    assert shown_cols[0] == max(["department", "active"], key=lambda c: res.diffs_by_column.get(c, 0))
+    assert own == {"salary": "A"} and shown_cols == ["emp_id"]                  # one-sided rows: the key alone
+    assert others == ["department", "active", "salary"]                         # the side's own column waits until ticked
+    _, shown_cols, others = rs.bucket_plan(run, "differ", ["emp_id"], ["department", "active"])
+    bad = rs.mismatched(run, ["department", "active"])
+    assert shown_cols == ["emp_id"] + bad[:rs.BUCKET_SHOWN] and set(shown_cols + others) >= {"department", "active"}
+    assert rs.bucket_plan(run, "same", ["emp_id"], ["department", "active"])[1] == ["emp_id"]
 
 
 def test_the_default_save_base_is_never_in_the_work_folder(tmp_path, monkeypatch):

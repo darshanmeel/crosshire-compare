@@ -47,3 +47,16 @@ export function serveValues(url: string): Response | null {
                            kind: number ? "number" : "text", sides, values: hit.length, page, size,
                            rows: hit.slice((page - 1) * size, page * size), hist }));
 }
+
+/** GET /api/results/{run}/key-values: 30 key values under the differing rows, searched and paged; null when not that call. */
+export function serveKeyValues(url: string): Response | null {
+  const u = new URL(url, "http://x");
+  if (!/^\/api\/results\/\w+\/key-values$/.test(u.pathname)) return null;
+  const p = u.searchParams;
+  const column = p.get("column") ?? "", search = (p.get("search") ?? "").toLowerCase();
+  const page = Number(p.get("page") ?? 1), size = Number(p.get("size") ?? 25);
+  const all = Array.from({ length: 30 }, (_, i) => ({ value: `E${i + 1}`, matched: 40 - i, differ: 30 - i, pct: Number(((100 * (30 - i)) / (40 - i)).toFixed(2)),
+                                                     cells: 35 - i, columns: i % 2 ? "salary" : "department, salary" }));
+  const hit = all.filter((r) => !search || r.value.toLowerCase().includes(search));
+  return json({ column, values: hit.length, page, size, rows: hit.slice((page - 1) * size, page * size) });
+}

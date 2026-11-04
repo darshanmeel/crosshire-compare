@@ -44,11 +44,11 @@ def test_a_bucket_gives_its_facts_a_side_each(c):
     d = c.get(f"{base}/differ/facts").json()
     assert d["bucket"] == "differ"
     assert [x["column"] for x in d["columns"]] == plain["shown"]               # the same columns as the simple view
-    one = d["columns"][0]
+    one = d["columns"][1]                                                    # [0] is the key, counted once
     assert [s["side"] for s in one["sides"]] == ["A", "B"]
     assert all(s["rows"] == int(COUNTS["diff_rows"]) for s in one["sides"])
     assert {"nulls", "null_pct", "distinct", "top", "shapes", "spellings"} <= set(one["sides"][0])
-    extra = plain["others"][0]["name"]
+    extra = next(o["name"] for g in plain["groups"] for o in g["items"] if o["name"] not in plain["shown"])
     more = c.get(f"{base}/differ/facts", params={"add": [extra]}).json()
     assert extra in [x["column"] for x in more["columns"]]
     only = c.get(f"{base}/differ/facts", params={"add": [extra], "exact": "true"}).json()

@@ -12,9 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from .. import results as rs
 from ..columns import role_tone
 from ..column_facts import column_facts
-from ..compare import (bucket_profile, bucket_rows, cd_occ, cells_table, column_ledger, diffs_by_key_value,
-                       differing_rows, filter_sql, join_on, ledger_counts, near_match, pair_views, paired_where,
-                       row_key, side_labels, value_pairs)
+from ..compare import (bucket_rows, cd_occ, cells_table, column_ledger, diffs_by_key_value,
+                       differing_rows, join_on, key_value_sql, ledger_counts, near_match, pair_views,
+                       paired_where, row_key, side_filter, side_labels, value_pairs)
 from ..profile import label
 from ..sql import ident, lit, memory_limit_bytes, scratch
 from ..values import BYTES_A_CELL, HOLD_SHARE, ColSpec
@@ -104,10 +104,15 @@ def compared_groups(run: dict, bucket: str, cols: list[str], item) -> list[dict]
             {"title": "Matching columns", "items": [item(c) for c in cols if c not in bad]}]
 
 
+SUBSETS = {"matched": "matched", "same": "same", "differ": "differ", "left": "only_a", "right": "only_b"}
+
+
 def bucket_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> dict:
-    """One bucket's profile. The columns counted are the plan's own plus `add`, or - with `exact` -
-    `add` alone, so a reader can untick one the plan counts. `groups` lists every column the bucket
-    can count, as the page offers them: the key, the compared columns, the ones not compared."""
+    """One bucket: which columns it counts and how - each column's values come from /values with
+    `subset`, on the bucket's rows. The columns are the plan's own (the key, and on the paired
+    buckets that differ the worst three) plus `add`, or - with `exact` - `add` alone, so a reader
+    can untick a default. `groups` lists every column the bucket can count, as the page offers
+    them: the key, the compared columns, the ones not compared."""
     NA, NB = run["names"]
     res = run["result"]
     keys, cols = rs.run_keys(run), rs.run_columns(run)
@@ -115,40 +120,39 @@ def bucket_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> 
         raise HTTPException(404, "This run has no such bucket of rows.")
     label_a, label_b = side_labels(NA, NB)
     side_name = {"A": label_a, "B": label_b}
-    out: dict = {"bucket": bucket, "by_key": None}
-    if bucket == "differ":
-        by_val = diffs_by_key_value(run, keys)
+    out: dict = {"bucket": bucket, "subset": SUBSETS[bucket], "by_key": None}
+    by_val = diffs_by_key_value(run, keys) if bucket == "differ" else {}
+    if by_val:
         out["by_key"] = {
             "title": (f"**By key value** - where the :red[{res.diff_rows:,} differing rows] sit, "
                       f"per key column of **{' + '.join(keys)}**"),
-            "tables": [{"title": f"**{k}** - top {len(t)} values by rows that differ", "table": sw.frame(t)}
+            "tables": [{"column": k, "title": f"**{k}** - top {len(t)} values by rows that differ", "table": sw.frame(t)}
                        for k, t in by_val.items()],
-            "after": "**Every column across these rows** - top values, counted on each side"}
-    apart = bool(out["by_key"] and out["by_key"]["tables"])
-    own, shown, others = rs.bucket_plan(run, bucket, keys, cols, keys_apart=apart)
+            "after": "**Every column across these rows** - its values, counted on each side"}
+    own, shown, others = rs.bucket_plan(run, bucket, keys, cols)
     item = lambda c: {"name": c, "label": f"{c} · only in {side_name[own[c]]}" if c in own else c}
-    out["others"] = [item(c) for c in others]
-    out["others_title"] = f"Other columns - {len(others)} to add"
     out["shown"] = shown
     out["groups"] = [g for g in (
-        {"title": "Key columns", "items": [] if apart else [item(c) for c in keys]},
+        {"title": "Key columns", "items": [item(c) for c in keys]},
         *compared_groups(run, bucket, [c for c in cols if c not in keys], item),
         {"title": "Not compared", "tone": "nc", "items": [item(c) for c in own if c not in keys and c not in cols]},
     ) if g["items"]]
-    prof = bucket_profile(run, keys, cols, bucket, only=_counted(keys, shown, others, apart, add, exact))
-    out["profiles"] = [{"column": col,
-                        "title": f"**{col}**" + (" · key" if col in keys else
-                                                 f" · :orange[only in {side_name[own[col]]}]" if col in own else ""),
-                        "table": sw.frame(df)} for col, df in prof.items()]
-    out["empty"] = "" if prof else "Nothing to profile for this bucket."
+    one = {"left": ["a"], "right": ["b"]}.get(bucket)
+    out["columns"] = [{"column": col,
+                       "title": f"**{col}**" + (" · key" if col in keys else
+                                                f" · :orange[only in {side_name[own[col]]}]" if col in own else ""),
+                       "sides": one or ([own[col].lower()] if col in own else ["a", "b"])}
+                      for col in _counted(keys, shown, others, add, exact)]
+    out["empty"] = "" if out["columns"] else "Tick a column to count its values on these rows."
     return out
 
 
-def _counted(keys: list[str], shown: list[str], others: list[str], apart: bool, add: list[str], exact: bool) -> list[str]:
-    """The columns a bucket counts: the plan's own plus `add`, or with `exact` `add` alone."""
-    asked = set(add)
-    can = set(shown) | set(others) | (set() if apart else set(keys))
-    return [c for c in can if c in asked] if exact else shown + [c for c in others if c in asked]
+def _counted(keys: list[str], shown: list[str], others: list[str], add: list[str], exact: bool) -> list[str]:
+    """The columns a bucket counts: the plan's own plus `add`, or with `exact` `add` alone (in its order)."""
+    if exact:
+        can = set(keys) | set(shown) | set(others)
+        return [c for c in dict.fromkeys(add) if c in can]
+    return shown + [c for c in others if c in set(add)]
 
 
 def facts_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> dict:
@@ -162,9 +166,8 @@ def facts_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> d
     if bucket not in dict(rs.bucket_list(res, keys, NA, NB)):
         raise HTTPException(404, "This run has no such bucket of rows.")
     label_a, label_b = side_labels(NA, NB)
-    apart = bucket == "differ" and bool(diffs_by_key_value(run, keys))
-    own, shown, others = rs.bucket_plan(run, bucket, keys, cols, keys_apart=apart)
-    wanted = _counted(keys, shown, others, apart, add, exact)
+    own, shown, others = rs.bucket_plan(run, bucket, keys, cols)
+    wanted = _counted(keys, shown, others, add, exact)
     cache: dict[str, list] = run.setdefault("_facts", {}).setdefault(bucket, {})
     todo = [c for c in wanted if c not in cache]
     if todo:
@@ -175,6 +178,27 @@ def facts_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> d
             cache[c] = [{"side": s, "label": label_a if s == "A" else label_b, **got[n]} for s, n in where.get(c, [])]
         run["con"].execute("DROP TABLE IF EXISTS bucket_rows")
     return {"bucket": bucket, "columns": [{"column": c, "sides": cache[c]} for c in wanted if cache.get(c)]}
+
+
+def key_values_body(run: dict, column: str, search: str, page: int, size: int) -> dict:
+    """Every value of one key column the differing rows sit under - matched rows, rows that
+    differ, their %, the cells and the columns that differ - most differing first, a page at a
+    time. Counted once per key column and held on the run."""
+    keys = rs.run_keys(run)
+    if column not in keys or not diffs_by_key_value(run, keys):
+        raise HTTPException(404, f"No key column called {column} with differing rows.")
+    con, held = run["con"], run.setdefault("_key_values", {})
+    if column not in held:
+        held[column] = f"kv_{len(held)}"
+        con.execute(f"CREATE OR REPLACE TABLE {held[column]} AS {key_value_sql(run, keys, column)}")
+    hit, params = ("contains(lower(coalesce(CAST(v AS VARCHAR), 'null')), lower(?))", [search]) if search else ("TRUE", [])
+    total = con.execute(f"SELECT count(*) FROM {held[column]} WHERE {hit}", params).fetchone()[0]
+    got = con.execute(f"SELECT CAST(v AS VARCHAR), coalesce(matched, 0), diff_rows, pct, diff_cells, "
+                      f"array_to_string(cols, ', ') FROM {held[column]} WHERE {hit} "
+                      f"ORDER BY diff_rows DESC, v NULLS LAST LIMIT ? OFFSET ?", params + [size, (page - 1) * size]).fetchall()
+    return {"column": column, "values": int(total), "page": page, "size": size,
+            "rows": [{"value": v, "matched": int(m), "differ": int(d), "pct": float(p), "cells": int(n), "columns": cs}
+                     for v, m, d, p, n, cs in got]}
 
 
 def columns_body(run: dict, limit: int, pick: list[str]) -> dict:
@@ -346,33 +370,23 @@ def one_sided(run_id: str, which: str, offset: int = Query(0, ge=0), limit: int 
 # ---- value counts: how often each value occurs, on a side and a set of rows ----------------
 HELD_VALUES = 50_000          # more distinct values than this (an id) are counted per call, not held
 HELD_TABLES = 32              # counts held on a run at once, together within HOLD_SHARE of DuckDB's memory
-
-
-def _both_filter(filters: dict) -> str:
-    """The Both filters as the engine applies them: its != and not in keep a null row, where
-    filter_sql's <> and NOT IN drop it. A side's own filters reach the engine as filter_sql."""
-    parts = []
-    for col, spec in filters.items():
-        for op, v in spec.items():
-            if op != "type":
-                w = filter_sql({col: {"type": spec.get("type"), op: v}})
-                parts.append(f"({w}) IS NOT FALSE" if op in ("ne", "not_in") else w)
-    return " AND ".join(parts)
+PAIRED = ("matched", "same", "differ")     # the subsets of paired rows - every other is a side's rows
 
 
 def _value_rows(run: dict, subset: str, side: str, column: str, differs: str, need: bool = True) -> str | None:
     """The SQL of the rows counted - the column as `v` (and B's as `b` for side "pair"): every row
-    of a side after the run's filters, the differing rows (only those where `differs` differs, when
-    given), or one side's one-sided rows. None, or 404 with `need`, when the side lacks the column."""
+    of a side after the run's filters, a bucket of paired rows - every one (matched), those with no
+    difference (same) or with one (differ; only those where `differs` differs, when given) - or one
+    side's one-sided rows. None, or 404 with `need`, when the side lacks the column."""
     con, cfg, c = run["con"], run["cfg"], ident(column)
-    if subset == "differ":
+    if subset in PAIRED:
         keys = rs.run_keys(run)
         pair_views(run, keys)
         rel = {"a": ("cmp_l", "l"), "b": ("cmp_r", "r")}
         picked = ("a", "b") if side == "pair" else (side,)
         src = [f"SELECT * FROM {rel[s][0]}" for s in picked]
         sel = ", ".join(f"{rel[s][1]}.{c} AS {name}" for s, name in zip(picked, ("v", "b")))
-        where = paired_where(run, keys, "differ")
+        where = paired_where(run, keys, subset)
         if differs:
             occ = cd_occ(run)
             where += (f" AND {row_key(keys, 'l.', '__occ' if occ else None)} IN (SELECT {row_key(keys, '', occ)} "
@@ -381,8 +395,7 @@ def _value_rows(run: dict, subset: str, side: str, column: str, differs: str, ne
     elif subset == "all":
         table = run["left"] if side == "a" else run["right"]
         src = [f"SELECT * FROM {ident(table)}"]
-        where = " AND ".join(w for w in (_both_filter(cfg["filters"]),
-                                         filter_sql(cfg["left_filters" if side == "a" else "right_filters"])) if w)
+        where = side_filter(cfg, "left" if side == "a" else "right")
         sql = f"SELECT {c} AS v FROM {ident(table)}" + (f" WHERE {where}" if where else "")
     else:
         got = runs.one_sided_source(run, "left" if subset == "only_a" else "right")
@@ -476,11 +489,13 @@ def values_body(run: dict, column: str, subset: str, side: str, differs: str, ba
         raise HTTPException(400, f"The rows {subset} holds are counted on side {subset[-1]} only.")
     if side == "pair" and subset != "differ":
         raise HTTPException(400, "A to B pairs are counted on the differing rows only.")
-    if side == "both" and subset not in ("all", "differ"):
-        raise HTTPException(400, "Both sides are counted on all rows or the differing rows only.")
+    if side == "both" and subset in ("only_a", "only_b"):
+        raise HTTPException(400, "Both sides are counted on all rows or the paired rows only.")
     if differs and subset != "differ":
         raise HTTPException(400, "differs narrows the differing rows only.")
-    if subset == "differ" and (run["mode"] != "key" or not rs.run_keys(run) or not cells_table(run)):
+    if subset in PAIRED and (run["mode"] != "key" or not rs.run_keys(run)):
+        raise HTTPException(404, "This run paired no rows on a key.")
+    if subset == "differ" and not cells_table(run):
         raise HTTPException(404, "This run has no differing rows to group.")
     if differs and differs not in rs.run_columns(run):
         raise HTTPException(404, f"This run did not compare a column called {differs}.")
@@ -521,12 +536,22 @@ def values_body(run: dict, column: str, subset: str, side: str, differs: str, ba
 
 @router.get("/{run_id}/values")
 def values(run_id: str, column: str = Query(..., max_length=1000),
-           subset: Literal["all", "differ", "only_a", "only_b"] = "all",
+           subset: Literal["all", "matched", "same", "differ", "only_a", "only_b"] = "all",
            side: Literal["a", "b", "both", "pair"] = "a", differs: str = Query("", max_length=1000),
            basis: Literal["all", "nonnull"] = "all", search: str = Query("", max_length=200),
            page: int = Query(1, ge=1, le=1_000_000), size: int = Query(25, ge=1, le=500), bins: int = Query(0, ge=0, le=50),
            ws: Workspace = Depends(workspace)) -> dict:
-    """One column's value counts on a side and a set of rows - for the top values on the Summary
-    and the distinct values on the Differing and One-sided rows tabs. Read-only."""
+    """One column's value counts on a side and a set of rows - for the top values on the Summary,
+    the buckets of Profile by bucket and the distinct values on the Differing and One-sided rows
+    tabs. Read-only."""
     with runs.reading(ws, run_id, "Values") as run:
         return values_body(run, column, subset, side, differs, basis, search, page, size, bins)
+
+
+@router.get("/{run_id}/key-values")
+def key_values(run_id: str, column: str = Query(..., max_length=1000), search: str = Query("", max_length=200),
+               page: int = Query(1, ge=1, le=1_000_000), size: int = Query(25, ge=1, le=500),
+               ws: Workspace = Depends(workspace)) -> dict:
+    """Every value of a key column the differing rows sit under, a page at a time - read-only."""
+    with runs.reading(ws, run_id, "Key values") as run:
+        return key_values_body(run, column, search, page, size)

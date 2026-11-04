@@ -7,7 +7,8 @@ import type { CompareState, RunView } from "../compare/types";
 import { getView, setView } from "../shell/view";
 import { compareState } from "../setup/testkit";
 import { body, json, mount, type Call } from "../sources/testkit";
-import { serveValues, valuesBody } from "./testkit";
+import { serveKeyValues, serveValues, valuesBody } from "./testkit";
+import { BucketProfile } from "./BucketProfile";
 import { RankKey, StackStrip } from "./TopValues";
 import { marks } from "../ui/marks";
 import { ResultsPage } from "./ResultsPage";
@@ -50,16 +51,15 @@ const SUMMARY = {
   default_bucket: "differ", sided_tip: "",
 };
 const bucketBody = (bucket: string) => ({
-  bucket,
+  bucket, subset: { left: "only_a", right: "only_b" }[bucket] ?? bucket,
   by_key: bucket === "differ" ? {
     title: "**By key value** - where the :red[649 differing rows] sit, per key column of **emp_id**",
-    tables: [{ title: "**emp_id** - top 2 values by rows that differ", table: frame(
+    tables: [{ column: "emp_id", title: "**emp_id** - top 2 values by rows that differ", table: frame(
       ["emp_id", "Matched rows", "Rows that differ", "% of those rows", "Cells that differ", "Columns that differ"],
       [["E1", 40, 12, 30, 15, "salary, department"], ["E2-a-very-long-key-value-that-must-not-break-the-row", 8, 8, 100, 8, "salary"]]) }],
-    after: "**Every column across these rows** - top values, counted on each side",
+    after: "**Every column across these rows** - its values, counted on each side",
   } : null,
-  others: [{ name: "department", label: "department" }], others_title: "Other columns - 1 to add",
-  profiles: [{ column: "emp_id", title: "**emp_id** · key", table: frame(["Value", "Rows", "%"], [["E1", 1, 100]]) }],
+  columns: [{ column: "emp_id", title: "**emp_id** · key", sides: bucket === "left" ? ["a"] : ["a", "b"] }],
   empty: "",
   shown: ["emp_id"], groups: [{ title: "Key columns", items: [{ name: "emp_id", label: "emp_id" }] },
                               { title: "Compared columns", items: [{ name: "department", label: "department" }] }],
@@ -102,7 +102,7 @@ function state(over: Partial<CompareState> = {}): CompareState {
 function serve(calls: Call[], st: () => CompareState = () => state()) {
   return vi.fn(async (url: string, init?: RequestInit) => {
     calls.push([url, init]);
-    const vc = serveValues(url);
+    const vc = serveValues(url) ?? serveKeyValues(url);
     if (vc) return vc;
     if (url === "/api/compare") return json(st());
     if (url === "/api/sources") return json(body());
@@ -211,7 +211,20 @@ test("the Summary: tiles, the Columns panel with its one-sided foot, and Profile
   expect(items[1].querySelector(".kb-val .m")).toHaveAttribute("title", "E2-a-very-long-key-value-that-must-not-break-the-row");
   expect((items[0].querySelector(".kb-m") as HTMLElement).style.width).toBe("80%");     // 40 of an axis to 50
   expect((items[0].querySelector(".kb-d") as HTMLElement).style.width).toBe("24%");
-  expect(screen.queryByRole("table", { name: /emp_id/ })).toBeNull();
+  // under the bars every key value, 25 a page, searchable
+  const keys = await screen.findByRole("table", { name: "Every value of emp_id with rows that differ" });
+  expect(within(keys).getAllByRole("row")).toHaveLength(26);
+  expect(within(keys).getAllByRole("row")[1]).toHaveTextContent("E1403075.00%35department, salary");
+  expect(keys.closest(".vc-all")).toHaveTextContent("Values 1–25 of 30");
+  await userEvent.click(within(screen.getByRole("navigation", { name: "Pages of emp_id key values" })).getByRole("button", { name: "Next" }));
+  await waitFor(() => expect(within(keys).getAllByRole("row")).toHaveLength(6));
+  await userEvent.type(screen.getByRole("searchbox", { name: "Find a value of emp_id" }), "E3");
+  await waitFor(() => expect(calls.some(([u]) => u === "/api/results/r1/key-values?column=emp_id&search=E3&page=1&size=25")).toBe(true));
+  // each ticked column as an opened row of the Columns table, on this bucket's rows
+  expect(await screen.findByRole("list", { name: "Top values of emp_id in Matched but different" })).toBeInTheDocument();
+  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=emp_id&subset=differ&side=both&basis=all&size=10");
+  expect(screen.getByRole("table", { name: "Values of emp_id in Matched but different" })).toBeInTheDocument();
+  expect(screen.getByRole("group", { name: "Percent of for emp_id in Matched but different" })).toBeInTheDocument();
   await userEvent.click(within(bucket).getByRole("button", { name: "Keys matched (2,960)" }));
   await waitFor(() => expect(calls.some(([u]) => u === "/api/results/r1/buckets/matched")).toBe(true));
   const pick = await screen.findByRole("group", { name: "Columns to count" });
@@ -226,6 +239,34 @@ test("the Summary: tiles, the Columns panel with its one-sided foot, and Profile
   await waitFor(() => expect(calls.some(([u]) => u === "/api/results/r1/buckets/matched?exact=true")).toBe(true));
   await userEvent.click(within(pick).getByRole("button", { name: "Default" }));
   expect(within(pick).getByRole("checkbox", { name: "emp_id" })).toBeChecked();
+});
+
+test("Profile by bucket on one side's rows shows that side alone", async () => {
+  const calls: Call[] = [];
+  vi.stubGlobal("fetch", serve(calls));
+  mount(<BucketProfile run={RUN} buckets={[{ id: "left", label: "Only in HR (40)" }]} first="left" sidedTip="" />);
+  await userEvent.click(screen.getByText("Profile by bucket"));
+  const chart = await screen.findByRole("list", { name: "Top values of emp_id in Only in HR" });
+  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=emp_id&subset=only_a&side=a&basis=all&size=10");
+  expect(within(chart).getAllByRole("listitem")[0].querySelectorAll(".vc-share")).toHaveLength(1);
+  const all = await screen.findByRole("table", { name: "Values of emp_id in Only in HR" });
+  expect(within(all).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Value", "HR rows", "HR %"]);
+  expect(screen.queryByRole("table", { name: /with rows that differ/ })).toBeNull();
+});
+
+test("Profile by bucket: a bucket opened for the first time never shows another bucket's counts", async () => {
+  const calls: Call[] = [];
+  vi.stubGlobal("fetch", serve(calls));
+  mount(<BucketProfile run={RUN} first="left" sidedTip=""
+    buckets={[{ id: "left", label: "Only in HR (40)" }, { id: "matched", label: "Keys matched (2,960)" }]} />);
+  await userEvent.click(screen.getByText("Profile by bucket"));
+  await screen.findByRole("list", { name: "Top values of emp_id in Only in HR" });
+  await userEvent.click(within(screen.getByRole("group", { name: "Bucket" })).getByRole("button", { name: "Keys matched (2,960)" }));
+  const chart = await screen.findByRole("list", { name: "Top values of emp_id in Keys matched" });
+  expect(within(chart).getAllByRole("listitem")[0].querySelectorAll(".vc-share")).toHaveLength(2);
+  expect(screen.queryByRole("list", { name: "Top values of emp_id in Only in HR" })).toBeNull();
+  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=emp_id&subset=matched&side=both&basis=all&size=10");
+  expect(calls.map(([u]) => u)).not.toContain("/api/results/r1/values?column=emp_id&subset=only_a&side=both&basis=all&size=10");
 });
 
 test("Why they differ: the value pairs, near-match for all-different values, the one-sided pattern", async () => {

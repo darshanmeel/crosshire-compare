@@ -1,11 +1,13 @@
 // web/src/results/valuesApi.ts - GET /api/results/{run}/values: one column's values counted over a
-// set of rows (all rows of a side, the differing rows, a side's one-sided rows), most frequent first.
+// set of rows (all rows of a side, a bucket of paired rows, a side's one-sided rows), most frequent
+// first; GET /api/results/{run}/key-values: a key column's values the differing rows sit under.
 // Written by hand - npm run gen:api does not run with this TypeScript.
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { HistBin } from "../profiling/types";
 
-export type Subset = "all" | "differ" | "only_a" | "only_b";
+/** matched: every paired row; same: paired with no difference; differ: paired with one. */
+export type Subset = "all" | "matched" | "same" | "differ" | "only_a" | "only_b";
 export type Side = "a" | "b" | "both" | "pair";
 export type Basis = "all" | "nonnull";
 export type ValuesQuery = {
@@ -33,6 +35,14 @@ export function valuesUrl(runId: string, q: ValuesQuery) {
 export const useValues = (runId: string, q: ValuesQuery, enabled = true) =>
   useQuery({ queryKey: ["results", runId, "values", q], enabled, staleTime: Infinity, placeholderData: keepPreviousData,
              queryFn: () => api.get<ValuesBody>(valuesUrl(runId, q)) });
+
+/** One key value under the differing rows: rows matched there, rows that differ, their %, cells and columns that differ. */
+export type KeyValueRow = { value: string | null; matched: number; differ: number; pct: number; cells: number; columns: string };
+export type KeyValuesBody = { column: string; values: number; page: number; size: number; rows: KeyValueRow[] };
+
+export const useKeyValues = (runId: string, column: string, search: string, page: number, size: number) =>
+  useQuery({ queryKey: ["results", runId, "key-values", column, search, page, size], staleTime: Infinity, placeholderData: keepPreviousData,
+             queryFn: () => api.get<KeyValuesBody>(`/api/results/${runId}/key-values?${new URLSearchParams({ column, ...(search ? { search } : {}), page: String(page), size: String(size) })}`) });
 
 const STEPS = [1, 2, 5, 10, 20, 25, 50, 100];
 /** The axis a bar chart is drawn on: the smallest round step that holds the largest share. */

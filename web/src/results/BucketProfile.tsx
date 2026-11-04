@@ -1,32 +1,38 @@
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { Expander } from "../ui/Expander";
+import { Icon } from "../ui/icons";
 import { ErrorNote, InfoTip, Loading, num, Seg } from "../ui/kit";
 import { ColumnPick, notCompared } from "./ColumnPick";
 import { marks } from "../ui/marks";
+import { Pager } from "./DistinctValues";
 import { Failed } from "./Failed";
-import { Grid } from "./Grid";
 import { usePick } from "./pickStore";
+import { ValueDetail } from "./TopValues";
+import { useKeyValues } from "./valuesApi";
 import { Findings, type Finding } from "../profiling/column/Findings";
 import "./values.css";
 import { qs, type BucketBody, type BucketFacts, type Frame, type SideFacts } from "./types";
 
-/** Profile by bucket, folded under the Summary: top values per column for one bucket of rows (matched, differing, only in
- * A, only in B) - the profile of what went wrong. The bucket is held by its id across runs (its
- * label carries this run's counts). */
+/** Profile by bucket, folded under the Summary: each ticked column's values on one bucket of rows
+ * (keys matched, matched and same, matched but different, only in A, only in B) - the top ten as
+ * bars and every value as a paged table, as an opened row of the Columns table. The bucket is held
+ * by its id across runs (its label carries this run's counts). */
 export function BucketProfile({ run, buckets, first, sidedTip }:
   { run: RunView; buckets: { id: string; label: string }[]; first: string; sidedTip: string }) {
   const [held, setHeld] = usePick<string>("bucket_id", "");
   const bucket = buckets.some((b) => b.id === held) ? held : first;
-  // null: the plan's own columns (the key and three); a list: exactly those, in the order ticked.
+  // null: the plan's own columns (the key, and where rows differ the worst three); a list: exactly those, in the order ticked.
   const [picked, setPicked] = usePick<string[] | null>(`bucket_pick_${bucket}`, null);
   // Simple: the top values, as it always was; Extended adds each column's facts as pills
   const [depth, setDepth] = usePick<"simple" | "extended">("bucket_depth", "simple");
   const [open, setOpen] = usePick("fold_bucket", false);     // a closed fold under the Summary, kept as left
   const ask = picked ? `${qs("add", picked)}${picked.length ? "&" : "?"}exact=true` : "";
   const q = useQuery({
-    enabled: !!bucket, staleTime: Infinity, placeholderData: (prev) => prev,
+    // the last body stays while columns are ticked, never under another bucket
+    enabled: !!bucket, staleTime: Infinity, placeholderData: (prev) => (prev?.bucket === bucket ? prev : undefined),
     queryKey: ["results", run.id, "bucket", bucket, picked],
     queryFn: () => api.get<BucketBody>(`/api/results/${run.id}/buckets/${bucket}${ask}`),
   });
@@ -40,6 +46,7 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
   const d = q.data;
   const now = picked ?? d?.shown ?? [];
   const nc = notCompared(d?.groups);
+  const where = (buckets.find((b) => b.id === bucket)?.label ?? bucket).replace(/ \([\d,]+\)$/, "");   // its name, without the count
   return (
     <section className="panel fold buckets" aria-label="Profile by bucket">
       <Expander open={open} onToggle={setOpen} title={<>Profile by bucket <span className="sub">the top values of a set of rows</span></>}>
@@ -50,7 +57,7 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
             <Seg label="Column profile" mini value={depth} onChange={setDepth}
               options={[{ label: "Simple", value: "simple", title: "The top values of each column" },
                         { label: "Extended", value: "extended", title: "Nulls, distinct, top value, range, shapes, first and last characters and spellings - a side each" }]} />
-            <InfoTip label="About Profile by bucket" text="Every mismatched column is counted, tick any other. Not compared columns show in orange. Paired rows count both sides." />
+            <InfoTip label="About Profile by bucket" text="The key is counted (and where rows differ the three columns that differ most) - tick any other. Not compared columns show in orange. Paired rows count both sides, one-sided rows their own side." />
           </div>
         </div>
         {sidedTip && <p className="caption">{marks(sidedTip)}</p>}
@@ -61,16 +68,20 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
             {d.by_key && (
               <>
                 <p className="bucket-line">{marks(d.by_key.title)}</p>
-                <div className="bucket-keys">{d.by_key.tables.map((t, i) => <div key={i}><p className="caption">{marks(t.title)}</p><KeyBars frame={t.table} /></div>)}</div>
+                <div className="bucket-keys">{d.by_key.tables.map((t) => (
+                  <div key={t.column}><p className="caption">{marks(t.title)}</p><KeyBars frame={t.table} /><KeyTable runId={run.id} column={t.column} /></div>
+                ))}</div>
                 <p className="bucket-line">{marks(d.by_key.after)}</p>
               </>
             )}
             {d.groups.length > 0 && <ColumnPick label="Columns to count" groups={d.groups} shown={d.shown} now={now} set={setPicked} />}
             {d.empty
               ? <p className="caption">{d.empty}</p>
-              : <div className="bucket-grids">{inOrder(d.profiles, now).map((p) => <div key={p.column} className={nc.has(p.column) ? "nc" : undefined}><p className="caption">{marks(p.title)}</p>
-                  {facts && <ColumnFacts sides={facts.get(p.column)} loading={f.isFetching} failed={!!f.error} />}
-                  <Grid frame={p.table} /></div>)}</div>}
+              : <div className="bucket-grids">{inOrder(d.columns, now).map((p) => (
+                  <div key={`${d.subset}:${p.sides.join("")}:${p.column}`} className={nc.has(p.column) ? "nc" : undefined}>
+                    {facts && <ColumnFacts sides={facts.get(p.column)} loading={f.isFetching} failed={!!f.error} />}
+                    <ValueDetail runId={run.id} column={p.column} names={run.names} subset={d.subset} sides={p.sides} title={marks(p.title)} where={where} />
+                  </div>))}</div>}
           </>
         )}
       </div>
@@ -126,7 +137,63 @@ function KeyBars({ frame }: { frame: Frame }) {
   );
 }
 
-/** The profiles in the order their columns were ticked - a new one lands at the end, so what is
+const PAGE = 25;
+
+/** Every value of one key column the differing rows sit under, a page at a time and searchable -
+ *  the whole list under the top values the bars draw. */
+function KeyTable({ runId, column }: { runId: string; column: string }) {
+  const [find, setFind] = useState("");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    const v = find.trim();
+    if (v === search) return;
+    const t = setTimeout(() => { setSearch(v); setPage(1); }, 250);
+    return () => clearTimeout(t);
+  }, [find, search]);
+  const q = useKeyValues(runId, column, search, page, PAGE);
+  const d = q.data;
+  const pages = d ? Math.max(1, Math.ceil(d.values / PAGE)) : 1;
+  const from = d ? (d.page - 1) * d.size + 1 : 0;
+  return (
+    <div className="vc-all">
+      <label className="search vc-search">
+        <Icon name="search" />
+        <input type="search" aria-label={`Find a value of ${column}`} placeholder="Find a value" value={find} onChange={(e) => setFind(e.target.value)} />
+      </label>
+      {q.error && <Failed error={q.error} />}
+      {!d && !q.error && <Loading>Counting key values…</Loading>}
+      {d && (
+        <>
+          <div className="tblwrap vc-all-scroll">
+            <table className="tbl compact" aria-label={`Every value of ${column} with rows that differ`} aria-busy={q.isFetching}>
+              <thead><tr><th>{column}</th><th className="num">Matched</th><th className="num">Differ</th><th className="num">% differ</th>
+                <th className="num">Cells that differ</th><th>Columns that differ</th></tr></thead>
+              <tbody>
+                {d.rows.map((r, k) => (
+                  <tr key={k}>
+                    <td className="m vc-val" title={r.value ?? "null"}>{r.value == null ? <em className="vc-null">null</em> : r.value}</td>
+                    <td className="num m">{num(r.matched)}</td><td className="num m">{num(r.differ)}</td>
+                    <td className="num m">{r.pct.toFixed(2)}%</td><td className="num m">{num(r.cells)}</td>
+                    <td className="kb-list" title={r.columns}>{r.columns}</td>
+                  </tr>
+                ))}
+                {!d.rows.length && <tr><td colSpan={6} className="dim">{search ? `No value of ${column} contains "${search}".` : "No rows."}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+          <div className="vc-all-foot">
+            <span>{d.rows.length ? <>Values <strong>{num(from)}–{num(from + d.rows.length - 1)}</strong> of {num(d.values)}</> : "No values."}</span>
+            <span className="grow" />
+            {pages > 1 && <Pager page={page} pages={pages} setPage={setPage} label={`Pages of ${column} key values`} />}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The columns in the order they were ticked - a new one lands at the end, so what is
  *  already on screen stays put. */
 function inOrder<T extends { column: string }>(profiles: T[], now: string[]) {
   const at = (c: string) => { const i = now.indexOf(c); return i < 0 ? now.length : i; };

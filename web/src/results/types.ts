@@ -1,4 +1,5 @@
 import type { Frame } from "../setup/api";
+import type { Subset } from "./valuesApi";
 export type { Frame };
 export type Metric = { label: string; value: number | string; help?: string };
 export type Summary = {
@@ -7,9 +8,11 @@ export type Summary = {
   overall: Metric[] | null; overall_caption: string; hash_caption: string; ledger: Frame;
   buckets: { id: string; label: string }[]; default_bucket: string; sided_tip: string;
 };
+/** GET /api/results/{run}/buckets/{bucket} - the columns a bucket counts; their values come from /values with `subset`. */
 export type BucketBody = {
-  bucket: string; by_key: { title: string; tables: { title: string; table: Frame }[]; after: string } | null;
-  profiles: { column: string; title: string; table: Frame }[];
+  bucket: string; subset: Subset;
+  by_key: { title: string; tables: { column: string; title: string; table: Frame }[]; after: string } | null;
+  columns: { column: string; title: string; sides: ("a" | "b")[] }[];
   empty: string;
   shown: string[]; groups: { title: string; tone?: "nc"; items: { name: string; label: string }[] }[];   // the plan's own, every column by kind
 };

@@ -29,11 +29,11 @@ def test_report_hash_mode_and_filters(tmp_path, monkeypatch):
     run, A, B = _run(tmp_path, monkeypatch)
     run["cfg"]["filters"] = {"department": {"in": ["Sales", "Finance"]}}
     run["cfg"]["left_filters"] = {"active": {"eq": "true", "type": "text"}}
-    run["cfg"]["right_filters"] = {"salary": {"not_null": True, "type": "number"}}
+    run["cfg"]["right_filters"] = {"CostCenter": {"not_null": True, "type": "text"}}   # a column payroll has
     run["cfg"]["ignore_case"], run["cfg"]["tolerance"] = True, 0.5
     html = build_report(run, A, B, "hr", "payroll", limit=20)
     assert "department in Sales, Finance · both sides" in html
-    assert "active = true · hr" in html and "salary is not null · payroll" in html
+    assert "active = true · hr" in html and "CostCenter is not null · payroll" in html
     assert "<b>case ignored</b>" in html and "<b>tolerance 0.5</b>" in html
     assert "unique on both sides" in html and "How this was worked out" not in html
 

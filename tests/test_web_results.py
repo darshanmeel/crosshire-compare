@@ -31,20 +31,20 @@ def test_a_bucket_counts_its_rows_and_adds_what_is_asked_for(c):
     base, key = f"/api/results/{run['id']}/buckets", COUNTS["key"]
     d = c.get(f"{base}/differ").json()
     assert d["by_key"]["title"].startswith("**By key value** - where the :red[") and d["by_key"]["tables"]
-    assert key not in [p["column"] for p in d["profiles"]] + [o["name"] for o in d["others"]]   # in By key value
-    extra = d["others"][0]["name"]
-    assert d["others_title"] == f"Other columns - {len(d['others'])} to add"
+    assert d["subset"] == "differ" and d["shown"][0] == key                       # the key is ticked as well
+    cols = [x["column"] for x in d["columns"]]
+    assert cols == d["shown"] and d["columns"][0]["title"] == f"**{key}** · key"
+    extra = next(o["name"] for g in d["groups"] for o in g["items"] if o["name"] not in cols)
     more = c.get(f"{base}/differ", params={"add": [extra]}).json()
-    assert extra in [p["column"] for p in more["profiles"]] and extra not in [p["column"] for p in d["profiles"]]
-    assert [g["title"] for g in d["groups"]][0] == "Mismatched columns"          # the key has its own tables
-    assert d["shown"] == [p["column"] for p in d["profiles"]] == [o["name"] for o in d["groups"][0]["items"]]   # every mismatched column
+    assert [x["column"] for x in more["columns"]] == cols + [extra]
+    assert [g["title"] for g in d["groups"]][:2] == ["Key columns", "Mismatched columns"]
     one = c.get(f"{base}/differ", params={"add": [extra], "exact": True}).json()
-    assert [p["column"] for p in one["profiles"]] == [extra]                       # a default can be unticked
+    assert [x["column"] for x in one["columns"]] == [extra]                        # a default can be unticked
     assert c.get(f"{base}/differ", params={"exact": True}).json()["empty"]
     left = c.get(f"{base}/left").json()
     assert left["groups"][0] == {"title": "Key columns", "items": [{"name": key, "label": key}]}
-    assert left["by_key"] is None and left["profiles"] and left["empty"] == ""
-    assert left["profiles"][0]["column"] == key and left["profiles"][0]["title"] == f"**{key}** · key"
+    assert left["by_key"] is None and left["empty"] == "" and left["subset"] == "only_a"
+    assert left["columns"] == [{"column": key, "title": f"**{key}** · key", "sides": ["a"]}]
     assert c.get(f"{base}/nowhere").status_code == 404
 
 

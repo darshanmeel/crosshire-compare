@@ -92,6 +92,7 @@
 /* the caption on a line of its own under the controls, so they stay put whatever its length */
 .vc-groupbar .vc-caption { flex: 1 1 100%; order: 5; }
 .vc-search { flex: 0 1 220px; }
+.vc-all > .vc-search { flex: none; width: 220px; max-width: 100%; }   /* in a column the 220px basis would be its height */
 .vc-tbl td { height: 36px; }
 .vc-tbl .vc-rank { width: 52px; color: var(--fs-text3); }
 .vc-tbl td.vc-n { font-weight: 600; }

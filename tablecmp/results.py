@@ -245,7 +245,7 @@ def first_bucket(names: dict, want: str | None) -> str:
     return "differ" if "differ" in names else next(iter(names))
 
 
-BUCKET_SHOWN = 3                        # columns counted for a bucket besides the key, before any is asked for
+BUCKET_SHOWN = 3                        # mismatched columns ticked besides the key on the paired buckets that differ
 
 
 def mismatched(run: dict, cols: list[str]) -> list[str]:
@@ -254,17 +254,13 @@ def mismatched(run: dict, cols: list[str]) -> list[str]:
     return sorted((c for c in cols if by.get(c)), key=lambda c: -by[c])
 
 
-def bucket_plan(run: dict, bucket: str, keys: list[str], cols: list[str],
-                keys_apart: bool = False) -> tuple[dict, list[str], list[str]]:
-    """For a bucket: the one-sided columns its rows carry (with their side), the columns counted
-    without asking, and the others. Counted without asking: the key, then every column that differs
-    (worst first) for paired rows, else the first BUCKET_SHOWN compared columns. A column only one
-    side has is never counted without asking - it is offered apart, to tick.
-    With `keys_apart` (the differing rows, whose key values have tables of their own) the key is
-    left out."""
+def bucket_plan(run: dict, bucket: str, keys: list[str], cols: list[str]) -> tuple[dict, list[str], list[str]]:
+    """For a bucket: the one-sided columns its rows carry (with their side), the columns ticked
+    without asking, and the others. Ticked without asking: the key, and on Keys matched and
+    Matched but different the BUCKET_SHOWN columns that differ most - the reader ticks the rest."""
     own = bucket_columns(run, bucket)
     mine = [c for c in own if c not in keys and c not in cols]
     rest = [c for c in cols if c not in keys]
-    first = (bucket not in ("left", "right") and mismatched(run, rest)) or rest[:BUCKET_SHOWN]
-    shown = ([] if keys_apart else list(keys)) + first
+    first = mismatched(run, rest)[:BUCKET_SHOWN] if bucket in ("matched", "differ") else []
+    shown = list(keys) + first
     return own, shown, [c for c in rest + mine if c not in first]
