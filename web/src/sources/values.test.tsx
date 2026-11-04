@@ -150,7 +150,7 @@ test("tabbing past the last control closes the values", async () => {
   const pickBtn = screen.getByRole("button", { name: "Pick from values" });
   await waitFor(() => expect(pickBtn).toBeEnabled());
   await userEvent.click(pickBtn);
-  await screen.findByRole("checkbox", { name: "Finance 380" });
+  await userEvent.click(await screen.findByRole("checkbox", { name: "Finance 380" }));   // a value, so Add takes focus
   screen.getByRole("button", { name: "Done" }).focus();
   await userEvent.tab();
   expect(screen.queryByRole("dialog")).toBeNull();
@@ -175,4 +175,70 @@ test("in the side card, a path that now names another file turns the button off"
   setForm("A", { path: "D:/x/other.csv" });
   await waitFor(() => expect(screen.getByRole("button", { name: "Pick from values" })).toBeDisabled(), { timeout: 3000 });
   expect(screen.getByRole("button", { name: "Pick from values" })).toHaveAttribute("title", "Load this side again to pick from its values");
+});
+
+test("in the side card, an Excel sheet whose Load found more columns than the first rows show keeps the button on", async () => {
+  const wide = view("A", { loaded: true, name: "HR", label: "hr.xlsx", kind: "excel", sheet: "Sheet1", rows: 3000, columns: ["emp_id", "department", "column2"] });
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url === "/api/sources/A/schema")       // the first rows only: column2 starts lower down
+      return json({ label: "hr.xlsx", kind: "excel", columns: [{ name: "emp_id", type: "VARCHAR" }, { name: "department", type: "VARCHAR" }], error: "", sheets: ["Sheet1"], sheet: "Sheet1" });
+    if (url.startsWith("/api/sources/A/values?")) return json(values());
+    if (url === "/api/sources/folders") return json([]);
+    return json(body({ sides: { A: wide, B: view("B"), P: view("P") }, quick_ops: OPS }));
+  }));
+  setForm("A", { how: "path", path: "D:/x/hr.xlsx" });
+  mount(<SideCard tag="A" meta={META} />);
+  await userEvent.click(await screen.findByRole("button", { name: /^Rows to read/ }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Pick from values" })).toBeEnabled());
+  expect(within(screen.getByLabelText("Column")).getAllByRole("option").map((o) => o.textContent)).toEqual(["emp_id", "department", "column2"]);
+});
+
+test("Add to filter waits for a value, a picked one or a null condition", async () => {
+  const calls = stub();
+  mount(<RowsToRead tag="A" cols={["emp_id", "department"]} quickOps={OPS} />);
+  const add = screen.getByRole("button", { name: "Add to filter" });
+  expect(add).toBeDisabled();                                         // not IN ('') / = ''
+  await userEvent.selectOptions(screen.getByLabelText("Condition"), "in (comma separated)");
+  expect(add).toBeDisabled();
+  await userEvent.type(screen.getByLabelText("Value"), "  ");
+  expect(add).toBeDisabled();
+  await userEvent.selectOptions(screen.getByLabelText("Condition"), "is null");
+  expect(add).toBeEnabled();
+  expect(sentClause(calls)).toEqual([]);
+});
+
+test("the empty value picked under = is a value: Add sends it", async () => {
+  const calls = stub({ values: () => values({ values: [{ value: "", n: 7 }, { value: "Finance", n: 380 }] }) });
+  mount(<RowsToRead tag="A" cols={["department"]} quickOps={OPS} />);
+  const pickBtn = screen.getByRole("button", { name: "Pick from values" });
+  await waitFor(() => expect(pickBtn).toBeEnabled());
+  await userEvent.click(pickBtn);
+  await userEvent.click(await screen.findByRole("button", { name: "empty 7" }));
+  const add = screen.getByRole("button", { name: "Add to filter" });
+  expect(add).toBeEnabled();
+  await userEvent.click(add);
+  await waitFor(() => expect(sentClause(calls)).toHaveLength(1));
+  expect(sentClause(calls)[0]).toMatchObject({ column: "department", op: "=", value: "", values: [""] });
+});
+
+test("in the side card, a first-rows list that is a prefix still turns the button off on another sheet or named extra columns", async () => {
+  const run = async (loaded: Record<string, unknown>, sheet: string) => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url === "/api/sources/A/schema")
+        return json({ label: "hr.xlsx", kind: "excel", columns: [{ name: "emp_id", type: "VARCHAR" }], error: "", sheets: ["Jan", "Feb"], sheet });
+      if (url.startsWith("/api/sources/A/values?")) return json(values());
+      if (url === "/api/sources/folders") return json([]);
+      return json(body({ sides: { A: view("A", { loaded: true, name: "HR", label: "hr.xlsx", kind: "excel", rows: 30, ...loaded }), B: view("B"), P: view("P") }, quick_ops: OPS }));
+    }));
+    setForm("A", { how: "path", path: "D:/x/hr.xlsx", sheet });
+    const { unmount } = mount(<SideCard tag="A" meta={META} />);
+    await userEvent.click(await screen.findByRole("button", { name: /^Rows to read/ }));
+    await waitFor(() => expect(screen.getByLabelText("Column")).toBeInTheDocument());
+    const opts = within(screen.getByLabelText("Column")).getAllByRole("option").map((o) => o.textContent);
+    unmount();
+    return opts;
+  };
+  expect(await run({ sheet: "Jan", columns: ["emp_id", "column1"] }, "Feb")).toEqual(["emp_id"]);   // another sheet
+  expect(await run({ sheet: "Jan", columns: ["emp_id", "notes"] }, "Jan")).toEqual(["emp_id"]);      // a named column is not a wider row
+  expect(await run({ sheet: "Jan", columns: ["emp_id", "column1"] }, "Jan")).toEqual(["emp_id", "column1"]);
 });

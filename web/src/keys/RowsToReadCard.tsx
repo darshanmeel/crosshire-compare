@@ -90,7 +90,7 @@ export function RowsToReadCard({ tag }: { tag: "A" | "B" }) {
           <input type="text" className="in mono grow" aria-label="Value" disabled={q.noValue} placeholder={q.hint}
                  value={q.value} onChange={(e) => q.setValue(e.target.value)} />
           <ValuePicker tag={tag} q={q} />
-          <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
+          <Button size="sm" icon="plus" disabled={q.add.isPending || q.empty} onClick={() => q.add.mutate()}>Add to filter</Button>
           <PickedChips q={q} />
         </div>
       )}

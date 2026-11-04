@@ -65,7 +65,15 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
     enabled: ready && keyPick === pickNow,                // not for a pick already typed over
     placeholderData: keepPreviousData,
   });
-  const cols = ready ? (schema.data?.columns?.map((c) => c.name) ?? []) : [];
+  const peek = ready ? (schema.data?.columns?.map((c) => c.name) ?? []) : [];
+  // an Excel column list reads the first rows only and Load the whole sheet: a wider row lower
+  // down adds header-less columns (columnN) at the end - then the loaded list is the true one,
+  // as long as the card still points at the sheet and range that were loaded
+  const wider = schema.data?.kind === "excel" && !!view?.loaded && peek.length > 0 && peek.length < view.columns.length
+                && peek.every((c, i) => c === view.columns[i]) && view.columns.slice(peek.length).every((c) => /^column\d+$/.test(c))
+                && (view.sheet ?? "") === (f.sheet || schema.data?.sheet || "") && (view.cell_range ?? "") === f.cell_range
+                && !!view.stop_at_blank === f.stop_at_blank;
+  const cols = wider ? view!.columns : peek;
   const kind = (ready ? schema.data?.kind : undefined) ?? view?.kind ?? "csv";
   const isCsv = kind === "csv";
   const isExcel = kind === "excel";

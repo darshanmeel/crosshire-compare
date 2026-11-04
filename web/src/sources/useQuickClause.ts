@@ -39,7 +39,9 @@ export function useQuickClause(tag: Tag, cols: string[], onError?: (e: unknown) 
     onError,
   });
   const hint = isIn && chips.length ? "more values, comma separated (optional)" : "2026-07-20 · Finance · 100";   // Value's placeholder
-  return { col, setCol, op, setOp: changeOp, value, setValue, add, noValue: NULL_OPS.includes(op), isIn, chips, toggle, pick, hint };
+  const noValue = NULL_OPS.includes(op);
+  const empty = !noValue && !value.trim() && !chips.length && picked !== value;   // nothing yet - not IN (''); a picked empty is a value
+  return { col, setCol, op, setOp: changeOp, value, setValue, add, noValue, empty, isIn, chips, toggle, pick, hint };
 }
 
 export type QuickClause = ReturnType<typeof useQuickClause>;

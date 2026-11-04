@@ -45,7 +45,7 @@ export function RowsToRead({ tag, cols, quickOps, stale = false }: { tag: Tag; c
               <ValuePicker tag={tag} q={q} stale={stale} />
             </span>
           </div>
-          <Button size="sm" icon="plus" disabled={q.add.isPending} onClick={() => q.add.mutate()}>Add to filter</Button>
+          <Button size="sm" icon="plus" disabled={q.add.isPending || q.empty} onClick={() => q.add.mutate()}>Add to filter</Button>
         </div>
       )}
       <PickedChips q={q} />
