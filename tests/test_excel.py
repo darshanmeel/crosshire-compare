@@ -233,7 +233,7 @@ def test_csv_skip_rows(tmp_path):
     assert s.rows == 2 and s.read_from == "skips 2 lines"
     # the option means nothing to another kind - it never splits a cache or a key
     assert Side(kind="parquet", skip_rows=3).read_opts == {}
-    assert Side(kind="csv", sheet="S").read_opts == {"skip_rows": 0}
+    assert Side(kind="csv", sheet="S").read_opts == {"skip_rows": 0, "quote": '"', "bad_rows": "keep"}
 
 
 # ---- over HTTP ---------------------------------------------------------------------------------
@@ -327,7 +327,7 @@ def test_csv_skip_rows_over_http_and_in_the_config(monkeypatch, tmp_path):
 def test_an_old_config_without_the_options_still_runs(tmp_path):
     from tablecmp.runconfig import open_side
     s = open_side({"name": "HR", "kind": "csv", "path": str(HR), "delimiter": ",", "header": True}, "A")
-    assert s.rows == 3000 and s.read_opts == {"skip_rows": 0}
+    assert s.rows == 3000 and s.read_opts == {"skip_rows": 0, "quote": '"', "bad_rows": "keep"}
 
 
 def test_profiling_an_excel_table(monkeypatch, tmp_path):

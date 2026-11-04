@@ -20,7 +20,7 @@ from pathlib import Path
 import duckdb
 import pandas as pd
 
-from .sources import Side, out_dir, slug, work_dir
+from .sources import Side, out_dir, set_aside_view, slug, work_dir
 from .sql import lit
 
 SCHEMA_VERSION = 1
@@ -95,7 +95,8 @@ def _source_block(s: Side, rows_read: int) -> dict:
             "connection": s.conn, "origin": s.origin, "label": s.label, "path": path, "sql": s.query,
             "fetched_at": s.fetched_at, "cap": s.cap, "capped": s.capped, "rows": rows_read,
             "cut": s.cut, "delimiter": s.delimiter, "header": s.header, "snapshot": bool(s.cache_path),
-            "columns": list(s.schema)}
+            "columns": list(s.schema), "set_aside": set_aside_view(s),
+            **({"quote": s.quote, "bad_rows": s.bad_rows} if s.kind == "csv" and not s.is_database else {})}
 
 
 def columns_frame(run: dict) -> pd.DataFrame:
@@ -248,7 +249,7 @@ def parquet_copy(run: dict, table: str) -> Path | None:
         return None
     dst = folder / f"{pair}__{table}.parquet"
     con = duckdb.connect()
-    con.execute(f"COPY (SELECT * FROM read_csv({lit(str(src))}, all_varchar=true, header=true)) "
+    con.execute(f"COPY (SELECT * FROM read_csv({lit(str(src))}, all_varchar=true, header=true, quote='\"', escape='\"')) "
                 f"TO {lit(str(dst))} (FORMAT PARQUET)")
     con.close()
     return dst

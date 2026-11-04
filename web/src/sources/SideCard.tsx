@@ -16,10 +16,11 @@ import { changedSinceLoad, loadTime, noteLoadTime, pickChangedSinceLoad, secs } 
 import { PathBox } from "./PathBox";
 import { PreviewTable } from "./PreviewTable";
 import { RowsToRead, rowsSummary } from "./RowsToRead";
+import { SetAside } from "./SetAside";
 import { SourceChoice } from "./SourceChoice";
 import { UploadBox } from "./UploadBox";
 import { useSources } from "./useSources";
-import { loadBody, pickOf, type Schema, type SideForm, type SideView, type Tag } from "./types";
+import { loadBody, pickOf, type BadRows, type Quote, type Schema, type SideForm, type SideView, type Tag } from "./types";
 import "./sources.css";
 
 function picked(f: SideForm, view?: SideView): boolean {
@@ -194,6 +195,23 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
           <textarea className="in mono" aria-label="Column names" rows={2} placeholder="emp_id, first_name, dept_name, ..."
                     value={f.column_names} onChange={(e) => set({ column_names: e.target.value })} />
         </label>
+        {isCsv && f.how !== "database" && (
+          <div className="row spread">
+            <span className="row">
+              <label className="lbl" htmlFor={`${id}-quote`}>Quote character</label>
+              <select id={`${id}-quote`} className="in" value={f.quote} onChange={(e) => set({ quote: e.target.value as Quote })}>
+                <option value={'"'}>" (double)</option><option value="'">' (single)</option><option value="">none</option>
+              </select>
+            </span>
+            <span className="row" title="A row with fewer or more fields than the header">
+              <label className="lbl" htmlFor={`${id}-bad`}>Rows with too few or too many fields</label>
+              <select id={`${id}-bad`} className="in" value={f.bad_rows} onChange={(e) => set({ bad_rows: e.target.value as BadRows })}>
+                <option value="keep">Keep - missing fields empty, extra ones as extra columns</option>
+                <option value="set_aside">Set aside - leave them out and list them</option>
+              </select>
+            </span>
+          </div>
+        )}
         {f.how === "database" && <FetchCap tag={tag} db={db} />}
         {!dbInline && snapshot(false)}
         {!compact && loaded && !dirty && <div className="row">{loadBtn(false, true)}</div>}
@@ -246,6 +264,7 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
           {compact && <>{toggles}{loadBtn(true)}{extra}</>}
         </LoadedLine>
       )}
+      {loaded && view?.set_aside && <SetAside tag={tag} info={view.set_aside} />}
       {compact && panels}
       {preview && loaded && <div id={`${id}-preview`} className="preview-wrap"><PreviewTable tag={tag} /></div>}
     </section>

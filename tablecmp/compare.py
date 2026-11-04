@@ -66,6 +66,8 @@ class Outcome:
     sample_unmatched_right: list = field(default_factory=list)
     duplicate_keys_left: int = 0        # rows that share their key with an earlier row
     duplicate_keys_right: int = 0
+    set_aside_left: int = 0             # rows Load set aside for having too few or too many fields
+    set_aside_right: int = 0
     error: str = ""
 
     @classmethod
@@ -323,10 +325,16 @@ def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = ""
             res = engine_compare(con, cfg, folder, out, keys, say)
         res.rows_left_read = res.rows_left_read or n_a
         res.rows_right_read = res.rows_right_read or n_b
+        res.set_aside_left, res.set_aside_right = A.set_aside_rows, B.set_aside_rows
         elapsed = time.perf_counter() - t0
         for p in folder.iterdir():                           # flatten: <out>/<name>/x -> <out>/x
             p.rename(out / p.name)
         folder.rmdir()
+        for s, word in ((A, "left"), (B, "right")):         # the rows Load set aside, beside the rest
+            if s.set_aside_path and Path(s.set_aside_path).exists():
+                dst = out / f"{cfg['name']}__set_aside_{word}.csv"
+                con.execute(f"COPY (SELECT line, fields, raw FROM read_parquet({lit(s.set_aside_path)}) ORDER BY line) "
+                            f"TO {lit(str(dst))} (HEADER)")
         name_sides(out / f"{cfg['name']}__diff.html", A, B, *(names or (A.name, B.name)))
         run = {"result": res, "folder": out, "files": {p.name: p for p in out.glob("*")}, "seconds": elapsed,
                "con": con, "left": "src_a", "right": "src_b", "cfg": cfg, "signature": sig,
@@ -523,7 +531,7 @@ def cells_table(run: dict) -> bool:
     if not path:
         return False
     con.execute(f"CREATE OR REPLACE TABLE cd AS SELECT * FROM "
-                f"read_csv({lit(str(path))}, all_varchar=true)")
+                f"read_csv({lit(str(path))}, all_varchar=true, quote='\"', escape='\"')")
     run["_cd_loaded"] = True
     return True
 
@@ -819,7 +827,7 @@ def _one_side_profile(run: dict, bucket: str, todo: list[str], cache: dict, n: i
         return
     if run.get("_one_side") != bucket:
         con.execute(f"CREATE OR REPLACE TABLE one_side AS SELECT * FROM "
-                    f"read_csv({lit(str(f))}, all_varchar=true)")
+                    f"read_csv({lit(str(f))}, all_varchar=true, quote='\"', escape='\"')")
         run["_one_side"] = bucket
     have = {r[0] for r in con.execute("DESCRIBE one_side").fetchall()}
     total = con.execute("SELECT count(*) FROM one_side").fetchone()[0]
@@ -881,7 +889,7 @@ def bucket_rows(run: dict, keys: list[str], bucket: str, cols: list[str]) -> dic
         f = run["files"].get(f"{cfg['name']}__{bucket}_only.csv")
         if not f:
             return {}
-        con.execute(f"CREATE OR REPLACE TABLE bucket_rows AS SELECT * FROM read_csv({lit(str(f))}, all_varchar=true)")
+        con.execute(f"CREATE OR REPLACE TABLE bucket_rows AS SELECT * FROM read_csv({lit(str(f))}, all_varchar=true, quote='\"', escape='\"')")
         have = {r[0] for r in con.execute("DESCRIBE bucket_rows").fetchall()}
         side = "A" if bucket == "left" else "B"
         return {c: [(side, c)] for c in cols if c in have}
@@ -918,7 +926,7 @@ def near_match(cells_path: str) -> pd.DataFrame:
     sql = (f'SELECT column_name AS "Column", count(*) AS "Mismatches", '
            f'round(avg({dist}), 2) AS "Avg edit distance", '
            f'round(100 * avg(1 - least(1.0, {dist}::DOUBLE / {span})), 1) AS "Similarity %" '
-           f"FROM read_csv({lit(cells_path)}, all_varchar=true) "
+           f"FROM read_csv({lit(cells_path)}, all_varchar=true, quote='\"', escape='\"') "
            f"WHERE left_value IS NOT NULL OR right_value IS NOT NULL "   # null on both (Null = null off) is no near miss
            f'GROUP BY 1 ORDER BY "Similarity %" DESC')
     return con.execute(sql).fetchdf()

@@ -120,3 +120,10 @@
   .vpick { position: static; }
   .vpick-pop { left: 0; right: 0; width: auto; }
 }
+/* the rows Load set aside: the line, then the rows themselves */
+.set-aside { display: grid; gap: 8px; }
+.set-aside > .row { flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.set-aside .note { margin: 0; }
+.set-aside-rows { display: grid; gap: 8px; }
+.set-aside-rows .tblwrap { max-height: 360px; overflow: auto; }
+.set-aside-rows td.raw { max-width: 640px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

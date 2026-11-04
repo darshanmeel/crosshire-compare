@@ -20,7 +20,8 @@ DOWNLOAD_LABELS = [("cell_diffs.csv", "Cell differences"), ("left_only.csv", "Ro
                    ("right_only.csv", "Rows only in {NB}"), ("paired.csv", "Paired rows"),
                    ("columns.csv", "Columns"), ("profile.csv", "Profile"), ("summary.csv", "Summary"),
                    ("summary.json", "Settings and result"), ("report.html", "Report"),
-                   ("diff.html", "Engine report")]
+                   ("diff.html", "Engine report"), ("set_aside_left.csv", "Rows set aside in {NA}"),
+                   ("set_aside_right.csv", "Rows set aside in {NB}")]
 MIME = {".csv": "text/csv", ".json": "application/json", ".html": "text/html",
         ".parquet": "application/vnd.apache.parquet", ".zip": "application/zip"}
 GONE = ("The files of this run are gone - the work folder is swept after `COMPARE_KEEP_HOURS` (24). "
@@ -75,6 +76,9 @@ def verdict_parts(run: dict, NA: str, NB: str) -> dict:
         seg += [("identical rows are identical by construction", False)]
     seg += [(" · ", False), (f"{res.only_left:,}", True), (f" only in {NA} · ", False),
             (f"{res.only_right:,}", True), (f" only in {NB}", False)]
+    for n, name in ((res.set_aside_left, NA), (res.set_aside_right, NB)):
+        if n:
+            seg += [(" · ", False), (f"{n:,}", True), (f" row{'s' if n != 1 else ''} set aside in {name}", False)]
     return {"tone": v.tone, "word": v.word, "segments": seg, "when": f"{run['seconds']:.1f}s at {run['at']}"}
 
 

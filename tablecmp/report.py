@@ -10,7 +10,7 @@ from .compare import (MAX_ONE_SIDED, ONE_SIDED_SHOWN, bucket_columns, bucket_pro
                       ledger_counts, one_sided_summary, Outcome, differing_rows, diffs_by_key_value,
                       value_pairs)
 from .outputs import summary_payload
-from .sources import Side
+from .sources import Side, set_aside_said
 from .theme import APP_NAME, CELL_BUDGET, FONTS, esc, tokens_css
 from .values import ColSpec
 
@@ -213,6 +213,8 @@ def _source_row(nm: str, s: Side, n: int, path: str) -> str:
     if s.cache_path:
         text += " · Parquet snapshot"
     text += f" - {n:,} rows"
+    if s.set_aside_rows:
+        text += f" · {esc(set_aside_said(s))}, not compared"
     if s.is_database:
         text += f" · fetched {esc(s.fetched_at)}"
     if s.capped:
@@ -345,7 +347,9 @@ def build_report(run: dict, A: Side, B: Side, name_a: str, name_b: str, limit: i
     verdict = (how + f" · <b>{len(cols)}</b> columns compared · "
                + (f"<b>{res.diff_rows:,}</b> rows ({pct}%) differ in <b>{res.cell_diffs:,}</b> cells"
                   if res.diff_rows else "<b>no differences</b> on the matched rows")
-               + f" · <b>{res.only_left:,}</b> only in {esc(name_a)} · <b>{res.only_right:,}</b> only in {esc(name_b)}")
+               + f" · <b>{res.only_left:,}</b> only in {esc(name_a)} · <b>{res.only_right:,}</b> only in {esc(name_b)}"
+               + "".join(f" · <b>{n:,}</b> row{'s' if n != 1 else ''} set aside in {esc(nm)}"
+                         for n, nm in ((res.set_aside_left, name_a), (res.set_aside_right, name_b)) if n))
 
     # which sections the page will have, in page order - the pills link to them
     have = {"setup", "counts", "columns"}

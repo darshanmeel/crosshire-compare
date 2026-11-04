@@ -329,7 +329,7 @@ Small, verified steps. Before handing over a change:
 
 1. `python -m pip install -r requirements-dev.txt` once - pytest and pytest-playwright.
 2. `python -m py_compile compare_app.py tablecmp/*.py` - everything must compile.
-3. `python -m pytest tests -q` - the suite (737 tests): the units for every module, the page's flows over HTTP on the sample pair - the file flow and the database flow asserting the counts in `tests/COUNTS.md`, and every response and output grepped for the fake password - the Profiling page, and three runs in a browser (the sample pair, one table profiled, settings kept across the page switch). The database tests set `COMPARE_CONNECTIONS` to a temp file, so your own connections are never read or written.
+3. `python -m pytest tests -q` - the suite (746 tests): the units for every module, the page's flows over HTTP on the sample pair - the file flow and the database flow asserting the counts in `tests/COUNTS.md`, and every response and output grepped for the fake password - the Profiling page, and three runs in a browser (the sample pair, one table profiled, settings kept across the page switch). The database tests set `COMPARE_CONNECTIONS` to a temp file, so your own connections are never read or written.
 4. The browser runs need Chromium once: `python -m playwright install chromium` (`--with-deps` on a bare Linux). Without it they skip and say that command - or run them on an installed Edge or Chrome instead: `python -m pytest tests/e2e --browser-channel msedge` (or `chrome`).
 5. To drive a flow yourself, the way the tests do - check the numbers, not just that it ran:
 
@@ -368,6 +368,8 @@ Node 24 is needed only to change the screens; running the app needs Python alone
 | Where Auto's decisions went | Open the **Log** in the header: the *Auto decisions* entry lists them, one line each, newest run last; the report keeps them under *How this was worked out*. |
 | The comparison failed | The message is shown, the step on the rail says *could not finish* and the previous result stays on screen; the Log keeps the steps up to the failure. Usually a value a step cannot convert - the message names the column, the side, how many rows hold which value, and says to use try_cast or *if empty, use* (a custom expression that does not read is refused when it is set); a filter value that is not a date or not a number is refused before the run. |
 | Header names look like data | Untick *First row is a header* and load again; give names under Advanced if you have them. |
+| *a quote never closes, so the rows cannot be told apart* | A CSV field opens a quote and never closes it. Fix that line in the file, or pick the file's own quote character (or none) under Advanced. |
+| Some rows have more or fewer fields than the header | Under Advanced pick *Set aside* for *Rows with too few or too many fields*: they are left out, counted under the file and listed with their line numbers (and in Downloads after a Compare). |
 | *Not under an allowed folder (COMPARE_DATA_DIR)* | The server restricts paths on disk to the folders in `COMPARE_DATA_DIR` (`/data` under Docker). Put the file there, or upload it. |
 | *Saves must stay under …* | `COMPARE_OUT_DIR` is set; every save goes under it. Use the default folder the box offers. |
 | *SQL Server needs the pymssql package: pip install pymssql* | That driver is not installed. `pip install -r requirements.txt` installs all five; a single one installs on its own. |

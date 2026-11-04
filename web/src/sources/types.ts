@@ -8,13 +8,20 @@ export type SideView = {
   columns: string[]; cut: string; is_database: boolean; conn: string; fetched_at: string; snapshot: boolean;
   caption: string; notes: Note[]; staged: string; fetched: FetchedView | null;
   sheet?: string; cell_range?: string; stop_at_blank?: boolean; skip_rows?: number; read_from?: string;
+  quote?: Quote; bad_rows?: BadRows; set_aside?: SetAsideInfo | null;
 };
+export type Quote = '"' | "'" | "";
+export type BadRows = "keep" | "set_aside";
+/** The rows Load set aside for having too few or too many fields: all, kept to show, the width a row should have. */
+export type SetAsideInfo = { rows: number; kept: number; fields: number; said: string; by: { fields: number | null; rows: number }[] };
+export type SetAsidePage = SetAsideInfo & { page: number; size: number; lines: { line: number; fields: number | null; raw: string }[] };
 export type How = "upload" | "path" | "database";
 export type SideForm = {
   name: string; how: How; path: string; folder: string; file: string; delimiter: string; header: boolean;
   where: string; order_by: string[]; desc: boolean; limit: number; column_names: string; snapshot: boolean;
   connection: string; db_mode: "table" | "sql"; table: string; sql: string; cap: number; password: string;
   sheet: string; cell_range: string; stop_at_blank: boolean; skip_rows: number;   // Excel: where the table sits; CSV: lines above the header
+  quote: Quote; bad_rows: BadRows;                                                 // CSV: the quote character, rows of the wrong width
 };
 export type ConfigView = { n: number; said: Note[]; boxes: { settings: Record<string, unknown>; A: Partial<SideForm>; B: Partial<SideForm> } };
 export type SourcesBody = {
@@ -34,7 +41,7 @@ export function blankForm(tag: Tag): SideForm {
   return { name: DEFAULT_NAMES[tag], how: "upload", path: "", folder: "", file: "", delimiter: ",", header: true,
            where: "", order_by: [], desc: false, limit: 0, column_names: "", snapshot: true,
            connection: "", db_mode: "table", table: "", sql: "", cap: CAP_DEFAULT, password: "",
-           sheet: "", cell_range: "", stop_at_blank: false, skip_rows: 0 };
+           sheet: "", cell_range: "", stop_at_blank: false, skip_rows: 0, quote: '"', bad_rows: "keep" };
 }
 
 /** Where the table sits in a file - cleared whenever the user picks another file, so a range or a
@@ -47,6 +54,7 @@ export const pickOf = (f: SideForm) => ({
   how: f.how, path: f.path, folder: f.folder, file: f.file, delimiter: f.delimiter, header: f.header,
   db: f.how === "database" ? dbOf(f) : null,
   sheet: f.sheet, cell_range: f.cell_range, stop_at_blank: f.stop_at_blank, skip_rows: f.skip_rows,
+  quote: f.quote, bad_rows: f.bad_rows,
 });
 
 /** What a Load sends, past the name: the pick and the cut. Callers add `name`. */

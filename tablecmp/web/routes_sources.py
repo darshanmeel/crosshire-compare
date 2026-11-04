@@ -8,7 +8,8 @@ from pathlib import Path
 from typing import Literal
 
 import duckdb
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+import pandas as pd
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import ClientDisconnect
@@ -17,8 +18,9 @@ from .. import connections as cx
 from .. import databases as db
 from .. import excel, filepick, loading
 from ..connforms import CAP_DEFAULT
-from ..sources import (FileChanged, Side, add_derived, column_values, file_stamp, folder_files, in_folder, kind_of, path_allowed, preview_rows,
-                       quick_clause, read_opts, source_schema, work_dir)
+from ..sources import (SET_ASIDE_KEPT, BadQuote, FileChanged, Side, add_derived, column_values, file_stamp, folder_files,
+                       in_folder, kind_of, path_allowed, preview_rows, quick_clause, quote_problem, read_opts,
+                       set_aside_page, slug, source_schema, work_dir)
 from .. import setup as su
 from . import jobs, runs
 from . import setupws as sw
@@ -58,6 +60,8 @@ class PickIn(BaseModel):
     cell_range: str = Field("", max_length=30)      # an Excel file: where the table sits - B4, B4:H500
     stop_at_blank: bool = False                     # an Excel file: the table ends at its first empty row
     skip_rows: int = Field(0, ge=0, le=1_000_000)   # a CSV: lines above the header to skip
+    quote: Literal['"', "'", ""] = '"'               # a CSV: the quote character, "" = none
+    bad_rows: Literal["keep", "set_aside"] = "keep"  # a CSV: rows with too few or too many fields
 
 
 class BrowseIn(BaseModel):
@@ -191,7 +195,8 @@ def read_as(kind: str, pick: PickIn) -> tuple[str, bool, dict]:
     """(delimiter, header, read options) the boxes give for this kind of file: a CSV takes all
     but the sheet, an Excel file its header and sheet boxes, the rest none of them."""
     if kind == "csv":
-        return pick.delimiter or ",", pick.header, read_opts(kind, skip_rows=pick.skip_rows)
+        return pick.delimiter or ",", pick.header, read_opts(kind, skip_rows=pick.skip_rows, quote=pick.quote,
+                                                             bad_rows=pick.bad_rows)
     if kind == "excel":
         return ",", pick.header, read_opts(kind, pick.sheet, pick.cell_range, pick.stop_at_blank)
     return ",", True, {}
@@ -224,7 +229,7 @@ def schema(tag: str, pick: PickIn, ws: Workspace = Depends(workspace)) -> dict:
             else:
                 found = source_schema(got.path, kind, delim, header, file_stamp(got.path), **opts)
         except duckdb.Error as exc:
-            out["error"] = f"Could not read the {kind_word(kind)} file: {exc}"
+            out["error"] = quote_problem(exc, got.label) or f"Could not read the {kind_word(kind)} file: {exc}"
         except ValueError as exc:                    # a sheet or range not there, a workbook that will not open
             out["error"] = str(exc)
         else:
@@ -277,7 +282,7 @@ def load(tag: str, body: LoadIn, ws: Workspace = Depends(workspace)) -> dict:
     try:
         found = source_schema(got.path, kind, delim, header, file_stamp(got.path), **opts)
     except duckdb.Error as exc:
-        raise HTTPException(400, f"Could not read the {kind_word(kind)} file: {exc}") from exc
+        raise HTTPException(400, quote_problem(exc, got.label) or f"Could not read the {kind_word(kind)} file: {exc}") from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     if not found:
@@ -293,8 +298,10 @@ def load(tag: str, body: LoadIn, ws: Workspace = Depends(workspace)) -> dict:
     with ws.lock:
         try:
             new = loading.build_side(tag, ask, found, dbs)
+        except BadQuote as exc:
+            raise HTTPException(400, str(exc)) from exc
         except (duckdb.Error, ValueError) as exc:
-            raise HTTPException(400, f"Could not read the rows: {exc}") from exc
+            raise HTTPException(400, quote_problem(exc, got.label) or f"Could not read the rows: {exc}") from exc
         for col, expr in panel(ws, tag).side.derived.items():      # the columns added to the old one come along
             if col in new.schema:
                 warn = (warn + " " if warn else "") + f"The added column {col} was dropped - the file has its own {col}."
@@ -318,6 +325,28 @@ def preview(tag: str, n: int = Query(10, ge=1, le=100), ws: Workspace = Depends(
     except duckdb.Error as exc:
         raise HTTPException(400, str(exc)) from exc
     return sw.frame(df)
+
+
+@router.get("/{tag}/set-aside")
+def set_aside(tag: str, page: int = Query(1, ge=1), size: int = Query(25, ge=1, le=500),
+              ws: Workspace = Depends(workspace)) -> dict:
+    """The rows Load set aside for having too few or too many fields, a page at a time."""
+    s = panel(ws, _tag(tag)).side
+    if not s.loaded:
+        raise HTTPException(409, "Load this side first.")
+    return set_aside_page(s, page, size)
+
+
+@router.get("/{tag}/set-aside.csv")
+def set_aside_csv(tag: str, ws: Workspace = Depends(workspace)) -> Response:
+    """Every row kept of those set aside, as CSV: line, fields, raw."""
+    s = panel(ws, _tag(tag)).side
+    if not s.loaded:
+        raise HTTPException(409, "Load this side first.")
+    got = set_aside_page(s, 1, SET_ASIDE_KEPT)
+    text = pd.DataFrame(got["lines"], columns=["line", "fields", "raw"]).to_csv(index=False, lineterminator="\n")
+    name = f"{slug(s.name) or tag}__set_aside.csv"
+    return Response(text, media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 VALUES_CACHE = 64                     # a panel's cached value lists; more and it starts again

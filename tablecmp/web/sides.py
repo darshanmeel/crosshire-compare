@@ -7,7 +7,7 @@ from pathlib import Path
 
 from ..comparing import close_run
 from ..loading import loaded_caption, loaded_notes, retire
-from ..sources import Side
+from ..sources import Side, set_aside_view
 from .workspace import Workspace
 
 TAGS = ("A", "B", "P")
@@ -85,7 +85,9 @@ def side_view(ws: Workspace, tag: str) -> dict:
             "is_database": s.is_database, "conn": s.conn, "fetched_at": s.fetched_at,
             "snapshot": bool(s.cache_path),
             "sheet": s.sheet, "cell_range": s.cell_range, "stop_at_blank": s.stop_at_blank,
-            "skip_rows": s.skip_rows, "read_from": s.read_from if s.loaded else "",
+            "skip_rows": s.skip_rows, "quote": s.quote, "bad_rows": s.bad_rows,
+            "set_aside": set_aside_view(s) if s.loaded else None,
+            "read_from": s.read_from if s.loaded else "",
             "caption": loaded_caption(s) if s.loaded else "",
             "notes": [{"tone": t, "text": x} for t, x in loaded_notes(s)] if s.loaded else [],
             "staged": p.staged_label if p.staged and Path(p.staged).exists() else "",

@@ -15,8 +15,8 @@ import pandas as pd
 
 from . import connections as cx
 from . import databases as db
-from .sources import (FOLDER_LIST_MAX, Side, apply_names, file_stamp, looks_headerless, path_allowed,
-                      row_count, short_header, snapshot, work_dir)
+from .sources import (FOLDER_LIST_MAX, Side, apply_names, capture_set_aside, file_stamp, looks_headerless,
+                      path_allowed, row_count, short_header, snapshot, work_dir)
 
 DEFAULT_NAMES = {"A": "Left", "B": "Right", "P": "Table"}    # what a side is called until it is named
 NAME_HELP = {"side": "What to call this side everywhere - and it names every output file: "
@@ -130,6 +130,8 @@ class ReadAsked:
     cell_range: str = ""              # excel: "B4", "B4:H500"; "" = from A1
     stop_at_blank: bool = False       # excel: stop at the first fully empty row
     skip_rows: int = 0                # csv: lines above the header to skip
+    quote: str = '"'                  # csv: '"', "'" or "" for none
+    bad_rows: str = "keep"            # csv: keep | set_aside the rows with too few or too many fields
 
 
 def names_warning(names_text: str, schema: dict[str, str]) -> str:
@@ -147,7 +149,7 @@ def build_side(tag: str, ask: ReadAsked, schema: dict[str, str], db_side: Side |
                 origin=ask.origin, delimiter=ask.delimiter, header=ask.header, where=ask.where,
                 order_by=list(ask.order_by), desc=bool(ask.desc), limit=int(ask.limit), folder=ask.folder,
                 sheet=ask.sheet, cell_range=ask.cell_range, stop_at_blank=bool(ask.stop_at_blank),
-                skip_rows=int(ask.skip_rows or 0),
+                skip_rows=int(ask.skip_rows or 0), quote=ask.quote, bad_rows=ask.bad_rows,
                 **({"conn": db_side.conn, "database": db_side.database, "query": db_side.query,
                     "fetched_at": db_side.fetched_at, "cap": db_side.cap, "capped": db_side.capped}
                    if db_side else {}))
@@ -155,12 +157,14 @@ def build_side(tag: str, ask: ReadAsked, schema: dict[str, str], db_side: Side |
     side.schema = apply_names(schema, names) if names else dict(schema)
     side.source_columns = list(schema)
     side.stamp = file_stamp(side.csv_path)
+    stamp = int(time.time() * 1000)
+    capture_set_aside(side, str(work_dir() / f"cmp_{tag}_{stamp}_set_aside.parquet"))
     # a Parquet source with no cut is already what a snapshot would be - no second copy. An Excel
     # sheet is snapshotted like a CSV: its conversion follows the workbook, and a workbook saved
     # again after Load must not change what this side holds
     already = ask.kind == "parquet" and not (ask.where.strip() or ask.order_by or ask.limit)
     if ask.snapshot and not already:
-        snapshot(side, str(work_dir() / f"cmp_{tag}_{int(time.time() * 1000)}.parquet"))
+        snapshot(side, str(work_dir() / f"cmp_{tag}_{stamp}.parquet"))
     else:
         side.cache_path = ""
     side.rows = row_count(side)
@@ -212,10 +216,12 @@ def loaded_notes(side: Side) -> list[tuple[str, str]]:
 
 
 def retire(old: Side, new: Side, held_fetch: str = "") -> None:
-    """What the old side read and the new one does not goes: its snapshot, and a database fetch
+    """What the old side read and the new one does not goes: its snapshot, its rows set aside, a database fetch
     nothing holds any more (held_fetch is the fetch the panel still offers)."""
     if old.cache_path and old.cache_path != new.cache_path:
         Path(old.cache_path).unlink(missing_ok=True)
+    if old.set_aside_path and old.set_aside_path != new.set_aside_path:
+        Path(old.set_aside_path).unlink(missing_ok=True)
     if old.is_database and old.csv_path and old.csv_path != new.csv_path and old.csv_path != held_fetch:
         Path(old.csv_path).unlink(missing_ok=True)
 
@@ -292,7 +298,8 @@ def config_boxes(conf: dict, folders: set[str]) -> dict:
             box.update(how="path", path=str(b.get("path") or ""),
                        folder=str(b["folder"]) if known else "", file=str(b["file"]) if known else "",
                        sheet=str(b.get("sheet") or ""), cell_range=str(b.get("cell_range") or ""),
-                       stop_at_blank=bool(b.get("stop_at_blank")), skip_rows=int(b.get("skip_rows") or 0))
+                       stop_at_blank=bool(b.get("stop_at_blank")), skip_rows=int(b.get("skip_rows") or 0),
+                       quote=str(b.get("quote", '"')), bad_rows=str(b.get("bad_rows") or "keep"))
         out[tag] = box
     return out
 

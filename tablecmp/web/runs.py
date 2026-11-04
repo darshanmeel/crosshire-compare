@@ -98,6 +98,7 @@ def run_view(run: dict, stale: bool, fallback: tuple[str, str]) -> dict:
     return {"id": run["run_id"], "at": run["at"], "pair": run["pair"], "mode": run["mode"], "names": [NA, NB],
             "keys": results.run_keys(run), "columns": results.run_columns(run), "matched": res.matched_rows,
             "diff_rows": res.diff_rows, "stale": stale,
+            "set_aside": {"A": res.set_aside_left, "B": res.set_aside_right},
             "verdict": {"tone": v["tone"], "word": v["word"], "when": v["when"],
                         "segments": [{"text": t, "bold": b} for t, b in v["segments"]]}}
 
@@ -211,7 +212,7 @@ def one_sided_source(run: dict, tag: str) -> tuple[str, str] | None:
     if p is None:
         return None
     return p.name, (f"read_parquet({lit(str(p))})" if p.suffix == ".parquet"
-                    else f"read_csv({lit(str(p))}, all_varchar=true)")
+                    else f"read_csv({lit(str(p))}, all_varchar=true, quote='\"', escape='\"')")
 
 
 @contextmanager

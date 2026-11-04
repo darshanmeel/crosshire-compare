@@ -28,6 +28,12 @@ class Side:
     cell_range: str = ""    # excel: where the table sits - "B4", "B4:H500", "B4:H"; "" = from A1
     stop_at_blank: bool = False   # excel: the table ends at its first fully empty row
     skip_rows: int = 0      # csv: lines above the header to skip (a title, notes)
+    quote: str = '"'        # csv: the quote character - '"', "'" or "" for none; the escape is the same
+    bad_rows: str = "keep"  # csv: rows with too few or too many fields - keep (padded, extra columns) | set_aside
+    set_aside_rows: int = 0                           # rows left out at Load (bad_rows set_aside), all of them
+    set_aside_by: dict[int, int] = field(default_factory=dict)   # their field count -> rows
+    set_aside_fields: int = 0                         # the fields a row should have
+    set_aside_path: str = ""                          # Parquet of them (line, fields, raw), the first SET_ASIDE_KEPT
     where: str = ""                                   # on the file's own columns
     order_by: list[str] = field(default_factory=list)
     desc: bool = False
@@ -78,7 +84,8 @@ class Side:
     @property
     def read_opts(self) -> dict:
         """Where in the file the table sits - only the options this kind of file takes."""
-        return read_opts(self.kind, self.sheet, self.cell_range, self.stop_at_blank, self.skip_rows)
+        return read_opts(self.kind, self.sheet, self.cell_range, self.stop_at_blank, self.skip_rows,
+                         self.quote, self.bad_rows)
 
     @property
     def read_from(self) -> str:
@@ -94,6 +101,10 @@ class Side:
         if o.get("skip_rows"):
             n = o["skip_rows"]
             bits.append(f"skips {n:,} line" + ("s" if n != 1 else ""))
+        if o.get("quote", '"') != '"':
+            bits.append(f"quote {o['quote']}" if o["quote"] else "no quoting")
+        if o.get("bad_rows") == "set_aside":
+            bits.append("wrong-width rows set aside")
         return " · ".join(bits)
 
     @property
@@ -114,17 +125,28 @@ FILE_KINDS = {".csv": "csv", ".txt": "csv", ".tsv": "csv", ".dat": "csv",
               ".xlsx": "excel", ".xlsm": "excel", ".xls": "excel"}
 
 
+QUOTES = ('"', "'", "")                 # a CSV's quote character: double, single, none
+BAD_ROWS = ("keep", "set_aside")         # a CSV row with too few or too many fields
+READ_DEFAULTS = {"sheet": "", "cell_range": "", "stop_at_blank": False, "skip_rows": 0,
+                 "quote": '"', "bad_rows": "keep"}
+SET_ASIDE_KEPT = 10_000                  # rows set aside kept to show and download; the count is always all
+
+
 def read_opts(kind: str, sheet: str = "", cell_range: str = "", stop_at_blank: bool = False,
-              skip_rows: int = 0) -> dict:
+              skip_rows: int = 0, quote: str = '"', bad_rows: str = "keep") -> dict:
     """The read options that apply to a kind of file: the sheet, range and stop for Excel, the
-    lines to skip for a CSV, none for the rest - so an option left from another kind never
-    changes a read or a cache key."""
+    lines to skip, the quote and what becomes of a wrong-width row for a CSV, none for the
+    rest - so an option left from another kind never changes a read or a cache key."""
     if kind == "excel":
         return {"sheet": (sheet or "").strip(),
                 "cell_range": (cell_range or "").strip().upper().replace(" ", ""),
                 "stop_at_blank": bool(stop_at_blank)}
     if kind == "csv":
-        return {"skip_rows": max(0, int(skip_rows or 0))}
+        if quote not in QUOTES:
+            raise ValueError(f"The quote character is {quote!r} - use \", ' or none.")
+        if bad_rows not in BAD_ROWS:
+            raise ValueError(f"Rows with too few or too many fields: {bad_rows!r} - use keep or set_aside.")
+        return {"skip_rows": max(0, int(skip_rows or 0)), "quote": quote, "bad_rows": bad_rows}
     return {}
 
 
@@ -159,16 +181,108 @@ def in_folder(root: str, name: str) -> str:
 
 
 def read_csv_expr(path: str, delimiter: str, header: bool, all_varchar: bool = True,
-                  skip_rows: int = 0) -> str:
-    return (f"read_csv({lit(path)}, delim={lit(delimiter)}, "
-            f"header={'true' if header else 'false'}, null_padding=true"
+                  skip_rows: int = 0, quote: str = '"', bad_rows: str = "keep", rejects: bool = False) -> str:
+    """The quote and escape are always given: left to the sniffer, one quote that never closes
+    makes it read the whole file unquoted, silently. Keep pads a short row and gives a long one
+    extra columns; set_aside skips both (`rejects` lists them in the connection's reject_errors)."""
+    keep = bad_rows != "set_aside"
+    return (f"read_csv({lit(path)}, delim={lit(delimiter)}, quote={lit(quote)}, escape={lit(quote)}, "
+            f"header={'true' if header else 'false'}, null_padding={'true' if keep else 'false'}"
+            + ("" if keep else ", ignore_errors=true")
+            + (", store_rejects=true" if rejects and not keep else "")
             + (f", skip={int(skip_rows)}" if skip_rows and int(skip_rows) > 0 else "")
             + (", all_varchar=true" if all_varchar else "") + ")")
 
 
+QUOTE_SAID = ("{file}: a quote never closes, so the rows cannot be told apart - fix the file, "
+              "or pick another quote character under Advanced.")
+
+
+def quote_problem(exc: Exception, file: str) -> str:
+    """The plain sentence for a CSV whose quotes do not balance, then DuckDB's own text up to its
+    list of fixes - '' for any other error."""
+    text = str(exc)
+    if "Error when sniffing file" not in text and "unterminated quote" not in text.lower():
+        return ""
+    own = " ".join(text.split("Possible fixes")[0].split())
+    return QUOTE_SAID.format(file=Path(file).name) + (f" {own}" if own else "")
+
+
+class BadQuote(ValueError):
+    """A CSV whose quotes do not balance - the message is quote_problem's."""
+
+
+def capture_set_aside(side: Side, path: str) -> None:
+    """Read the whole file once (before its WHERE and top N) with the rows of the wrong width set
+    aside, and keep what DuckDB listed: the count by field count on the side, the first
+    SET_ASIDE_KEPT rows (line, fields, raw) in a Parquet file at `path`. BadQuote when a quote
+    never closes - DuckDB would set that row and the next aside, glued together."""
+    side.set_aside_rows, side.set_aside_by, side.set_aside_fields, side.set_aside_path = 0, {}, 0, ""
+    o = side.read_opts
+    if side.kind != "csv" or o["bad_rows"] != "set_aside":
+        return
+    con = scratch()
+    expr = read_csv_expr(side.csv_path, side.delimiter, side.header, True, o["skip_rows"], o["quote"], "set_aside",
+                         rejects=True)
+    con.execute(f"SELECT count(*) FROM {expr}").fetchall()     # fetched to the end: the rejects land as it finishes
+    # one error per missing or extra field, so one row per line: the most fields DuckDB found on it
+    con.execute(r"""CREATE TEMP TABLE aside AS SELECT line, any_value(trim(csv_line, chr(13) || chr(10))) AS raw,
+        max(TRY_CAST(regexp_extract(error_message, 'Found: (\d+)', 1) AS INTEGER)) AS fields,
+        max(TRY_CAST(regexp_extract(error_message, 'Expected Number of Columns: (\d+)', 1) AS INTEGER)) AS expected,
+        bool_or(error_type = 'UNQUOTED VALUE') AS broken, any_value(error_message) AS error_message
+        FROM reject_errors GROUP BY line""")
+    broken = con.execute("SELECT line, error_message FROM aside WHERE broken ORDER BY line LIMIT 1").fetchone()
+    if broken:
+        raise BadQuote(QUOTE_SAID.format(file=side.label or Path(side.csv_path).name)
+                       + f" Line {broken[0]}: {broken[1]}")
+    n, fields = con.execute("SELECT count(*), coalesce(max(expected), 0) FROM aside").fetchone()
+    if not n:
+        return
+    side.set_aside_rows, side.set_aside_fields = int(n), int(fields)
+    side.set_aside_by = {int(f) if f is not None else -1: int(c) for f, c in con.execute(
+        "SELECT fields, count(*) FROM aside GROUP BY fields ORDER BY fields NULLS LAST").fetchall()}
+    con.execute(f"COPY (SELECT line, fields, raw FROM aside ORDER BY line LIMIT {SET_ASIDE_KEPT}) "
+                f"TO {lit(path)} (FORMAT PARQUET)")
+    side.set_aside_path = path
+
+
+def set_aside_said(side: Side) -> str:
+    """'12 rows set aside - 7 with 49 fields, 5 with 51 (the header has 50)'; '' for none."""
+    n = side.set_aside_rows
+    if not n:
+        return ""
+    bits = [f"{c:,} with {f:,}" + ("" if i else " field" + ("s" if f != 1 else "")) if f >= 0
+            else f"{c:,} other" for i, (f, c) in enumerate(side.set_aside_by.items())]
+    whose = "the header has" if side.header else "the rest have"
+    return (f"{n:,} row{'s' if n != 1 else ''} set aside - " + ", ".join(bits)
+            + (f" ({whose} {side.set_aside_fields:,})" if side.set_aside_fields else ""))
+
+
+def set_aside_view(side: Side) -> dict | None:
+    """The rows set aside at Load, counted: all of them, those kept to show, the width a row
+    should have, the count by field count (fields None: DuckDB gave none) and the sentence."""
+    if not side.set_aside_rows:
+        return None
+    return {"rows": side.set_aside_rows, "kept": min(side.set_aside_rows, SET_ASIDE_KEPT),
+            "fields": side.set_aside_fields, "said": set_aside_said(side),
+            "by": [{"fields": f if f >= 0 else None, "rows": n} for f, n in side.set_aside_by.items()]}
+
+
+def set_aside_page(side: Side, page: int = 1, size: int = 25) -> dict:
+    """One page of the rows set aside, in file order: line, fields, the raw line."""
+    out = {**(set_aside_view(side) or {"rows": 0, "kept": 0, "fields": 0, "said": "", "by": []}),
+           "page": page, "size": size, "lines": []}
+    if side.set_aside_path and Path(side.set_aside_path).exists():
+        got = scratch().execute(f"SELECT line, fields, raw FROM read_parquet({lit(side.set_aside_path)}) "
+                                f"ORDER BY line LIMIT {int(size)} OFFSET {(int(page) - 1) * int(size)}").fetchall()
+        out["lines"] = [{"line": int(ln), "fields": f, "raw": raw} for ln, f, raw in got]
+    return out
+
+
 def raw_expr(path: str, kind: str, delimiter: str = ",", header: bool = True,
              all_varchar: bool = True, *, sheet: str = "", cell_range: str = "",
-             stop_at_blank: bool = False, skip_rows: int = 0) -> str:
+             stop_at_blank: bool = False, skip_rows: int = 0, quote: str = '"',
+             bad_rows: str = "keep") -> str:
     """A DuckDB table expression for the file as it is, typed columns and all. An Excel sheet
     is its Parquet copy (made on first use; ValueError for a bad sheet or range)."""
     if kind == "parquet":
@@ -178,7 +292,7 @@ def raw_expr(path: str, kind: str, delimiter: str = ",", header: bool = True,
     if kind == "excel":
         from .excel import to_parquet
         return f"read_parquet({lit(to_parquet(path, sheet, cell_range, header, stop_at_blank))})"
-    return read_csv_expr(path, delimiter, header, all_varchar, skip_rows)
+    return read_csv_expr(path, delimiter, header, all_varchar, skip_rows, quote, bad_rows)
 
 
 def text_expr(col: str, typ: str) -> str:
@@ -196,10 +310,12 @@ def text_expr(col: str, typ: str) -> str:
 def read_expr(path: str, kind: str, delimiter: str = ",", header: bool = True, **opts) -> str:
     """The same file with every column as text - the one form the rest of the app reads,
     so a Parquet DATE, a JSON number and a CSV field all go through the same typing.
-    `opts` are the read options (read_opts): sheet, cell_range, stop_at_blank, skip_rows."""
+    `opts` are the read options (read_opts): sheet, cell_range, stop_at_blank, skip_rows,
+    quote, bad_rows."""
     o = read_opts(kind, **opts)
     if kind == "csv":
-        return read_csv_expr(path, delimiter, header, all_varchar=True, skip_rows=o["skip_rows"])
+        return read_csv_expr(path, delimiter, header, all_varchar=True, skip_rows=o["skip_rows"],
+                             quote=o["quote"], bad_rows=o["bad_rows"])
     if kind == "excel":                           # every column is text already
         return raw_expr(path, kind, delimiter, header, **o)
     cols = source_schema(path, kind, delimiter, header, file_stamp(path))
@@ -217,12 +333,12 @@ def file_stamp(path: str) -> str:
 
 def source_schema(path: str, kind: str, delimiter: str, header: bool, stamp: str = "",
                   sheet: str = "", cell_range: str = "", stop_at_blank: bool = False,
-                  skip_rows: int = 0) -> dict[str, str]:
+                  skip_rows: int = 0, quote: str = '"', bad_rows: str = "keep") -> dict[str, str]:
     """Column names and the types the file itself carries (or DuckDB sniffs for a CSV) -
     cheap on a big file, DuckDB reads only what it needs to know the shape. The read options
     that do not apply to the kind are dropped, so they never split the cache. ValueError for
     an Excel sheet or range that is not there."""
-    o = read_opts(kind, sheet, cell_range, stop_at_blank, skip_rows)
+    o = read_opts(kind, sheet, cell_range, stop_at_blank, skip_rows, quote, bad_rows)
     return dict(_source_schema(path, kind, delimiter, header, stamp, tuple(sorted(o.items()))))
 
 

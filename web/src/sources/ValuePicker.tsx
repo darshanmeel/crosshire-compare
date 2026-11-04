@@ -55,7 +55,7 @@ function ValueList({ id, tag, q, onDone }: { id: string; tag: Tag; q: QuickClaus
   const many = q.isIn;
   const v = useSources().data?.sides?.[tag];
   const got = useQuery({
-    queryKey: ["values", tag, `${v?.origin}|${v?.label}|${v?.sheet}|${v?.cell_range}|${v?.skip_rows}|${v?.rows}`, q.col, search],
+    queryKey: ["values", tag, `${v?.origin}|${v?.label}|${v?.sheet}|${v?.cell_range}|${v?.skip_rows}|${v?.quote}|${v?.bad_rows}|${v?.rows}`, q.col, search],
     queryFn: () => api.get<ColumnValues>(`/api/sources/${tag}/values?${new URLSearchParams({ column: q.col, search, limit: String(VALUES_LIMIT) })}`),
     placeholderData: keepPreviousData,
   });

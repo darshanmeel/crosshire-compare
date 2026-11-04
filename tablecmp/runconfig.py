@@ -14,12 +14,14 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+import duckdb
 import pandas as pd
 
 from .columns import apply_mapping_json, mapping_json, only_in, specs_from, table_compare, table_keys
 from .compare import build_filters, column_rules, run_comparison, side_labels, signature
 from .outputs import pair_name
-from .sources import Side, add_derived, apply_names, file_stamp, kind_of, path_allowed, row_count, snapshot, source_schema, work_dir
+from .sources import (READ_DEFAULTS, BadQuote, Side, add_derived, apply_names, capture_set_aside, file_stamp, kind_of,
+                      path_allowed, quote_problem, row_count, snapshot, source_schema, work_dir)
 from .values import NULL_TOKENS_DEFAULT, ReadOptions
 
 KIND = "crosshire-compare config"
@@ -52,7 +54,7 @@ def side_block(side: Side, name: str) -> dict:
     else:
         block["path"] = side.csv_path
         # where the table sits in the file: an Excel sheet and range, the lines above a CSV's header
-        block.update({k: v for k, v in side.read_opts.items() if v})
+        block.update({k: v for k, v in side.read_opts.items() if v != READ_DEFAULTS[k]})
         if side.kind == "excel" and not side.sheet:
             try:                                 # the sheet read, by name: a sheet put in front of it later
                 from .excel import resolve_sheet  # must not change what a rerun reads
@@ -152,7 +154,7 @@ def options_of(conf: dict) -> ReadOptions:
     return ReadOptions(tuple(tokens), bool(s.get("trim", True)))
 
 
-READ_FIELDS = ("sheet", "cell_range", "stop_at_blank", "skip_rows")
+READ_FIELDS = ("sheet", "cell_range", "stop_at_blank", "skip_rows", "quote", "bad_rows")
 
 
 def with_file(block: dict, path: str | None, name: str | None = None, read: dict | None = None) -> dict:
@@ -226,23 +228,40 @@ def open_side(block: dict, which: str, passwords: dict[str, str] | None = None, 
         side.skip_rows = max(0, int(block.get("skip_rows") or 0))
     except (TypeError, ValueError):
         raise ConfigError(f"{name}: skip_rows is not a number") from None
+    side.quote = str(block.get("quote", '"'))
+    side.bad_rows = str(block.get("bad_rows") or "keep")
     try:
         schema = source_schema(side.csv_path, side.kind, side.delimiter, side.header, file_stamp(side.csv_path),
                                **side.read_opts)
-    except ValueError as exc:                    # an Excel sheet or range that is not there
+    except duckdb.Error as exc:                  # quotes that do not balance, said plainly
+        said = quote_problem(exc, side.csv_path)
+        if not said:
+            raise
+        raise ConfigError(said) from None
+    except ValueError as exc:                    # an Excel sheet or range that is not there, a quote not known
         raise ConfigError(f"{name}: {exc}") from None
     names = list(block.get("column_names") or [])
     side.schema = apply_names(schema, names) if names else dict(schema)
     side.source_columns = list(schema)
     side.stamp = file_stamp(side.csv_path)
-    if block.get("snapshot") and not (side.kind == "parquet" and not side.cut):
-        snapshot(side, str(work_dir() / f"cmp_{which}_{int(time.time() * 1000)}.parquet"))
+    stamp = int(time.time() * 1000)
+    try:
+        capture_set_aside(side, str(work_dir() / f"cmp_{which}_{stamp}_set_aside.parquet"))
+        if block.get("snapshot") and not (side.kind == "parquet" and not side.cut):
+            snapshot(side, str(work_dir() / f"cmp_{which}_{stamp}.parquet"))
+        side.rows = row_count(side)
+    except BadQuote as exc:
+        raise ConfigError(str(exc)) from None
+    except duckdb.Error as exc:                  # a quote that never closes further down the file
+        said = quote_problem(exc, side.csv_path)
+        if not said:
+            raise
+        raise ConfigError(said) from None
     for col, expr in (block.get("derived") or {}).items():
         try:
             add_derived(side, str(col), str(expr))
         except Exception as exc:
             raise ConfigError(f"{name}: the added column {col} does not read - {exc}") from exc
-    side.rows = row_count(side)
     return side
 
 
