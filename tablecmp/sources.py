@@ -2,7 +2,6 @@
 streams it from disk; an Excel sheet is read once into Parquet first (excel.py)."""
 from __future__ import annotations
 
-import collections
 import os
 import re
 import tempfile
@@ -30,12 +29,10 @@ class Side:
     stop_at_blank: bool = False   # excel: the table ends at its first fully empty row
     skip_rows: int = 0      # csv: lines above the header to skip (a title, notes)
     quote: str = '"'        # csv: the quote character - '"', "'" or "" for none; the escape is the same
-    bad_rows: str = "set_aside"   # csv: rows with too few or too many fields - set_aside | keep (padded, extra columns) | first:N | join_numbers
-    fixed_rows: int = 0                               # join_numbers - the rows with a split number or time joined
-    fixed_guess: int = 0                              # join_numbers - those where the comma could have belonged to another number
-    first_kept: int = 0                               # first:N - the fields each row was cut to
-    first_cut_rows: int = 0                           # first:N - the rows that did not have exactly that many
-    first_cut_by: dict[int, int] = field(default_factory=dict)   # their field count -> rows
+    bad_rows: str = "set_aside"   # csv: rows with too few or too many fields - set_aside | keep (padded, extra columns)
+    set_aside_hint: str = ""                          # what the rows set aside suggest is wrong, a suggestion only
+    filled_rows: int = 0                              # set_aside - rows short of fields, read with the missing ones empty
+    filled_by: dict[int, int] = field(default_factory=dict)      # their field count -> rows
     clean_path: str = ""    # csv: the rows that fit, when others were set aside - read in place of the file
     set_aside_valid: int = 0                          # the rows that fit, when the file was split
     set_aside_rows: int = 0                           # rows left out at Load (bad_rows set_aside), all of them
@@ -113,10 +110,6 @@ class Side:
             bits.append(f"quote {o['quote']}" if o["quote"] else "no quoting")
         if o.get("bad_rows") == "keep":
             bits.append("wrong-width rows kept")
-        elif o.get("bad_rows") == "join_numbers":
-            bits.append("split numbers joined")
-        elif first_fields_of(o.get("bad_rows", "")):
-            bits.append(f"first {self.first_kept or first_fields_of(o['bad_rows']):,} fields of each row")
         return " · ".join(bits)
 
     @property
@@ -138,17 +131,11 @@ FILE_KINDS = {".csv": "csv", ".txt": "csv", ".tsv": "csv", ".dat": "csv",
 
 
 QUOTES = ('"', "'", "")                 # a CSV's quote character: double, single, none
-BAD_ROWS = ("keep", "set_aside", "join_numbers")   # a CSV row with too few or too many fields
+BAD_ROWS = ("keep", "set_aside")         # a CSV row with too few or too many fields
 READ_DEFAULTS = {"sheet": "", "cell_range": "", "stop_at_blank": False, "skip_rows": 0,
                  "quote": '"', "bad_rows": "set_aside"}
 SET_ASIDE_KEPT = 10_000                  # rows set aside kept to show and download; the count is always all
 SNIFF_ROWS = 20_480                      # rows that say a header-less file's width
-
-
-def first_fields_of(bad_rows: str) -> int:
-    """N of a first:N choice - read each row as its first N fields; 0 for any other choice."""
-    head, _, n = str(bad_rows).partition(":")
-    return int(n) if head == "first" and n.isdecimal() and n.isascii() else 0
 
 
 def read_opts(kind: str, sheet: str = "", cell_range: str = "", stop_at_blank: bool = False,
@@ -163,8 +150,8 @@ def read_opts(kind: str, sheet: str = "", cell_range: str = "", stop_at_blank: b
     if kind == "csv":
         if quote not in QUOTES:
             raise ValueError(f"The quote character is {quote!r} - use \", ' or none.")
-        if bad_rows not in BAD_ROWS and not first_fields_of(bad_rows):
-            raise ValueError(f"Rows with too few or too many fields: {bad_rows!r} - use keep, set_aside, join_numbers or first:N.")
+        if bad_rows not in BAD_ROWS:
+            raise ValueError(f"Rows with too few or too many fields: {bad_rows!r} - use keep or set_aside.")
         return {"skip_rows": max(0, int(skip_rows or 0)), "quote": quote, "bad_rows": bad_rows}
     return {}
 
@@ -203,7 +190,7 @@ def read_csv_expr(path: str, delimiter: str, header: bool, all_varchar: bool = T
                   skip_rows: int = 0, quote: str = '"', bad_rows: str = "keep") -> str:
     """The quote and escape are always given: left to the sniffer, one quote that never closes
     makes it read the whole file unquoted, silently. Keep pads a short row and gives a long one
-    extra columns; set_aside and first:N are strict - capture_set_aside has made every row fit."""
+    extra columns; set_aside is strict - capture_set_aside has made every row fit."""
     keep = bad_rows == "keep"
     return (f"read_csv({lit(path)}, delim={lit(delimiter)}, quote={lit(quote)}, escape={lit(quote)}, "
             f"header={'true' if header else 'false'}, null_padding={'true' if keep else 'false'}"
@@ -213,8 +200,10 @@ def read_csv_expr(path: str, delimiter: str, header: bool, all_varchar: bool = T
 
 QUOTE_SAID = ("{file}: a quote never closes, so the rows cannot be told apart - fix the file, "
               "or pick another quote character under Advanced.")
-TOO_WIDE_SAID = ("an unquoted delimiter does this, often a decimal comma, 12,33 in a comma-separated file. "
-                 "Export the file again with another delimiter or with decimal points, or under Advanced join the split numbers or read the first fields of each row.")
+EXPORT_SAID = "Try exporting the file again with every value quoted, another delimiter or decimal points."
+TOO_WIDE_SAID = ("a delimiter outside quotes does this, often a decimal comma (German format), 12,33 in a comma-separated file. " + EXPORT_SAID)
+TIME_ENDS = re.compile(r"[0-9]{2}:[0-9]{2}:[0-9]{2}$")
+WHOLE_NUMBER = re.compile(r"-?[0-9]+$")
 WIDTH_SAID = ("{file}: line {line} has {found} fields where the rows before it have {expected}, so the columns "
               "cannot be lined up. An unquoted delimiter does this - often a decimal comma, 12,33 in a "
               "comma-separated file. Export the file again with another delimiter or with decimal points.")
@@ -303,250 +292,23 @@ def fields_of(text: str, delimiter: str, quote: str) -> list[str]:
     return out + [now]
 
 
-def first_fields(raw: str, delimiter: str, quote: str, n: int) -> str:
-    """The row cut to its first n fields, a short one filled with empty ones; its line end stays."""
-    text = raw.rstrip("\r\n")
-    got = fields_of(text, delimiter, quote)[:n]
-    return delimiter.join(got + [""] * (n - len(got))) + raw[len(text):]
-
-
-def _capture_first(side: Side, n: int, clean: str, file: str) -> None:
-    """first:N: every row goes on to `clean_path`, cut or filled to n fields, and those that did not
-    have n are counted. n is at most the columns the side has."""
-    o = side.read_opts
-    by: dict[int, int] = {}
-    valid, first = 0, True
-    try:
-        with _open_csv(side.csv_path) as f, open(clean, "w", encoding="utf-8", errors="surrogateescape", newline="") as out:
-            for _, count, raw in csv_rows(f, side.delimiter, o["quote"], o["skip_rows"]):
-                out.write(raw if count == n else first_fields(raw, side.delimiter, o["quote"], n))
-                if not (first and side.header):
-                    valid += 1
-                    if count != n:
-                        by[count] = by.get(count, 0) + 1
-                first = False
-    except BadQuote as exc:
-        Path(clean).unlink(missing_ok=True)
-        raise BadQuote(QUOTE_SAID.format(file=file) + f" {exc}") from exc
-    side.clean_path, side.set_aside_valid = clean, valid
-    side.first_kept, side.first_cut_rows, side.first_cut_by = n, sum(by.values()), dict(sorted(by.items()))
-    _types_from_clean(side)
-
-
-TIME_END = re.compile(r"[0-9]{2}:[0-9]{2}:[0-9]{2}$")
-WHOLE = re.compile(r"-?[0-9]+$")
-JOIN_SAID = ("{file}: its text is not quoted, or its columns do not add up to the header, so split "
-             "numbers cannot be told apart - use the first fields of each row, or export it again.")
-
-
-def _runs(text: str, delimiter: str, quote: str) -> tuple[list[list[str]], list[str]]:
-    """A row as the unquoted fields around each quoted one: (runs, quoted), with one run more than
-    quoted. A time split at its fraction, 12:11:35,284, is joined already."""
-    runs: list[list[str]] = [[]]
-    quoted: list[str] = []
-    for f in fields_of(text, delimiter, quote):
-        if f.startswith(quote):
-            quoted.append(f)
-            runs.append([])
-        elif runs[-1] and TIME_END.search(runs[-1][-1]) and f.isdecimal():
-            runs[-1][-1] += "." + f
-        else:
-            runs[-1].append(f)
-    return runs, quoted
-
-
-def join_template(path: str, delimiter: str, header: bool, skip: int, quote: str, file: str = "") -> list[int]:
-    """The unquoted columns between each two quoted ones. A number with a decimal comma only makes
-    a run longer, so a run's shortest length that rows really have is its columns. BadQuote unless
-    those and the quoted columns add up to the header, read on a sample and then on the whole file."""
-    said = JOIN_SAID.format(file=file or Path(path).name)
-    if not quote:
-        raise BadQuote(said)
-    want = row_width(path, delimiter, header, skip, quote) if header else 0
-    for limit in (SNIFF_ROWS, None):
-        seen: dict[int, list[collections.Counter]] = {}
-        rows = 0
-        with _open_csv(path) as f:
-            for i, (_, _c, raw) in enumerate(csv_rows(f, delimiter, quote, skip)):
-                if i == 0 and header:
-                    continue
-                runs, _q = _runs(raw.rstrip("\r\n"), delimiter, quote)
-                gaps = seen.setdefault(len(runs), [collections.Counter() for _ in runs])
-                for g, r in zip(gaps, runs):
-                    g[len(r)] += 1
-                rows += 1
-                if limit and rows >= limit:
-                    break
-        if not seen:
-            return []
-        gaps = max(seen.values(), key=lambda g: sum(g[0].values()))
-        enough = max(1, rows // 1000)              # a stray short row says nothing about the columns
-        template = [min((n for n, c in g.items() if c >= enough), default=min(g)) for g in gaps]
-        if not want or sum(template) + len(template) - 1 == want:
-            return template
-    raise BadQuote(said)
-
-
-def join_row(raw: str, delimiter: str, quote: str, template: list[int]) -> tuple[str, bool] | None:
-    """(the row with its split numbers joined, whether a comma could have belonged elsewhere); None
-    when it cannot be placed. An extra comma has whole numbers on both sides; with more than one
-    such pair the last wins - the columns of a run that hold decimals, prices, tend to be its last."""
-    text = raw.rstrip("\r\n")
-    runs, quoted = _runs(text, delimiter, quote)
-    if len(runs) != len(template):
-        return None
-    guess = False
-    for r, k in zip(runs, template):
-        if len(r) < k:
-            return None
-        while len(r) > k:
-            pairs = [i for i in range(len(r) - 1) if WHOLE.match(r[i]) and r[i + 1].isdecimal()]
-            if not pairs:
-                return None
-            guess = guess or len(pairs) > 1
-            r[pairs[-1]:pairs[-1] + 2] = [r[pairs[-1]] + "." + r[pairs[-1] + 1]]
-    out = list(runs[0])
-    for q, r in zip(quoted, runs[1:]):
-        out += [q, *r]
-    return delimiter.join(out) + raw[len(text):], guess
-
-
-def _capture_join(side: Side, clean: str, path: str, file: str) -> None:
-    """join_numbers: every row that can be placed goes on to `clean_path` with its split numbers
-    joined; the others are set aside as a row of the wrong width is."""
-    o = side.read_opts
-    template = join_template(side.csv_path, side.delimiter, side.header, o["skip_rows"], o["quote"], file)
-    by: dict[int, int] = {}
-    kept: list[tuple[int, int, str]] = []
-    valid, fixed, guessed, first = 0, 0, 0, True
-    with _open_csv(side.csv_path) as f, open(clean, "w", encoding="utf-8", errors="surrogateescape", newline="") as out:
-        for line, count, raw in csv_rows(f, side.delimiter, o["quote"], o["skip_rows"]):
-            if first and side.header:
-                out.write(raw)
-                first = False
-                continue
-            first = False
-            got = join_row(raw, side.delimiter, o["quote"], template)
-            if got is None:
-                by[count] = by.get(count, 0) + 1
-                if len(kept) < SET_ASIDE_KEPT:
-                    kept.append((line, count, raw.strip("\r\n").encode("utf-8", "replace").decode("utf-8")))
-                continue
-            out.write(got[0])
-            valid += 1
-            fixed += got[0] != raw
-            guessed += got[1]
-    side.clean_path, side.set_aside_valid, side.fixed_rows, side.fixed_guess = clean, valid, fixed, guessed
-    if by:
-        side.set_aside_rows, side.set_aside_fields = sum(by.values()), sum(template) + len(template) - 1
-        side.set_aside_by = dict(sorted(by.items()))
-        frame = pd.DataFrame(kept, columns=["line", "fields", "raw"])       # noqa: F841 - read by DuckDB by name
-        scratch().execute(f"COPY (SELECT * FROM frame ORDER BY line) TO {lit(path)} (FORMAT PARQUET)")
-        side.set_aside_path = path
-    _types_from_clean(side)
-
-
-def join_said(side: Side) -> str:
-    """'344,605 rows had a split number or time joined - 282,182 where ...'; '' when none had."""
-    n = side.fixed_rows
-    if not n:
-        return ""
-    return (f"{n:,} row{'s' if n != 1 else ''} had a split number or time joined"
-            + (f" - in {side.fixed_guess:,} the comma could have belonged to another number, and went to the last one" if side.fixed_guess else "")
-            + ".")
-
-
-def join_preview(path: str, delimiter: str, header: bool, skip: int, quote: str, names: list[str], show: int = 10) -> dict:
-    """What join_numbers does to a sample of the file: the first rows joined, and how many could not be placed or were a choice."""
-    template = join_template(path, delimiter, header, skip, quote)
-    width = sum(template) + len(template) - 1
-    by: dict[int, int] = {}
-    rows, sampled, unplaced, guessed, first = [], 0, 0, 0, True
-    with _open_csv(path) as f:
-        for line, count, raw in csv_rows(f, delimiter, quote, skip):
-            if first and header:
-                first = False
-                continue
-            first = False
-            sampled += 1
-            by[count] = by.get(count, 0) + 1
-            got = join_row(raw, delimiter, quote, template)
-            if got is None:
-                unplaced += 1
-            else:
-                guessed += got[1]
-                if len(rows) < show:
-                    vals = [_shown(v, quote) for v in fields_of(got[0].rstrip("\r\n"), delimiter, quote)]
-                    rows.append({"line": line, "fields": count, "values": vals, "left_out": ""})
-            if sampled >= SNIFF_ROWS:
-                break
-    return {"fields": width, "width": width, "columns": names[:width], "sampled": sampled, "unplaced": unplaced, "guessed": guessed,
-            "by": [{"fields": k, "rows": v} for k, v in sorted(by.items())], "rows": rows}
-
-
-def _shown(v: str, quote: str) -> str:
-    bare = v[len(quote):-len(quote)] if quote and len(v) >= 2 * len(quote) and v.startswith(quote) and v.endswith(quote) else v
-    return bare.encode("utf-8", "replace").decode("utf-8")
-
-
-def first_fields_said(side: Side) -> str:
-    """'344,605 rows read as their first 46 fields - 36,022 had 47, ...'; '' when none was cut."""
-    n = side.first_cut_rows
-    if not n:
-        return ""
-    bits = [f"{c:,} had {f:,}" for f, c in side.first_cut_by.items()]
-    return (f"{n:,} row{'s' if n != 1 else ''} read as {'their' if n != 1 else 'its'} first {side.first_kept:,} fields - " + ", ".join(bits)
-            + ". If a value holds the delimiter, the columns after it hold the wrong values - check them before trusting a difference.")
-
-
-def first_fields_preview(path: str, delimiter: str, header: bool, skip: int, quote: str, n: int, names: list[str],
-                         show: int = 10) -> dict:
-    """What first:n does to a sample of the file: the field counts met, and the first rows cut."""
-    width = row_width(path, delimiter, header, skip, quote)
-    n = min(n or width, len(names)) if names else (n or width)
-    by: dict[int, int] = {}
-    rows, sampled, first = [], 0, True
-    with _open_csv(path) as f:
-        for line, count, raw in csv_rows(f, delimiter, quote, skip):
-            if first and header:
-                first = False
-                continue
-            first = False
-            sampled += 1
-            by[count] = by.get(count, 0) + 1
-            if len(rows) < show:
-                got = fields_of(raw.rstrip("\r\n"), delimiter, quote)
-                rows.append({"line": line, "fields": count, "values": [_shown(v, quote) for v in (got + [""] * n)[:n]],
-                             "left_out": delimiter.join(got[n:]).encode("utf-8", "replace").decode("utf-8")})
-            if sampled >= SNIFF_ROWS:
-                break
-    return {"fields": n, "width": width, "columns": names[:n], "sampled": sampled,
-            "by": [{"fields": k, "rows": v} for k, v in sorted(by.items())], "rows": rows}
-
-
 def capture_set_aside(side: Side, path: str) -> None:
     """Read the whole file once and split it: the rows with the fields a row should have go on to
     `clean_path` (the same bytes, so they read as they would have) when any other row exists, the
     others are counted by field count on the side and the first SET_ASIDE_KEPT kept (line, fields,
     raw) in a Parquet file at `path`. BadQuote when a quote never closes."""
     side.set_aside_rows, side.set_aside_by, side.set_aside_fields, side.set_aside_path = 0, {}, 0, ""
+    side.set_aside_hint = ""
     side.clean_path, side.set_aside_valid = "", 0
-    side.first_kept, side.first_cut_rows, side.first_cut_by = 0, 0, {}
-    side.fixed_rows, side.fixed_guess = 0, 0
+    side.filled_rows, side.filled_by = 0, {}
     o = side.read_opts
     if side.kind != "csv" or o["bad_rows"] == "keep":
         return
     file = side.label or Path(side.csv_path).name
     clean = str(Path(path).with_suffix("")) + "_valid.csv"
-    if o["bad_rows"] == "join_numbers":
-        _capture_join(side, clean, path, file)
-        return
-    n = first_fields_of(o["bad_rows"])
-    if n:
-        _capture_first(side, min(n, len(side.source_columns) or n), clean, file)
-        return
     by: dict[int, int] = {}
     kept: list[tuple[int, int, str]] = []
+    filled_by: dict[int, int] = {}
     want, valid, first = 0, 0, True
     try:
         with _open_csv(side.csv_path) as f, open(clean, "w", encoding="utf-8", errors="surrogateescape", newline="") as out:
@@ -555,6 +317,11 @@ def capture_set_aside(side: Side, path: str) -> None:
                 if count == want:
                     out.write(raw)
                     valid += 0 if first and side.header else 1
+                elif count < want:                        # what is there is read; the fields it lacks are empty
+                    text = raw.rstrip("\r\n")
+                    out.write(text + side.delimiter * (want - count) + raw[len(text):])
+                    valid += 1
+                    filled_by[count] = filled_by.get(count, 0) + 1
                 else:
                     by[count] = by.get(count, 0) + 1
                     if len(kept) < SET_ASIDE_KEPT:
@@ -563,12 +330,17 @@ def capture_set_aside(side: Side, path: str) -> None:
     except BadQuote as exc:
         Path(clean).unlink(missing_ok=True)
         raise BadQuote(QUOTE_SAID.format(file=file) + f" {exc}") from exc
-    side.set_aside_valid = valid
-    if not by:
+    side.set_aside_valid, side.filled_rows, side.filled_by = valid, sum(filled_by.values()), dict(sorted(filled_by.items()))
+    side.set_aside_fields = want
+    if not by and not filled_by:
         Path(clean).unlink(missing_ok=True)
         return
     side.clean_path = clean
-    side.set_aside_rows, side.set_aside_fields = sum(by.values()), want
+    if not by:
+        _types_from_clean(side)
+        return
+    side.set_aside_rows = sum(by.values())
+    side.set_aside_hint = comma_hint(kept, side.delimiter, o["quote"], want, side.source_columns)
     side.set_aside_by = dict(sorted(by.items()))
     con = scratch()
     frame = pd.DataFrame(kept, columns=["line", "fields", "raw"])       # noqa: F841 - read by DuckDB by name
@@ -591,18 +363,63 @@ def _types_from_clean(side: Side) -> None:
         side.schema = dict(zip(side.schema, found.values()))
 
 
+def comma_hint(kept: list[tuple[int, int, str]], delimiter: str, quote: str, want: int, columns: list[str]) -> str:
+    """What the rows set aside suggest, in a comma-separated file: a time with a comma before its
+    fraction, a number with a decimal comma. A suggestion from the rows kept; '' when neither shows.
+    The column is named only for a time, the first split in a row: nothing before it has shifted."""
+    if delimiter != ",":
+        return ""
+    times: dict[str, int] = {}
+    numbers = False
+    for _, count, raw in kept:
+        fields = fields_of(raw, delimiter, quote)
+        plain = [not (quote and f.startswith(quote)) for f in fields]
+        pairs = [i for i in range(len(fields) - 1) if plain[i] and plain[i + 1]]
+        split = [i for i in pairs if TIME_ENDS.search(fields[i]) and fields[i + 1].isdecimal()]
+        if split and split[0] < len(columns):
+            times[columns[split[0]]] = times.get(columns[split[0]], 0) + 1
+        elif split:
+            times[""] = times.get("", 0) + 1
+        whole = [i for i in pairs if i not in split and (i - 1) not in split
+                 and WHOLE_NUMBER.match(fields[i]) and fields[i + 1].isdecimal()]
+        numbers = numbers or (count - want > len(split) and bool(whole))
+    named = sorted((c for c in times if c), key=lambda c: -times[c])[:2]
+    time = f"{' and '.join(named)} seem{'s' if len(named) == 1 else ''} to use" if named else "A time seems to use"
+    if times and numbers:
+        return f"{time} a comma in the time, 12:11:35,284, and a number seems to use a decimal comma, 12,33, with no quotes around them, so each reads as two fields."
+    if times:
+        return f"{time} a comma in the time, 12:11:35,284, with no quotes around it, so it reads as two fields."
+    if numbers:
+        return "A number seems to use a decimal comma, 12,33, with no quotes around it, so it reads as two fields."
+    return ""
+
+
+def filled_said(side: Side) -> str:
+    """'2 rows have 2 fields, 3 have 3 (the header has 3) - the missing fields read as empty.'; '' for none."""
+    if not side.filled_rows:
+        return ""
+    return f"{widths_said(side)} - the missing fields read as empty."
+
+
+def widths_said(side: Side) -> str:
+    """How many rows have how many fields: '4,000 rows have 20 fields, 300 have 21 (the header has 20)'."""
+    fit = side.set_aside_valid - side.filled_rows
+    counts = {**side.filled_by, **side.set_aside_by, **({side.set_aside_fields: fit} if fit > 0 else {})}
+    bits = [(f"{c:,} row{' has' if c == 1 else 's have'} {f:,} field{'' if f == 1 else 's'}" if not i else f"{c:,} {'has' if c == 1 else 'have'} {f:,}")
+            for i, (f, c) in enumerate(sorted(counts.items()))]
+    return ", ".join(bits) + f" ({'the header has' if side.header else 'the first row has'} {side.set_aside_fields:,})"
+
+
 def set_aside_said(side: Side) -> str:
-    """'12 rows set aside - 7 with 49 fields, 5 with 51 (the header has 50)'; '' for none."""
+    """'12 rows set aside - 7 rows have 49 fields, 100 have 50, 5 have 51 (the header has 50)'; '' for none."""
     n = side.set_aside_rows
     if not n:
         return ""
-    bits = [f"{c:,} with {f:,}" + ("" if i else " field" + ("s" if f != 1 else "")) if f >= 0
-            else f"{c:,} other" for i, (f, c) in enumerate(side.set_aside_by.items())]
-    whose = "the header has" if side.header else "the rest have"
-    return (f"{n:,} row{'s' if n != 1 else ''} set aside - " + ", ".join(bits)
-            + (f" ({whose} {side.set_aside_fields:,})" if side.set_aside_fields else "")
-            + (f". {'No row fits' if not side.set_aside_valid else 'More rows left out than kept'} - " + TOO_WIDE_SAID
-               if side.set_aside_valid < n else ""))
+    return (f"{n:,} row{'s' if n != 1 else ''} set aside - " + widths_said(side)
+            + (f". {'No row fits' if not side.set_aside_valid else 'More rows left out than kept'} - "
+               + (f"{side.set_aside_hint} {EXPORT_SAID}" if side.set_aside_hint else TOO_WIDE_SAID)
+               if side.set_aside_valid < n else
+               f". {side.set_aside_hint} {EXPORT_SAID}" if side.set_aside_hint else ""))
 
 
 def set_aside_view(side: Side) -> dict | None:
@@ -694,8 +511,7 @@ def _source_schema(path: str, kind: str, delimiter: str, header: bool, stamp: st
                    opts: tuple) -> dict[str, str]:
     con = scratch()
     o = dict(opts)
-    first = first_fields_of(o.get("bad_rows", "")) if kind == "csv" else 0
-    strict = kind == "csv" and (first or o.get("bad_rows") in ("set_aside", "join_numbers"))
+    strict = kind == "csv" and o.get("bad_rows") == "set_aside"
     if strict:                                     # the sample may hold rows of another width: named by the header, cut to its width
         o["bad_rows"] = "keep"
     q = f"DESCRIBE SELECT * FROM {raw_expr(path, kind, delimiter, header, all_varchar=False, **o)}"
@@ -703,8 +519,6 @@ def _source_schema(path: str, kind: str, delimiter: str, header: bool, stamp: st
     if strict:
         want = row_width(path, delimiter, header, o.get("skip_rows", 0), o.get("quote", '"'))
         got = dict(list(got.items())[:want]) if want else got
-        if first:
-            got = dict(list(got.items())[:first])
     return got
 
 

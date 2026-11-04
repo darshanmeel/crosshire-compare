@@ -10,7 +10,7 @@ import pytest
 
 from tablecmp.loading import ReadAsked, build_side
 from tablecmp.runconfig import ConfigError, open_side, side_block
-from tablecmp.sources import BadQuote, Side, file_stamp, first_fields_said, join_said, preview_rows, set_aside_said, source_schema
+from tablecmp.sources import BadQuote, Side, file_stamp, filled_said, preview_rows, set_aside_said, source_schema
 from tests.conftest import isolated_env
 from tests.webflow import auto, boot, load_path, settle, wait
 
@@ -117,94 +117,7 @@ def test_a_file_where_no_row_fits_says_why(tmp_path):
     s = build_side("A", ReadAsked(name="X", label=p.name, path=str(p), kind="csv"), schema)
     assert s.rows == 0 and s.set_aside_rows == 2 and s.columns == ["id", "price"]
     said = set_aside_said(s)
-    assert said.startswith("2 rows set aside - 2 with 3 fields (the header has 2). No row fits - ") and "decimal comma" in said
-
-
-def test_first_fields_keeps_every_row_cut_to_that_width(tmp_path):
-    text = 'id,name,amt,note\n1,"a,b",12,33,x\n2,c,5\n3,d,6,y\n'
-    s = side_of(put(tmp_path, "w.csv", text), bad_rows="first:3")
-    assert s.columns == ["id", "name", "amt"] and s.rows == 3
-    assert values(s) == [["1", "a,b", "12"], ["2", "c", "5"], ["3", "d", "6"]]
-    assert s.first_cut_rows == 2 and s.first_cut_by == {4: 1, 5: 1} and s.first_kept == 3      # the header is no row
-    assert s.set_aside_rows == 0 and s.read_from == "first 3 fields of each row"
-    assert first_fields_said(s).startswith("2 rows read as their first 3 fields - 1 had 4, 1 had 5.")
-
-
-def test_first_fields_rescues_a_file_where_no_row_fits_and_stops_at_the_header(tmp_path):
-    p = put(tmp_path, "c.csv", "id,price\n1,12,33\n2,45,10\n")
-    assert side_of(p).rows == 0
-    s = side_of(p, bad_rows="first:9")                  # more than the header names: the header's width
-    assert s.rows == 2 and s.columns == ["id", "price"] and values(s) == [["1", "12"], ["2", "45"]]
-    assert s.first_kept == 2 and s.first_cut_by == {3: 2}
-
-
-def test_first_fields_is_said_on_the_card_and_on_the_verdict_and_goes_through_a_config(monkeypatch, tmp_path):
-    f = boot(monkeypatch, tmp_path)
-    a, b = put(tmp_path, "a.csv", "id,price\n1,12,33\n2,45,10\n"), put(tmp_path, "b.csv", "id,price\n1,12\n2,46\n")
-    view = load_path(f, "A", a, bad_rows="first:2")["side"]
-    load_path(f, "B", b)
-    assert view["bad_rows"] == "first:2" and view["set_aside"] is None and view["rows"] == 2
-    assert any("2 rows read as their first 2 fields" in n["text"] for n in view["notes"])
-    run = auto(f)
-    assert " rows cut to the first fields in " in str(run["body"]["verdict"]["segments"]) and run["body"]["matched"] == 2
-    block = side_block(side_of(a, bad_rows="first:2"), "L")
-    assert block["bad_rows"] == "first:2" and open_side(block, "A").rows == 2
-
-
-def test_the_first_fields_preview_shows_the_rows_cut_and_the_counts_met(monkeypatch, tmp_path):
-    f = boot(monkeypatch, tmp_path)
-    p = put(tmp_path, "w.csv", 'id,name,amt\n1,"a,b",12,33\n2,c,5\n3,d\n')
-    got = f.send("POST", "/api/sources/A/first-fields?n=2", {"how": "path", "path": str(p)}).json()
-    assert got["fields"] == 2 and got["width"] == 3 and got["columns"] == ["id", "name"] and got["sampled"] == 3
-    assert got["by"] == [{"fields": 2, "rows": 1}, {"fields": 3, "rows": 1}, {"fields": 4, "rows": 1}]
-    assert got["rows"][0] == {"line": 2, "fields": 4, "values": ["1", "a,b"], "left_out": "12,33"}
-    assert got["rows"][2]["values"] == ["3", "d"] and got["rows"][2]["left_out"] == ""
-    whole = f.send("POST", "/api/sources/A/first-fields", {"how": "path", "path": str(p)}).json()
-    assert whole["fields"] == 3 and whole["rows"][2]["values"] == ["3", "d", ""]
-    assert f.send("POST", "/api/sources/A/schema", {"how": "path", "path": str(p), "bad_rows": "first:x"}).status_code == 422
-
-
-SPLIT = ('"id","at","qty","price","side","avg","name"\n'
-         '"a",01/10/26 06:59:36,123000000,5,12,33,"B",7,"x, y"\n'
-         '"b",02/10/26 01:02:03,456000000,6,40,"S",8,25,"z"\n'
-         '"c",03/10/26 01:02:03,789000000,7,,"B",,"w"\n')
-
-
-def test_join_numbers_rebuilds_the_real_columns_with_the_quoted_text_as_fixed_points(tmp_path):
-    s = side_of(put(tmp_path, "s.csv", SPLIT), bad_rows="join_numbers")
-    assert s.columns == ["id", "at", "qty", "price", "side", "avg", "name"] and s.rows == 3 and s.set_aside_rows == 0
-    assert values(s) == [["a", "01/10/26 06:59:36.123000000", "5", "12.33", "B", "7", "x, y"],
-                         ["b", "02/10/26 01:02:03.456000000", "6", "40", "S", "8.25", "z"],
-                         ["c", "03/10/26 01:02:03.789000000", "7", None, "B", None, "w"]]
-    assert s.fixed_rows == 3 and s.fixed_guess == 1 and s.read_from == "split numbers joined"     # 5,12,33 could have been 5.12,33
-    assert join_said(s) == ("3 rows had a split number or time joined - in 1 the comma could have belonged to another number, "
-                            "and went to the last one.")
-
-
-def test_join_numbers_sets_aside_a_row_it_cannot_place_and_a_stray_one_does_not_change_the_columns(tmp_path):
-    good = SPLIT + "".join(f'"r{i}",04/10/26 01:02:03,{i},1,2,"B",3,"n"\n' for i in range(2000))
-    s = side_of(put(tmp_path, "s.csv", good + '"bad",1,"S",9,"q"\n'), bad_rows="join_numbers")
-    assert s.rows == 2003 and s.set_aside_rows == 1 and s.set_aside_fields == 7 and len(s.columns) == 7
-
-
-@pytest.mark.parametrize("text", ["id,price\n1,12,33\n2,45,10\n", '"a","b"\n1\n2\n'])
-def test_join_numbers_says_so_when_the_file_is_not_written_that_way(tmp_path, text):
-    with pytest.raises(BadQuote, match="split numbers cannot be told apart"):
-        side_of(put(tmp_path, "c.csv", text), bad_rows="join_numbers")
-
-
-def test_join_numbers_over_http_previews_loads_and_is_said_on_the_verdict(monkeypatch, tmp_path):
-    f = boot(monkeypatch, tmp_path)
-    p = put(tmp_path, "s.csv", SPLIT)
-    got = f.send("POST", "/api/sources/A/first-fields?join=true", {"how": "path", "path": str(p)}).json()
-    assert got["fields"] == 7 and got["guessed"] == 1 and got["unplaced"] == 0 and got["columns"][3] == "price"
-    assert got["rows"][0]["values"] == ["a", "01/10/26 06:59:36.123000000", "5", "12.33", "B", "7", "x, y"]
-    view = load_path(f, "A", p, bad_rows="join_numbers")["side"]
-    assert view["rows"] == 3 and any("split number" in n["text"] for n in view["notes"])
-    load_path(f, "B", put(tmp_path, "b.csv", '"id","price"\n"a",12.33\n"b",40\n'))
-    assert " rows with split numbers joined in " in str(auto(f)["body"]["verdict"]["segments"])
-    block = side_block(side_of(p, bad_rows="join_numbers"), "L")
-    assert block["bad_rows"] == "join_numbers" and open_side(block, "A").rows == 3
+    assert said.startswith("2 rows set aside - 2 rows have 3 fields (the header has 2). No row fits - ") and "decimal comma" in said
 
 
 def test_set_aside_is_the_default_and_keep_still_pads(tmp_path):
@@ -216,14 +129,49 @@ def test_set_aside_is_the_default_and_keep_still_pads(tmp_path):
 
 def test_set_aside_keeps_the_right_rows_and_counts_by_field_count(tmp_path):
     s = side_of(put(tmp_path, "l.csv", LEFT), bad_rows="set_aside")
-    assert s.columns == ["id", "name", "amt"] and s.rows == 3
-    assert [r[0] for r in values(s)] == ["1", "2", "5"] and values(s)[0][1] == "Smith, John"
-    assert (s.set_aside_rows, s.set_aside_by, s.set_aside_fields) == (3, {2: 2, 4: 1}, 3)
-    assert set_aside_said(s) == "3 rows set aside - 2 with 2 fields, 1 with 4 (the header has 3)"
+    assert s.columns == ["id", "name", "amt"] and s.rows == 5
+    assert [r[0] for r in values(s)] == ["1", "2", "3", "5", "6"] and values(s)[0][1] == "Smith, John"
+    assert values(s)[2] == ["3", "c", None]                      # a short row reads, the field it lacks empty
+    assert (s.set_aside_rows, s.set_aside_by, s.set_aside_fields) == (1, {4: 1}, 3)
+    assert set_aside_said(s) == "1 row set aside - 2 rows have 2 fields, 3 have 3, 1 has 4 (the header has 3)"
+    assert s.filled_rows == 2
+    assert filled_said(s) == "2 rows have 2 fields, 3 have 3, 1 has 4 (the header has 3) - the missing fields read as empty."
     assert s.read_from == ""
     # captured once from the whole file: a WHERE and a top N do not change what was set aside
     cut = side_of(put(tmp_path, "l2.csv", LEFT), bad_rows="set_aside", where="id = '5'", limit=1)
-    assert cut.rows == 1 and cut.set_aside_rows == 3
+    assert cut.rows == 1 and cut.set_aside_rows == 1
+
+
+def test_short_rows_alone_read_with_nothing_set_aside_and_the_last_line_need_not_end(tmp_path):
+    s = side_of(put(tmp_path, "s.csv", 'id,name,amt\n"1","a, b",10\n"2"\n"3","c"'))
+    assert values(s) == [["1", "a, b", "10"], ["2", None, None], ["3", "c", None]]
+    assert s.set_aside_rows == 0 and s.filled_rows == 2 and s.read_from == ""
+
+
+def test_the_message_suggests_which_field_uses_a_comma_and_the_app_changes_nothing(tmp_path):
+    head = '"id","at","qty","price","name"\n'
+    both = side_of(put(tmp_path, "b.csv", head + '"a",01/10/26 06:59:36,123,5,12,33,"x"\n"b",02/10/26 01:02:03,456,6,40,"y"\n'))
+    assert both.rows == 0 and both.set_aside_rows == 2
+    said = set_aside_said(both)
+    assert "at seems to use a comma in the time, 12:11:35,284, and a number seems to use a decimal comma" in said
+    time = side_of(put(tmp_path, "t.csv", head + '"b",02/10/26 01:02:03,456,6,40,"y"\n'))
+    assert "at seems to use a comma in the time" in set_aside_said(time) and "decimal comma" not in set_aside_said(time)
+    number = side_of(put(tmp_path, "n.csv", head + '"a",01/10/26,5,12,33,"x"\n'))
+    assert "A number seems to use a decimal comma" in set_aside_said(number) and "in the time" not in set_aside_said(number)
+    other = side_of(put(tmp_path, "o.csv", 'id,name\n1,a\n2,b,x\n'))
+    assert set_aside_said(other) == "1 row set aside - 1 row has 2 fields, 1 has 3 (the header has 2)"      # nothing to suggest
+
+
+def test_the_read_offers_no_way_to_cut_a_row_to_fit(monkeypatch, tmp_path):
+    f = boot(monkeypatch, tmp_path)
+    p = put(tmp_path, "c.csv", "id,price\n1,12,33\n")
+    assert f.send("POST", "/api/sources/A/schema", {"how": "path", "path": str(p), "bad_rows": "first:2"}).status_code == 422
+
+
+def test_a_file_where_every_row_is_too_wide_does_not_say_it_has_no_rows(tmp_path):
+    from tablecmp.loading import loaded_notes
+    notes = [t for _, t in loaded_notes(side_of(put(tmp_path, "c.csv", "id,price\n1,12,33\n2,45,10\n")))]
+    assert not any("no rows" in t for t in notes)
 
 
 def test_set_aside_over_http_and_in_the_compare(monkeypatch, tmp_path):
@@ -231,39 +179,38 @@ def test_set_aside_over_http_and_in_the_compare(monkeypatch, tmp_path):
     a, b = put(tmp_path, "left.csv", LEFT), put(tmp_path, "right.csv", RIGHT)
     va = load_path(f, "A", a, bad_rows="set_aside")["side"]
     vb = load_path(f, "B", b, bad_rows="set_aside")["side"]
-    assert va["bad_rows"] == "set_aside" and va["quote"] == '"' and va["rows"] == 3
-    assert va["set_aside"] == {"rows": 3, "kept": 3, "fields": 3,
-                               "said": "3 rows set aside - 2 with 2 fields, 1 with 4 (the header has 3)",
-                               "by": [{"fields": 2, "rows": 2}, {"fields": 4, "rows": 1}]}
-    assert vb["rows"] == 4 and vb["set_aside"]["said"] == "2 rows set aside - 1 with 2 fields, 1 with 5 (the header has 3)"
+    assert va["bad_rows"] == "set_aside" and va["quote"] == '"' and va["rows"] == 5
+    assert va["set_aside"] == {"rows": 1, "kept": 1, "fields": 3,
+                               "said": "1 row set aside - 2 rows have 2 fields, 3 have 3, 1 has 4 (the header has 3)",
+                               "by": [{"fields": 4, "rows": 1}]}
+    assert any("the missing fields read as empty" in n["text"] for n in va["notes"])
+    assert vb["rows"] == 5 and vb["set_aside"]["said"] == "1 row set aside - 1 row has 2 fields, 4 have 3, 1 has 5 (the header has 3)"
     # the panel: a page at a time, in file order; the download holds them all
-    page = f.get("/api/sources/A/set-aside", page=2, size=2).json()
-    assert page["rows"] == 3 and page["page"] == 2 and page["lines"] == [{"line": 7, "fields": 2, "raw": "6,f"}]
-    first = f.get("/api/sources/A/set-aside", page=1, size=2).json()["lines"]
-    assert first == [{"line": 4, "fields": 2, "raw": "3,c"}, {"line": 5, "fields": 4, "raw": "4,d,40,x"}]
+    page = f.get("/api/sources/A/set-aside", page=1, size=2).json()
+    assert page["rows"] == 1 and page["page"] == 1 and page["lines"] == [{"line": 5, "fields": 4, "raw": "4,d,40,x"}]
     r = f.c.get("/api/sources/A/set-aside.csv")
     assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
-    assert list(csv.reader(io.StringIO(r.text))) == [["line", "fields", "raw"], ["4", "2", "3,c"],
-                                                     ["5", "4", "4,d,40,x"], ["7", "2", "6,f"]]
+    assert list(csv.reader(io.StringIO(r.text))) == [["line", "fields", "raw"], ["5", "4", "4,d,40,x"]]
     assert f.get("/api/sources/P/set-aside").status_code == 409
     # the compare leaves them out
     got = auto(f)
-    assert got["counts"]["matched"] == 3 and got["counts"]["only_left"] == 0
-    assert got["counts"]["only_right"] == 1 and got["counts"]["diff_rows"] == 1
-    assert got["body"]["set_aside"] == {"A": 3, "B": 2}
+    assert got["counts"]["matched"] == 4 and got["counts"]["only_left"] == 1
+    assert got["counts"]["only_right"] == 1 and got["counts"]["diff_rows"] == 2
+    assert got["body"]["set_aside"] == {"A": 1, "B": 1}
     said = "".join(s["text"] for s in got["body"]["verdict"]["segments"])
-    assert said.endswith("3 rows set aside in Left · 2 rows set aside in Right")
+    assert said.endswith("1 row set aside in Left · 1 row set aside in Right")
     pair, folder = got["pair"], got["folder"]
     summary = json.loads((folder / f"{pair}__summary.json").read_text(encoding="utf-8"))
-    assert (summary["result"]["set_aside_left"], summary["result"]["set_aside_right"]) == (3, 2)
-    assert summary["sources"]["A"]["bad_rows"] == "set_aside" and summary["sources"]["A"]["set_aside"]["rows"] == 3
+    assert (summary["result"]["set_aside_left"], summary["result"]["set_aside_right"]) == (1, 1)
+    assert summary["sources"]["A"]["bad_rows"] == "set_aside" and summary["sources"]["A"]["set_aside"]["rows"] == 1
     assert (folder / f"{pair}__set_aside_right.csv").read_text(encoding="utf-8").splitlines()[1:] == [
-        '5,5,"4,d,40,y,z"', "7,2,\"7,g\""]
+        '5,5,"4,d,40,y,z"']
     files = {x["name"]: x["label"] for x in f.call("files").json()["files"]}
     assert files[f"{pair}__set_aside_left.csv"] == "Rows set aside in Left"
     assert files[f"{pair}__set_aside_right.csv"] == "Rows set aside in Right"
     report = (folder / f"{pair}__report.html").read_text(encoding="utf-8")
-    assert "<b>3</b> rows set aside in Left" in report and "2 rows set aside - 1 with 2 fields" in report
+    assert "<b>1</b> row set aside in Left" in report and "1 row set aside - 1 row has 2 fields, 4 have 3, 1 has 5" in report
+    assert "the missing fields read as empty" in report
     # the run config carries the option; Run from config honours it
     conf = json.loads((folder / f"{pair}__config.json").read_text(encoding="utf-8"))
     assert "bad_rows" not in conf["sides"]["A"] and "quote" not in conf["sides"]["A"]     # the defaults stay out
@@ -274,7 +221,7 @@ def test_set_aside_over_http_and_in_the_compare(monkeypatch, tmp_path):
     boxes = fresh.get("/api/sources").json()["config"]["boxes"]
     assert boxes["A"]["bad_rows"] == "set_aside" and boxes["A"]["quote"] == '"'
     again = fresh.call("state").json()["run"]
-    assert again["set_aside"] == {"A": 3, "B": 2} and again["matched"] == 3
+    assert again["set_aside"] == {"A": 1, "B": 1} and again["matched"] == 4
 
 
 def test_a_new_load_drops_the_old_rows_set_aside(monkeypatch, tmp_path):
@@ -297,7 +244,7 @@ def test_the_config_side_block_round_trip(tmp_path):
     block = side_block(s, "L")
     assert "bad_rows" not in block and block["quote"] == "'"
     back = open_side(block, "A")
-    assert (back.quote, back.bad_rows, back.set_aside_rows, back.rows) == ("'", "set_aside", 4, 2)   # "Smith, John" splits in two
+    assert (back.quote, back.bad_rows, back.set_aside_rows, back.rows) == ("'", "set_aside", 2, 4)   # "Smith, John" splits in two
     plain = side_block(side_of(p), "L")
     assert "quote" not in plain and "bad_rows" not in plain          # defaults stay out
     none = side_block(side_of(put(tmp_path, "n.csv", "a,b\n1,2\n"), quote=""), "N")

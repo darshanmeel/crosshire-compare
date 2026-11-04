@@ -8,7 +8,7 @@ import type { SetAsideInfo, SetAsidePage, Tag } from "./types";
 
 const SIZE = 25;
 
-export function SetAside({ tag, info, startOpen = false, onUseFirst, onJoin }: { tag: Tag; info: SetAsideInfo; startOpen?: boolean; onUseFirst?: () => void; onJoin?: () => void }) {
+export function SetAside({ tag, info, startOpen = false }: { tag: Tag; info: SetAsideInfo; startOpen?: boolean }) {
   const id = useId();
   const [open, setOpen] = useState(startOpen);
   const [page, setPage] = useState(1);
@@ -25,8 +25,6 @@ export function SetAside({ tag, info, startOpen = false, onUseFirst, onJoin }: {
         <LinkButton iconAfter="chevron" aria-expanded={open} aria-controls={id} className={open ? "open" : undefined}
                     onClick={() => setOpen(!open)}>Show the rows set aside</LinkButton>
         <a className="link-btn" href={`/api/sources/${tag}/set-aside.csv`} download>Download them (CSV)</a>
-        {onJoin && <LinkButton onClick={onJoin}>Join the split numbers instead</LinkButton>}
-        {onUseFirst && info.fields > 0 && <LinkButton onClick={onUseFirst}>Use the first {num(info.fields)} fields of each row instead</LinkButton>}
       </div>
       {open && (
         <div id={id} className="set-aside-rows">

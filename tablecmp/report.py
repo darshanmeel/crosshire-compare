@@ -10,7 +10,7 @@ from .compare import (MAX_ONE_SIDED, ONE_SIDED_SHOWN, bucket_columns, bucket_pro
                       ledger_counts, one_sided_summary, Outcome, differing_rows, diffs_by_key_value,
                       value_pairs)
 from .outputs import summary_payload
-from .sources import Side, first_fields_said, join_said, set_aside_said
+from .sources import Side, filled_said, set_aside_said
 from .theme import APP_NAME, CELL_BUDGET, FONTS, esc, tokens_css
 from .values import ColSpec
 
@@ -215,10 +215,8 @@ def _source_row(nm: str, s: Side, n: int, path: str) -> str:
     text += f" - {n:,} rows"
     if s.set_aside_rows:
         text += f" · {esc(set_aside_said(s))}, not compared"
-    if s.first_cut_rows:
-        text += f" · {esc(first_fields_said(s))}"
-    if s.fixed_rows:
-        text += f" · {esc(join_said(s))}"
+    if s.filled_rows:
+        text += f" · {esc(filled_said(s))}"
     if s.is_database:
         text += f" · fetched {esc(s.fetched_at)}"
     if s.capped:

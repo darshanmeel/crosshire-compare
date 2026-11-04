@@ -79,12 +79,6 @@ def verdict_parts(run: dict, NA: str, NB: str) -> dict:
     for n, name in ((res.set_aside_left, NA), (res.set_aside_right, NB)):
         if n:
             seg += [(" · ", False), (f"{n:,}", True), (f" row{'s' if n != 1 else ''} set aside in {name}", False)]
-    for n, name in ((res.fixed_left, NA), (res.fixed_right, NB)):
-        if n:
-            seg += [(" · ", False), (f"{n:,}", True), (f" row{'s' if n != 1 else ''} with split numbers joined in {name}", False)]
-    for n, name in ((res.first_cut_left, NA), (res.first_cut_right, NB)):
-        if n:
-            seg += [(" · ", False), (f"{n:,}", True), (f" row{'s' if n != 1 else ''} cut to the first fields in {name}", False)]
     return {"tone": v.tone, "word": v.word, "segments": seg, "when": f"{run['seconds']:.1f}s at {run['at']}"}
 
 

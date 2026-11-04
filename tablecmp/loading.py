@@ -15,7 +15,7 @@ import pandas as pd
 
 from . import connections as cx
 from . import databases as db
-from .sources import (FOLDER_LIST_MAX, Side, apply_names, capture_set_aside, file_stamp, first_fields_said, join_said, looks_headerless,
+from .sources import (FOLDER_LIST_MAX, Side, apply_names, capture_set_aside, file_stamp, filled_said, looks_headerless,
                       path_allowed, row_count, short_header, snapshot, work_dir)
 
 DEFAULT_NAMES = {"A": "Left", "B": "Right", "P": "Table"}    # what a side is called until it is named
@@ -131,7 +131,7 @@ class ReadAsked:
     stop_at_blank: bool = False       # excel: stop at the first fully empty row
     skip_rows: int = 0                # csv: lines above the header to skip
     quote: str = '"'                  # csv: '"', "'" or "" for none
-    bad_rows: str = "set_aside"       # csv: set_aside | keep the rows with too few or too many fields
+    bad_rows: str = "set_aside"       # csv: the rows with too many fields - set_aside | keep
 
 
 def names_warning(names_text: str, schema: dict[str, str]) -> str:
@@ -184,11 +184,9 @@ def loaded_caption(side: Side) -> str:
 def loaded_notes(side: Side) -> list[tuple[str, str]]:
     """The warnings and errors under a loaded side, as (tone, text)."""
     out: list[tuple[str, str]] = []
-    if side.first_cut_rows:
-        out.append(("warning", first_fields_said(side)))
-    if side.fixed_rows:
-        out.append(("info", join_said(side)))
-    if side.rows == 0:
+    if side.filled_rows:
+        out.append(("info", filled_said(side)))
+    if side.rows == 0 and (side.cut or not side.set_aside_rows):      # all set aside: that note says so
         out.append(("warning", "The filter left no rows." if side.cut else
                     "The fetch returned no rows." if side.is_database else "The file has no rows."))
     if side.kind in ("csv", "excel") and side.header and looks_headerless(side.schema):

@@ -16,12 +16,11 @@ import { changedSinceLoad, loadTime, noteLoadTime, pickChangedSinceLoad, secs } 
 import { PathBox } from "./PathBox";
 import { PreviewTable } from "./PreviewTable";
 import { RowsToRead, rowsSummary } from "./RowsToRead";
-import { FirstFields } from "./FirstFields";
 import { SetAside } from "./SetAside";
 import { SourceChoice } from "./SourceChoice";
 import { UploadBox } from "./UploadBox";
 import { useSources } from "./useSources";
-import { loadBody, pickOf, type BadRows, type Quote, type Schema, type SideForm, type SideView, type Tag } from "./types";
+import { loadBody, pickOf, type Quote, type Schema, type SideForm, type SideView, type Tag } from "./types";
 import "./sources.css";
 
 function picked(f: SideForm, view?: SideView): boolean {
@@ -82,7 +81,6 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
   const sheets = ready ? (schema.data?.sheets ?? []) : [];
   const hidden = ready ? (schema.data?.hidden ?? []) : [];
   const sheetRead = f.sheet || schema.data?.sheet || sheets[0] || "";
-  const firstN = f.bad_rows.startsWith("first:") ? Number(f.bad_rows.slice(6)) : 0;
   const [said, setSaid] = useState<{ warnings: string[]; error: string }>({ warnings: [], error: "" });
   const [open, setOpen] = useState<Open>(null);
   const [preview, setPreview] = useState(false);
@@ -205,22 +203,8 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
                 <option value={'"'}>" (double)</option><option value="'">' (single)</option><option value="">none</option>
               </select>
             </span>
-            <span className="row" title="A row with fewer or more fields than the header">
-              <label className="lbl" htmlFor={`${id}-bad`}>Rows with too few or too many fields</label>
-              <select id={`${id}-bad`} className="in" value={firstN ? "first" : f.bad_rows}
-                      onChange={(e) => set({ bad_rows: e.target.value === "first" ? `first:${Math.max(1, cols.length)}` : e.target.value as BadRows })}>
-                <option value="set_aside">Set aside - leave them out and list them</option>
-                <option value="keep">Keep - missing fields empty, extra ones as extra columns</option>
-                <option value="join_numbers">Join split numbers - text is quoted, numbers with a decimal comma are not</option>
-                <option value="first">Use the first fields of each row - ignore the rest</option>
-              </select>
-              {firstN > 0 && <input type="number" className="in skip" aria-label="Fields to use from each row" min={1} step={1} inputMode="numeric" value={firstN}
-                                    onChange={(e) => set({ bad_rows: `first:${Math.max(1, Math.floor(Number(e.target.value) || 1))}` })} />}
-            </span>
           </div>
         )}
-        {isCsv && f.how !== "database" && (firstN > 0 || f.bad_rows === "join_numbers") && ready
-          && <FirstFields tag={tag} pick={keyPick} n={firstN} join={f.bad_rows === "join_numbers"} />}
         {f.how === "database" && <FetchCap tag={tag} db={db} />}
         {!dbInline && snapshot(false)}
         {!compact && loaded && !dirty && <div className="row">{loadBtn(false, true)}</div>}
@@ -273,9 +257,7 @@ export function SideCard({ tag, meta, compact = false, extra }: { tag: Tag; meta
           {compact && <>{toggles}{loadBtn(true)}{extra}</>}
         </LoadedLine>
       )}
-      {loaded && view?.set_aside && <SetAside tag={tag} info={view.set_aside} onUseFirst={f.how === "database" ? undefined
-        : () => { set({ bad_rows: `first:${view.set_aside!.fields}` }); setOpen("advanced"); }}
-        onJoin={f.how === "database" ? undefined : () => { set({ bad_rows: "join_numbers" }); setOpen("advanced"); }} />}
+      {loaded && view?.set_aside && <SetAside tag={tag} info={view.set_aside} />}
       {compact && panels}
       {preview && loaded && <div id={`${id}-preview`} className="preview-wrap"><PreviewTable tag={tag} /></div>}
     </section>

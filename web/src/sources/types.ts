@@ -11,10 +11,7 @@ export type SideView = {
   quote?: Quote; bad_rows?: BadRows; set_aside?: SetAsideInfo | null;
 };
 export type Quote = '"' | "'" | "";
-export type BadRows = "keep" | "set_aside" | "join_numbers" | `first:${number}`;
-/** POST /api/sources/{tag}/first-fields - a sample's field counts and its first rows cut to their first fields. */
-export type FirstFieldsPreview = { fields: number; width: number; columns: string[]; sampled: number; by: { fields: number; rows: number }[]; unplaced?: number; guessed?: number;
-                                   rows: { line: number; fields: number; values: string[]; left_out: string }[] };
+export type BadRows = "keep" | "set_aside";
 /** The rows Load set aside for having too few or too many fields: all, kept to show, the width a row should have. */
 export type SetAsideInfo = { rows: number; kept: number; fields: number; said: string; by: { fields: number | null; rows: number }[] };
 export type SetAsidePage = SetAsideInfo & { page: number; size: number; lines: { line: number; fields: number | null; raw: string }[] };

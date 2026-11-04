@@ -20,7 +20,7 @@ cd web && npm run dev                                   # hot reload on http://l
 # check — run all three before calling a change done
 cd web && npm test && cd ..                             # vitest (web/src/**/*.test.tsx)
 cd web && npm run build && cd ..                        # tsc --noEmit + vite build → tablecmp/web_dist + source hash
-python -m pytest tests -q                               # 769 tests; tests/test_web_build.py fails if web_dist is older than web/src
+python -m pytest tests -q                               # 764 tests; tests/test_web_build.py fails if web_dist is older than web/src
 ```
 
 ## Where things are

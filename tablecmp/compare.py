@@ -67,10 +67,6 @@ class Outcome:
     duplicate_keys_left: int = 0        # rows that share their key with an earlier row
     duplicate_keys_right: int = 0
     set_aside_left: int = 0             # rows Load set aside for having too few or too many fields
-    first_cut_left: int = 0             # rows Load cut to their first fields, first:N
-    first_cut_right: int = 0
-    fixed_left: int = 0                 # rows Load joined the split numbers of, join_numbers
-    fixed_right: int = 0
     set_aside_right: int = 0
     error: str = ""
 
@@ -329,8 +325,6 @@ def run_comparison(A: Side, B: Side, cfg: dict, opts: ReadOptions, sig: str = ""
         res.rows_left_read = res.rows_left_read or n_a
         res.rows_right_read = res.rows_right_read or n_b
         res.set_aside_left, res.set_aside_right = A.set_aside_rows, B.set_aside_rows
-        res.first_cut_left, res.first_cut_right = A.first_cut_rows, B.first_cut_rows
-        res.fixed_left, res.fixed_right = A.fixed_rows, B.fixed_rows
         elapsed = time.perf_counter() - t0
         for p in folder.iterdir():                           # flatten: <out>/<name>/x -> <out>/x
             p.rename(out / p.name)
