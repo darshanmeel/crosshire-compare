@@ -29,7 +29,7 @@ SUMMARY_COLUMNS = ["schema_version", "run_id", "started_at", "pair", "left", "ri
                    "only_left", "only_right", "diff_rows", "cell_diffs", "duplicate_keys_left",
                    "duplicate_keys_right", "status", "tone", "seconds", "error"]
 SETTINGS_KEYS = ["mode", "keys", "compare_columns", "only_a", "only_b", "trim", "empty_as_null",
-                 "ignore_case", "tolerance", "column_rules", "filters", "left_filters", "right_filters",
+                 "ignore_case", "nulls_equal", "tolerance", "column_rules", "filters", "left_filters", "right_filters",
                  "null_tokens", "specs", "table_formats"]
 TABLES = ["cell_diffs", "left_only", "right_only", "paired", "columns", "profile"]
 COLUMNS_HEADER = ["column", "name_a", "name_b", "role", "read_as", "matched_by", "matched", "mismatched",

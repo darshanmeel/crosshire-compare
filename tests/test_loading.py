@@ -116,7 +116,7 @@ def test_config_boxes():
                             "column_names": ["a", "b"]},
                       "B": {"connection": "SAMPLE", "query": "SELECT 1", "cap": 10}}}
     boxes = ld.config_boxes(conf, {"DATA"})
-    assert boxes["settings"] == {"trim": False, "empty_as_null": True, "ignore_case": False, "tolerance": 0.5,
+    assert boxes["settings"] == {"trim": False, "empty_as_null": True, "ignore_case": False, "nulls_equal": True, "tolerance": 0.5,
                                  "out_fmt": "both", "nokey_mode": "position"}
     assert boxes["A"]["how"] == "path" and boxes["A"]["folder"] == "DATA" and boxes["A"]["column_names"] == "a, b"
     assert ld.config_boxes(conf, set())["A"]["folder"] == ""                 # the folder is gone: its path then

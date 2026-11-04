@@ -21,7 +21,7 @@ from .outputs import pair_name, table_formats, verdict_of, write_parquet_copies,
 from .report import build_report
 from .setup import Setup
 from .sources import Side
-from .values import ColSpec, ReadOptions
+from .values import ColSpec, ReadOptions, plain_error
 
 Said = list[tuple[str, str]]          # (tone, sentence) - tone is error | warning | info | success
 
@@ -49,7 +49,8 @@ def page_settings(settings: dict) -> dict:
 def values_of(settings: dict) -> dict:
     """How values are read, as the engine's cfg carries them."""
     return {"trim": bool(settings["trim"]), "empty_as_null": bool(settings["empty_as_null"]),
-            "ignore_case": bool(settings["ignore_case"]), "tolerance": float(settings["tolerance"]),
+            "ignore_case": bool(settings["ignore_case"]), "nulls_equal": bool(settings["nulls_equal"]),
+            "tolerance": float(settings["tolerance"]),
             "null_tokens": settings["null_tokens"]}
 
 
@@ -181,7 +182,10 @@ def compare_once(A: Side, B: Side, NA: str, NB: str, cfg: dict, opts: ReadOption
     still = STILL_SHOWN if old else ""
     try:
         new = run_comparison(A, B, cfg, opts, sig, previous=old, progress=say, names=(NA, NB))
-    except (duckdb.Error, RuntimeError, ValueError, KeyError) as exc:
+    except duckdb.Error as exc:
+        said = plain_error(exc, [(A, "A", NA), (B, "B", NB)], [ColSpec(**d) for d in cfg["specs"]])
+        raise CompareFailed(f"The comparison failed: {said}{still}") from exc
+    except (RuntimeError, ValueError, KeyError) as exc:
         raise CompareFailed(f"The comparison failed: {exc}{still}") from exc
     if new["result"].error:
         discard_run(new)

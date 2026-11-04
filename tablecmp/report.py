@@ -268,7 +268,8 @@ def _values_row(cfg: dict) -> str:
             "empty is null" if cfg.get("empty_as_null", True) else "<b>empty is a value</b>",
             _case_bit(cfg),
             f"<b>tolerance {tol}</b>" if tol else f"tolerance {tol}",
-            "null tokens: " + (esc(", ".join(str(t) for t in tokens)) or "none")]
+            "null tokens: " + (esc(", ".join(str(t) for t in tokens)) or "none"),
+            "null = null" if cfg.get("nulls_equal", True) else "<b>null vs null differs</b>"]
     return " · ".join(bits)
 
 

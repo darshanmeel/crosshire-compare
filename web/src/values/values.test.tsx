@@ -132,7 +132,7 @@ test("a step the server refuses is said, and a date step offers the spellings", 
   expect(screen.getByLabelText("or a format")).toHaveValue("%d/%m/%Y");
   await userEvent.click(screen.getByRole("button", { name: "replace text…" }));
   expect(screen.getByLabelText("find")).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Add step" }));
+  await userEvent.click(screen.getByRole("button", { name: "Add to both" }));       // no steps on either side: one list
   expect(await screen.findByText("Type the find first - one space counts.")).toBeInTheDocument();
 });
 
@@ -158,7 +158,7 @@ test("the head changes the type, Check counts what converts, and the other conve
   expect(await screen.findByText("HR: 3,000 of 3,000 convert · PR: 2,980 of 2,985 convert")).toBeInTheDocument();
   expect(screen.getByRole("table", { name: "Conversion check" })).toBeInTheDocument();
   expect(bodies(calls, "/api/setup/check")[0]).toEqual({ canon: "emp_id" });
-  expect(screen.getByText("trim → left 10 characters → number")).toBeInTheDocument();
+  expect(screen.getByText("HR: as in the file · PR: trim → left 10 characters → number")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Edit salary and Salary" }));
   expect(getView().pair).toBe(1);
   expect(await screen.findByRole("region", { name: "Steps for salary and Salary" })).toBeInTheDocument();
@@ -182,17 +182,21 @@ test("How values are read sits in the editor: a switch is sent at once, a typed 
   await waitFor(() => expect(bodies(calls, "/api/setup/settings")[1]).toEqual({ empty_as_null: false }));
   await userEvent.click(screen.getByLabelText("Trim whitespace"));
   await waitFor(() => expect(bodies(calls, "/api/setup/settings")[2]).toEqual({ trim: false }));
+  expect(screen.getByLabelText("Null on both sides counts as equal")).toBeChecked();
+  await userEvent.click(screen.getByLabelText("Null on both sides counts as equal"));
+  await waitFor(() => expect(bodies(calls, "/api/setup/settings")[3]).toEqual({ nulls_equal: false }));
+  calls.length = 0;
   const tol = screen.getByLabelText("Numeric tolerance");
   await userEvent.clear(tol);
   await userEvent.type(tol, "0.5");
-  expect(bodies(calls, "/api/setup/settings")).toHaveLength(3);
+  expect(bodies(calls, "/api/setup/settings")).toHaveLength(0);
   await userEvent.tab();
-  await waitFor(() => expect(bodies(calls, "/api/setup/settings")[3]).toEqual({ tolerance: 0.5 }));
+  await waitFor(() => expect(bodies(calls, "/api/setup/settings")[0]).toEqual({ tolerance: 0.5 }));
   const nulls = screen.getByLabelText("Null tokens");
   expect(nulls).toHaveValue("NULL, N/A");
   await userEvent.type(nulls, ", -");
   await userEvent.tab();
-  await waitFor(() => expect(bodies(calls, "/api/setup/settings")[4]).toEqual({ null_tokens: "NULL, N/A, -" }));
+  await waitFor(() => expect(bodies(calls, "/api/setup/settings")[1]).toEqual({ null_tokens: "NULL, N/A, -" }));
   expect(calls.every(([, i]) => (i?.headers as Record<string, string>)["X-Compare"] === "1")).toBe(true);
 });
 
@@ -267,4 +271,91 @@ test("How values are read: the null-token and order captions are info buttons wh
   const nulls = screen.getByRole("button", { name: "About null tokens" });
   expect(nulls).toHaveAccessibleDescription("Comma separated, any case - read as null on both sides");
   expect(screen.getByLabelText("Null tokens")).toHaveAttribute("title", "Comma separated, any case - read as null on both sides");
+});
+
+const EXPR = { op: "custom expression", params: { expr: "case when x is null then 0 else x end" } as Record<string, string> };
+const BOTH = { ...setup().specs[1], a_steps: [EXPR], b_steps: [EXPR], a_said: ["custom expression (x=…)"], b_said: ["custom expression (x=…)"] };
+
+test("both sides alike: one list, a short line, and every edit goes to both sides", async () => {
+  const S2 = setup({ specs: [setup().specs[0], BOTH] });
+  setView({ pair: 1 });
+  const calls = server((url, init) => (url === "/api/setup" || (url === "/api/setup/steps" && init?.method === "POST") ? S2 : undefined));
+  mount(<ValuesEditor />);
+  expect(await screen.findByRole("button", { name: /^Both sides · 1/ })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByRole("list", { name: "Steps on both sides" })).toHaveTextContent("custom expression");
+  expect(screen.getByText("Both:").closest("p")).toHaveTextContent("Both: custom expression · compared as number");
+  expect(screen.queryByRole("button", { name: /^Copy to/ })).toBeNull();
+  const box = screen.getByLabelText("expression, x = the value, step 1");
+  expect(box.tagName).toBe("TEXTAREA");                                   // the whole row, many lines
+  await userEvent.click(screen.getByRole("button", { name: "trim" }));
+  await waitFor(() => expect(stepBodies(calls).map((b) => [b.which, b.action])).toEqual([["A", "add"], ["B", "add"]]));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Remove step 1" })).toBeEnabled());
+  await userEvent.click(screen.getByRole("button", { name: "Remove step 1" }));
+  await waitFor(() => expect(stepBodies(calls).slice(2).map((b) => [b.which, b.action])).toEqual([["A", "pop"], ["B", "pop"]]));
+});
+
+test("choosing Both on a pair whose sides differ copies the steps on screen to the other side", async () => {
+  setView({ pair: 1 });
+  const COPIED = setup({ specs: [setup().specs[0], { ...SALARY, a_steps: SALARY.b_steps, a_said: SALARY.b_said }] });
+  let copied = false;
+  const calls = server((url, init) => {
+    if (url === "/api/setup/steps" && init?.method === "POST") { copied = true; return COPIED; }
+    return url === "/api/setup" && copied ? COPIED : undefined;
+  });
+  mount(<ValuesEditor />);
+  expect(await screen.findByRole("button", { name: "PR steps · 2" })).toHaveAttribute("aria-pressed", "true");
+  expect(screen.getByText("HR:").closest("p")).toHaveTextContent("HR: as in the file · PR: trim → left 10 characters · compared as number");
+  await userEvent.click(screen.getByRole("button", { name: /^Both sides/ }));
+  await waitFor(() => expect(stepBodies(calls)[0]).toMatchObject({ action: "copy", which: "B" }));
+  expect(screen.getByRole("button", { name: /^Both sides/ })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("an expression the server refuses is said under it and the steps stay as they were", async () => {
+  const S2 = setup({ specs: [setup().specs[0], BOTH] });
+  setView({ pair: 1 });
+  const calls = server((url, init) => {
+    if (url === "/api/setup") return S2;
+    if (url === "/api/setup/steps" && init?.method === "POST") {
+      const b = JSON.parse(init.body as string);
+      return b.action === "add" && b.step.params.expr !== EXPR.params.expr ? json({ detail: "The brackets don't match - 2 opened, 1 closed." }, 400) : S2;
+    }
+    return undefined;
+  });
+  mount(<ValuesEditor />);
+  const box = await screen.findByLabelText("expression, x = the value, step 1");
+  await userEvent.clear(box);
+  await userEvent.type(box, "upper(trim(x)");
+  await userEvent.tab();
+  expect(await screen.findByText("The brackets don't match - 2 opened, 1 closed.")).toBeInTheDocument();
+  const sent = stepBodies(calls).map((b) => [b.which, b.action, b.step?.params?.expr ?? null]);
+  expect(sent).toEqual([["A", "clear", null], ["A", "add", "upper(trim(x)"], ["A", "clear", null], ["A", "add", EXPR.params.expr]]);  // put back; B untouched
+});
+
+test("both sides alike: a changed parameter is sent to both sides; one that fails puts the first back", async () => {
+  const LEFT = { op: "left N characters", params: { n: "4" } as Record<string, string> };
+  const S2 = setup({ specs: [setup().specs[0], { ...setup().specs[1], a_steps: [LEFT], b_steps: [LEFT], a_said: ["left N characters (N=4)"], b_said: ["left N characters (N=4)"] }] });
+  setView({ pair: 1 });
+  let failB = false;
+  const calls = server((url, init) => {
+    if (url === "/api/setup") return S2;
+    if (url === "/api/setup/steps" && init?.method === "POST") {
+      const b = JSON.parse(init.body as string);
+      return failB && b.which === "B" && b.action === "add" && b.step.params.n === "9" ? json({ detail: "B refused" }, 400) : S2;
+    }
+    return undefined;
+  });
+  mount(<ValuesEditor />);
+  const n = await screen.findByLabelText("N, step 1");
+  await userEvent.clear(n);
+  await userEvent.type(n, "6");
+  await userEvent.tab();
+  await waitFor(() => expect(stepBodies(calls).filter((b) => b.action === "add").map((b) => [b.which, b.step.params.n])).toEqual([["A", "6"], ["B", "6"]]));
+  calls.length = 0;
+  failB = true;
+  await userEvent.clear(n);
+  await userEvent.type(n, "9");
+  await userEvent.tab();
+  expect(await screen.findByText("B refused")).toBeInTheDocument();
+  const adds = stepBodies(calls).filter((b) => b.action === "add").map((b) => [b.which, b.step.params.n]);
+  expect(adds.at(-1)).toEqual(["A", "4"]);                               // A put back to what both had
 });

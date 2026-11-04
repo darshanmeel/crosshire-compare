@@ -8,6 +8,7 @@ difference instead of vanishing.
 """
 from __future__ import annotations
 
+import difflib
 import json
 import re
 from dataclasses import dataclass, field
@@ -61,6 +62,9 @@ STEPS = {
     "letters and digits only": ("regexp_replace(x, '[^A-Za-z0-9]', '', 'g')", ()),
     "part N split by S": ("split_part(x, {s}, {n})", ("s", "n")),
     "remove thousands separators": ("replace(x, ',', '')", ()),
+    # null, or nothing but spaces, tabs, line breaks and non-breaking spaces
+    "if empty, use": ("CASE WHEN x IS NULL OR trim(x, ' ' || chr(9) || chr(10) || chr(13) || chr(160)) = '' "
+                      "THEN {v} ELSE x END", ("v",)),
     "to number": ("__number__", ()),
     "to timestamp": ("__timestamp__", ("fmt",)),
     "to date": ("__date__", ("fmt",)),
@@ -69,10 +73,13 @@ STEPS = {
 }
 PARAM_LABELS = {"n": "N", "m": "M", "a": "find", "b": "replace with", "c": "pad character",
                 "s": "separator", "fmt": "format - blank tries the usual spellings",
-                "expr": "expression, x = the value"}
+                "expr": "expression, x = the value", "v": "value"}
 NUMERIC_PARAMS = {"n", "m"}
-TEXT_PARAMS = {"a", "b", "c", "s"}      # quoted into the SQL as typed, spaces included
-NEEDED_TEXT = {"a", "c", "s"}           # blank: find does nothing, pad fails, split gives one character
+TEXT_PARAMS = {"a", "b", "c", "s", "v"}     # quoted into the SQL as typed, spaces included
+NEEDED_TEXT = {"a", "c", "s", "v"}          # blank: find does nothing, pad fails, split gives one character
+# what x is in a custom expression, by the pair's Type
+X_TYPES = {"text": "VARCHAR", "number": "DOUBLE", "date": "DATE", "timestamp": "TIMESTAMP",
+           "boolean": "BOOLEAN"}
 CONVERSIONS = {"to number": "number", "to timestamp": "timestamp", "to date": "date",
                "to boolean": "boolean"}
 
@@ -115,7 +122,7 @@ class ColSpec:
         return self.a_steps if which == "A" else self.b_steps
 
     def tx(self, which: str) -> str:
-        return compile_steps(self.steps(which))
+        return compile_steps(self.steps(which), self.kind)
 
     def case_rule(self) -> bool | None:
         """The engine's ignore_case for this column: True, False, or None to follow the switch."""
@@ -160,8 +167,20 @@ def substitute_x(expr: str, value: str) -> str:
 _QUOTED = re.compile(r"'(?:[^']|'')*'|\"(?:[^\"]|\"\")*\"")
 
 
-def step_sql(step: dict) -> str:
-    """The SQL for one step, on x. Conversions keep the original text when they fail."""
+def typed_x(text: str, kind: str) -> str:
+    """The text as the Read as type, the safe way: NULL when it is not one (' - ', '.', a space).
+    A number may carry thousands separators."""
+    if kind == "number":
+        return f"try_cast(replace(trim({text}), ',', '') AS DOUBLE)"
+    if kind in ("date", "timestamp", "boolean"):
+        return typed_exprs(text, kind)[0]
+    return text
+
+
+def step_sql(step: dict, kind: str = "text") -> str:
+    """The SQL for one step, on x. Conversions keep the original text when they fail. In a
+    custom expression x is the value as the pair's Type (typed_x), and the result goes back to
+    text for the steps after it."""
     tpl, params = STEPS[step["op"]]
     p = step.get("params", {})
     if tpl.startswith("__"):
@@ -171,7 +190,9 @@ def step_sql(step: dict) -> str:
         expr = str(p.get("expr", "x")).strip() or "x"
         if ";" in _QUOTED.sub("", expr):          # one expression, never a second statement
             raise ValueError("A custom expression is one expression - take out the ';'.")
-        return expr
+        if not typed_only(expr, kind):
+            return expr                           # reads on text x (trim, nullif(x, '-')...): as it always did
+        return f"CAST(({substitute_x(expr, typed_x('x', kind))}) AS VARCHAR)"
     out = tpl
     for name in params:
         v = str(p.get(name, ""))
@@ -187,12 +208,123 @@ def step_sql(step: dict) -> str:
     return out
 
 
-def compile_steps(steps: list) -> str:
-    """Nest the steps into one expression on x; empty when there are no steps."""
+def compile_steps(steps: list, kind: str = "text") -> str:
+    """Nest the steps into one expression on x; empty when there are no steps. `kind` is the
+    pair's Type - what x is in a custom expression."""
     expr = "x"
     for s in steps or []:
-        expr = substitute_x(step_sql(s), expr)
+        expr = substitute_x(step_sql(s, kind), expr)
     return "" if expr == "x" else expr
+
+
+def expr_problem(expr: str, kind: str = "text") -> str:
+    """'' when a custom expression reads with x as the pair's Type - or as text, the way one
+    written before x was typed reads - else a plain sentence on what is wrong."""
+    bare = _QUOTED.sub("", expr)
+    if ";" in bare:
+        return "A custom expression is one expression - take out the ';'."
+    opened, closed = bare.count("("), bare.count(")")
+    if opened != closed:
+        return f"The brackets don't match - {opened} opened, {closed} closed."
+    as_text = _bind_problem(expr, "text")
+    return "" if not as_text or typed_only(expr, kind) else (_bind_problem(expr, kind) if kind != "text" else as_text)
+
+
+def typed_only(expr: str, kind: str) -> bool:
+    """True when x must be the pair's Type for the expression to read - `case when x is null then
+    0.0 else x end` on a number pair. One that reads on text keeps text x, so what it does never
+    changes under a Type."""
+    return kind != "text" and bool(_bind_problem(expr, "text")) and not _bind_problem(expr, kind)
+
+
+PROBE = {"number": "1", "date": "DATE '2000-01-01'", "timestamp": "TIMESTAMP '2000-01-01'",
+         "boolean": "true"}
+
+
+@lru_cache(maxsize=512)
+def _bind_problem(expr: str, kind: str) -> str:
+    """'' when the expression reads with x of the pair's Type, else the plain sentence. A typed x
+    is also run on one probe value, so a text literal that cannot be the Type (x = '-' on a
+    number) fails here, not on every row of the run; text is only bound - any text is data."""
+    xt = X_TYPES.get(kind, "VARCHAR")
+    rows = f"UNION ALL SELECT CAST({PROBE[kind]} AS {xt})) AS t" if kind in PROBE else ") AS t LIMIT 0"
+    try:
+        with duckdb.connect() as con:
+            con.execute(f"SELECT CAST(({expr}) AS VARCHAR) FROM (SELECT CAST(NULL AS {xt}) AS x {rows}").fetchall()
+    except duckdb.ParserException as exc:
+        near = re.search(r'at or near "([^"]*)"', str(exc))
+        return (f"Not a valid expression near '{near.group(1)}'." if near
+                else f"Not a valid expression: {short_error(exc)}")
+    except duckdb.CatalogException as exc:
+        m = re.search(r"with name (\S+) does not exist", str(exc))
+        if not m:
+            return f"The expression does not read: {short_error(exc)}"
+        near = difflib.get_close_matches(m.group(1).lower(), _function_names(), n=1)
+        return f"There is no function called {m.group(1)}" + (f" - did you mean {near[0]}?" if near else ".")
+    except duckdb.ConversionException as exc:
+        bad = _NOT_CONVERTED.search(str(exc))
+        if bad:
+            return (f"x is a {kind} here, so '{bad.group(2)}' cannot be one - values that are not a {kind} "
+                    "already read as null: test x is null instead.")
+        return f"The expression does not read: {short_error(exc)}"
+    except duckdb.Error as exc:
+        said = short_error(exc)
+        if isinstance(exc, duckdb.BinderException) and (xt in said or "DECIMAL" in said):
+            how = ("use CAST(x AS VARCHAR) for text functions" if kind != "text"
+                   else "set Read as, or convert it with try_cast(x AS DOUBLE)")
+            return f"x is {'text' if kind == 'text' else 'a ' + kind} ({xt}) here - {how}. DuckDB says: {said}"
+        return f"The expression does not read: {said}"
+    return ""
+
+
+@lru_cache(maxsize=1)
+def _function_names() -> list[str]:
+    """DuckDB's function names, and SQL's own the catalog leaves out - for 'did you mean'."""
+    with duckdb.connect() as con:
+        names = [r[0] for r in con.execute("SELECT DISTINCT function_name FROM duckdb_functions() "
+                                           "WHERE function_type IN ('scalar', 'macro')").fetchall()]
+    return names + ["coalesce", "nullif", "try_cast", "cast", "ifnull"]
+
+
+def short_error(exc: Exception) -> str:
+    """DuckDB's message without the SQL it quotes: its first lines, up to 'LINE n:'."""
+    text = str(exc).split("\nLINE ")[0].strip()
+    return " ".join(line.strip() for line in text.splitlines() if line.strip())
+
+
+_NOT_CONVERTED = re.compile(r"Could not convert string (['\"])(.*?)\1 to ([A-Z]+)")
+TYPE_WORDS = {"DATE": "date", "TIMESTAMP": "timestamp", "BOOLEAN": "boolean"}   # else a number
+
+
+def plain_error(exc: Exception, sides: list[tuple[Side, str, str]], specs: list[ColSpec]) -> str:
+    """A run's or a preview's DuckDB error in a sentence. A value a step's cast could not convert
+    is found on the sides - [(side, "A" or "B", its name)] - and counted there:
+    "amount on Left: 208 rows hold ' - ', which is not a number. ..." Else "DuckDB says:" and its
+    own message, without the SQL it quotes."""
+    m = _NOT_CONVERTED.search(str(exc))
+    if not isinstance(exc, duckdb.ConversionException) or not m:
+        return f"DuckDB says: {short_error(exc)}"
+    value, word = m.group(2), TYPE_WORDS.get(m.group(3), "number")
+    named = re.search(r"when casting from source column (\S+)", str(exc))
+    with scratch() as con:
+        for side, which, name in sides:
+            for spec in specs:
+                src = spec.src(which)
+                # only a conversion or a custom expression casts; a source column DuckDB names must be this one
+                casts = any(s["op"] in CONVERSIONS or s["op"] == "custom expression" for s in spec.steps(which))
+                if not src or not casts or (named and named.group(1) != src):
+                    continue
+                raw = raw_text(side, src)
+                try:
+                    n = con.execute(f"SELECT count(*) FROM {source_expr(side)} WHERE {raw} = {lit(value)} "
+                                    f"OR trim({raw}) = trim({lit(value)})").fetchone()[0]
+                except duckdb.Error:
+                    continue
+                if n:
+                    holds = "row holds" if n == 1 else "rows hold"
+                    return (f"{spec.canon} on {name}: {n:,} {holds} '{value}', which is not a {word}. "
+                            f"Use try_cast, or the 'if empty, use' step. (DuckDB says: {short_error(exc)})")
+    return f"DuckDB says: {short_error(exc)}"
 
 
 def describe_step(step: dict) -> str:
@@ -385,7 +517,8 @@ def conversion_report(A: Side, B: Side, specs: list[ColSpec], name_a: str, name_
             raw = raw_text(side, s.src(which))
             probe, value = column_exprs(side, s, which, opts)
             bad = f"FILTER (WHERE {raw} IS NOT NULL AND {probe} IS NULL)"
-            aggs += [f"count({raw})", f"count({probe})",
+            # converted counts the file's own values: a step may fill a null ('if empty, use')
+            aggs += [f"count({raw})", f"count({probe}) FILTER (WHERE {raw} IS NOT NULL)",
                      f"min({raw}) {bad}", f"max({raw}) {bad}",
                      f"min({raw}) FILTER (WHERE {raw} IS NOT NULL)",
                      f"arg_min({value}, {raw}) FILTER (WHERE {raw} IS NOT NULL)"]

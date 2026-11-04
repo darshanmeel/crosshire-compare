@@ -5,6 +5,7 @@ import { CommitInput, ErrorNote, InfoTip } from "../ui/kit";
 import "./values.css";
 
 const NULLS = "Comma separated, any case - read as null on both sides";
+const NULLS_EQUAL = "On: a value missing on both sides is the same. Off: it counts as a difference. Keys always pair a missing value with a missing one; empty cells are missing while Empty string is null is on.";
 const ORDER = "Order, per value: transform steps → null folding → trim → type.";
 
 /** How values are read - the switches the run takes with it. They live on the server, so they
@@ -15,7 +16,7 @@ export function HowValuesRead({ settings }: { settings: Settings }) {
     mutationFn: (patch: Partial<Settings>) => api.send<Settings>("PUT", "/api/setup/settings", patch),
     onSuccess: () => [...SETUP_KEY, ...DERIVED_KEYS].forEach((k) => qc.invalidateQueries({ queryKey: [k] })),
   });
-  const tick = (key: "trim" | "empty_as_null" | "ignore_case", label: string) => (
+  const tick = (key: "trim" | "empty_as_null" | "ignore_case" | "nulls_equal", label: string) => (
     <label className="check"><input type="checkbox" checked={settings[key]}
                                     onChange={(e) => put.mutate({ [key]: e.target.checked })} />{label}</label>
   );
@@ -36,6 +37,7 @@ export function HowValuesRead({ settings }: { settings: Settings }) {
       {tick("empty_as_null", "Empty string is null")}
       {tick("trim", "Trim whitespace")}
       {tick("ignore_case", "Ignore case in values")}
+      <span className="vx-how-head">{tick("nulls_equal", "Null on both sides counts as equal")}<InfoTip label="About null on both sides" text={NULLS_EQUAL} /></span>
       <div className="tol">
         <label className="lbl" htmlFor="vx-tol">Numeric tolerance</label>
         <CommitInput id="vx-tol" type="number" min={0} step="any" aria-label="Numeric tolerance" value={String(settings.tolerance)}

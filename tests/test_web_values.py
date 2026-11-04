@@ -30,7 +30,7 @@ def spec(view, canon):
 
 def test_the_switches_start_at_their_defaults_and_change_one_at_a_time(c):
     assert c.get("/api/setup/settings").json() == {"trim": True, "empty_as_null": True, "ignore_case": False,
-                                                    "tolerance": 0.0, "null_tokens": NULL_TOKENS_DEFAULT,
+                                                    "nulls_equal": True, "tolerance": 0.0, "null_tokens": NULL_TOKENS_DEFAULT,
                                                     "nokey_mode": "hash"}
     s = c.put("/api/setup/settings", json={"ignore_case": True, "tolerance": 0.5}, headers=W).json()
     assert s["ignore_case"] is True and s["tolerance"] == 0.5 and s["trim"] is True
@@ -73,9 +73,12 @@ def test_a_step_that_lacks_what_it_needs_is_refused_in_a_sentence(c):
     assert steps(c, "salary", "A", "add", {"op": "no such step"}).status_code == 400
     assert steps(c, "department", "A", "clear").status_code == 404   # one-sided: no pair to read
     bad = steps(c, "last_name", "A", "add", {"op": "custom expression", "params": {"expr": "x +* 1"}})
-    assert bad.status_code == 200                                    # kept: the preview says what is wrong
+    assert bad.status_code == 400 and bad.json()["detail"] == "There is no function called +* - did you mean +?"
+    ws = ws_of(c)                                                    # one a config put in: the preview says what is wrong
+    ws.data["cmap"].loc[ws.data["cmap"]["Common name"] == "last_name", "A steps"] = \
+        '[{"op": "custom expression", "params": {"expr": "x +* 1"}}]'
     t = c.get("/api/setup/try", params={"canon": "last_name", "which": "A"}).json()
-    assert t["error"].startswith("DuckDB says:") and t["rows"] == []
+    assert t["error"].startswith("DuckDB says:") and "LINE 1" not in t["error"] and t["rows"] == []
 
 
 def test_the_type_and_the_check_on_all_rows(c):

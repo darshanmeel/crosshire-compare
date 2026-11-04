@@ -18,7 +18,7 @@ from .compare import build_filters
 from .sniff import looks_like
 from .sources import Side
 from .theme import esc
-from .values import NULL_TOKENS_DEFAULT, TYPES, ColSpec, ReadOptions, blank_param, final_kind, has_x
+from .values import NULL_TOKENS_DEFAULT, TYPES, ColSpec, ReadOptions, blank_param, expr_problem, final_kind, has_x
 
 LOOKS_HELP = ("What a sample of this side's values looks like - a type, and the date format or "
               "the thousands separators that go with it. A suggestion only: the Type stays what "
@@ -26,8 +26,8 @@ LOOKS_HELP = ("What a sample of this side's values looks like - a type, and the 
 # the cells a person may change; the rest are worked out (Matched by, detected, looks like)
 EDITABLE = ("A column", "B column", "Common name", "Type", "Key", "Compare", "Case")
 # How values are read, and the pairing without a key - what a fresh page starts with
-SETTINGS_DEFAULT = {"trim": True, "empty_as_null": True, "ignore_case": False, "tolerance": 0.0,
-                    "null_tokens": NULL_TOKENS_DEFAULT, "nokey_mode": "hash"}
+SETTINGS_DEFAULT = {"trim": True, "empty_as_null": True, "ignore_case": False, "nulls_equal": True,
+                    "tolerance": 0.0, "null_tokens": NULL_TOKENS_DEFAULT, "nokey_mode": "hash"}
 STEP_ACTIONS = ("add", "pop", "clear", "copy")
 FILTER_TYPES = ["auto", "string", "number", "date"]     # what a Rows filter's value is read as
 
@@ -166,10 +166,12 @@ def with_steps(cmap: pd.DataFrame, canon: str, which: str, steps: list) -> pd.Da
     return out
 
 
-def step_problem(step: dict) -> str:
-    """'' when a step can be added, else the sentence that says what it lacks."""
-    if step.get("op") == "custom expression" and not has_x(str(step.get("params", {}).get("expr", ""))):
-        return "The expression must mention `x`, the value."
+def step_problem(step: dict, kind: str = "text") -> str:
+    """'' when a step can be added, else the sentence that says what it lacks - a custom
+    expression is read with x as the pair's Type (`kind`), on no rows."""
+    if step.get("op") == "custom expression":
+        expr = str(step.get("params", {}).get("expr", ""))
+        return "The expression must mention `x`, the value." if not has_x(expr) else expr_problem(expr, kind)
     missing = blank_param(step)
     return f"Type the {missing} first - one space counts." if missing else ""
 
@@ -179,7 +181,7 @@ def steps_after(spec: ColSpec, which: str, action: str, step: dict | None = None
     other side. ValueError with the sentence the page shows."""
     steps = list(spec.steps(which))
     if action == "add":
-        problem = step_problem(step or {})
+        problem = step_problem(step or {}, spec.kind)
         if problem:
             raise ValueError(problem)
         return which, steps + [{"op": step["op"], "params": dict(step.get("params") or {})}]

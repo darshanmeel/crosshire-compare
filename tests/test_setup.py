@@ -103,7 +103,7 @@ def test_a_step_that_lacks_what_it_needs_is_said():
 
 
 def test_the_switches_and_what_they_read():
-    assert su.settings_of(None) == {"trim": True, "empty_as_null": True, "ignore_case": False, "tolerance": 0.0,
+    assert su.settings_of(None) == {"trim": True, "empty_as_null": True, "ignore_case": False, "nulls_equal": True, "tolerance": 0.0,
                                     "null_tokens": NULL_TOKENS_DEFAULT, "nokey_mode": "hash"}
     assert su.settings_of({"trim": False, "display_rows": 500})["display_rows"] == 500
     opts = su.read_options({"null_tokens": "-, n/a", "empty_as_null": False, "trim": False})

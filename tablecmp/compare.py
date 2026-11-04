@@ -367,6 +367,7 @@ def engine_compare(con, cfg: dict, folder: Path, out: Path, keys: list[str], say
         "trim": cfg["trim"],
         "treat_empty_as_null": cfg["empty_as_null"],
         "ignore_case_values": cfg["ignore_case"],
+        "null_equals_null": cfg.get("nulls_equal", True),
         "tolerance": cfg["tolerance"],
         "column_rules": cfg["column_rules"],
         "filters": cfg["filters"],
@@ -398,7 +399,9 @@ def hash_compare(con, cfg: dict, folder: Path, say) -> Outcome:
         if where:
             con.execute(f"CREATE OR REPLACE TABLE {side} AS SELECT * FROM {side} WHERE {where}")
             setattr(res, "filter_left" if side == "src_a" else "filter_right", where)
-    h = "hash(concat_ws(chr(1), " + ", ".join(f"coalesce({ident(c)}, chr(2))" for c in cols) + "))"
+    # Null = null off: a null is a value of its own row, so a row holding one never matches
+    null = "chr(2)" if cfg.get("nulls_equal", True) else "chr(2) || CAST(gen_random_uuid() AS VARCHAR)"
+    h = "hash(concat_ws(chr(1), " + ", ".join(f"coalesce({ident(c)}, {null})" for c in cols) + "))"
     say(f"Hashing every row over {len(cols)} columns on both sides…")
     for side in ("src_a", "src_b"):                  # every column, so one-sided rows come out whole
         con.execute(f"CREATE OR REPLACE TABLE h_{side[-1]} AS "
@@ -916,5 +919,6 @@ def near_match(cells_path: str) -> pd.DataFrame:
            f'round(avg({dist}), 2) AS "Avg edit distance", '
            f'round(100 * avg(1 - least(1.0, {dist}::DOUBLE / {span})), 1) AS "Similarity %" '
            f"FROM read_csv({lit(cells_path)}, all_varchar=true) "
+           f"WHERE left_value IS NOT NULL OR right_value IS NOT NULL "   # null on both (Null = null off) is no near miss
            f'GROUP BY 1 ORDER BY "Similarity %" DESC')
     return con.execute(sql).fetchdf()

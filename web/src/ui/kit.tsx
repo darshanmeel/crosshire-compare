@@ -1,6 +1,6 @@
 // The shared UI pieces, on the classes in styles.css. Each is a thin
 // wrapper over a real control: buttons are <button>, toggles say aria-pressed, groups say role="group".
-import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { copyText } from "./copy";
 import { Icon, type IconName } from "./icons";
 
@@ -42,6 +42,20 @@ export function CommitInput({ value, onDone, trim, type = "text", ...rest }: Com
   const done = () => { const v = trim ? draft.trim() : draft; if (v !== value) onDone(v); };
   return <input type={type} {...rest} value={draft} onChange={(e) => setDraft(e.target.value)} onBlur={done}
                 onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />;
+}
+
+type AreaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, "value" | "onChange" | "onBlur" | "onKeyDown"> & {
+  value: string; onDone: (v: string) => void;
+};
+/** CommitInput for a longer text: as many lines as it holds (2 to 8); Ctrl+Enter hands it on too. */
+export function CommitArea({ value, onDone, ...rest }: AreaProps) {
+  const [draft, setDraft] = useState(value);
+  const [was, setWas] = useState(value);
+  if (value !== was) { setWas(value); setDraft(value); }
+  const done = () => { if (draft !== value) onDone(draft); };
+  return <textarea {...rest} rows={Math.min(8, Math.max(2, draft.split("\n").length))} value={draft}
+                   onChange={(e) => setDraft(e.target.value)} onBlur={done}
+                   onKeyDown={(e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) e.currentTarget.blur(); }} />;
 }
 
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {

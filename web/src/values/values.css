@@ -41,6 +41,9 @@
 .vx-param input[type=number] { width: 72px; }
 .vx-param input.short { width: 64px; }
 .vx-param input.wide { width: min(320px, 60vw); }
+/* a custom expression: the whole row, as many lines as it needs */
+.vx-param.expr { flex: 1 1 100%; align-items: flex-start; }
+.vx-param textarea.expr { flex: 1; min-width: 0; padding: 6px 8px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; resize: vertical; }
 .pstep.draft { border-style: dashed; border-color: var(--fs-accent-line); background: var(--fs-panel); }
 .pstep.draft .n { background: var(--fs-accent-fill); color: var(--fs-on-fill); }
 .vx-empty { padding: 12px 14px; border: 1px dashed var(--fs-border2); border-radius: var(--r-sm); font-size: 13px; color: var(--fs-text3); }

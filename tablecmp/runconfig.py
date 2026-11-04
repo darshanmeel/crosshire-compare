@@ -25,7 +25,7 @@ from .values import NULL_TOKENS_DEFAULT, ReadOptions
 KIND = "crosshire-compare config"
 VERSION = 1
 # the switches a config carries, as the run's cfg names them
-SETTINGS = ("mode", "trim", "empty_as_null", "ignore_case", "tolerance", "null_tokens",
+SETTINGS = ("mode", "trim", "empty_as_null", "ignore_case", "nulls_equal", "tolerance", "null_tokens",
             "display_rows", "table_formats")
 DB_FIELDS = ("connection", "database", "query", "cap")
 
@@ -283,7 +283,8 @@ def build_cfg(conf: dict, A: Side, B: Side, name_a: str, name_b: str, cmap: pd.D
             "mode": mode, "keys": keys if mode == "key" else [], "specs": [sp.__dict__ for sp in specs],
             "compare_columns": compare, "only_a": only_in(cmap, "A"), "only_b": only_in(cmap, "B"),
             "trim": bool(s.get("trim", True)), "empty_as_null": bool(s.get("empty_as_null", True)),
-            "ignore_case": bool(s.get("ignore_case", False)), "tolerance": float(s.get("tolerance") or 0.0),
+            "ignore_case": bool(s.get("ignore_case", False)), "nulls_equal": bool(s.get("nulls_equal", True)),
+            "tolerance": float(s.get("tolerance") or 0.0),
             "null_tokens": str(s.get("null_tokens", NULL_TOKENS_DEFAULT)),
             "column_rules": column_rules(specs, compare),
             "filters": both, "left_filters": left, "right_filters": right,

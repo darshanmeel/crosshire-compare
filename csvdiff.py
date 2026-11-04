@@ -185,6 +185,7 @@ class Options:
     trim: bool = True                       # strip surrounding whitespace
     treat_empty_as_null: bool = True        # '' and NULL are the same thing
     ignore_case_values: bool = False        # case-insensitive value compare
+    null_equals_null: bool = True           # a value null on both sides is the same (keys always are)
     tolerance: float = 0.0                  # global absolute numeric tolerance
     rel_tolerance: float = 0.0              # global relative numeric tolerance
     on_duplicate_keys: str = "index"        # index | first | error
@@ -374,6 +375,12 @@ class CsvDiff:
 
     # ---------------- comparison expressions ----------------
     def _eq_expr(self, lref: str, rref: str, rule: ColumnRule, o: Options) -> str:
+        eq = self._same_value(lref, rref, rule, o)
+        if o.null_equals_null:
+            return eq
+        return f"CASE WHEN {lref} IS NULL AND {rref} IS NULL THEN FALSE ELSE {eq} END"
+
+    def _same_value(self, lref: str, rref: str, rule: ColumnRule, o: Options) -> str:
         ignore_case = o.ignore_case_values if rule.ignore_case is None else rule.ignore_case
         if ignore_case:
             str_eq = f"lower({lref}) IS NOT DISTINCT FROM lower({rref})"
@@ -816,7 +823,8 @@ class CsvDiff:
         if not cols:
             raise ValueError("multiset mode needs at least one comparable column")
         sel = ", ".join(ident(c) for c in cols)
-        on = " AND ".join(f"l.{ident(c)} IS NOT DISTINCT FROM r.{ident(c)}" for c in cols)
+        same = lambda c: ("IS NOT DISTINCT FROM" if c in keys or o.null_equals_null else "=")  # keys: null is null
+        on = " AND ".join(f"l.{ident(c)} {same(c)} r.{ident(c)}" for c in cols)
         coal = ", ".join(f"coalesce(l.{ident(c)}, r.{ident(c)}) AS {ident(c)}" for c in cols)
         self._sql(f"""
             CREATE OR REPLACE TEMP TABLE __ms AS
@@ -1430,6 +1438,8 @@ def cli_overrides(args) -> dict:
         over["html_all_limit"] = args.html_all_limit
     if getattr(args, "ignore_case_values", False):
         over["ignore_case_values"] = True
+    if getattr(args, "nulls_differ", False):
+        over["null_equals_null"] = False
     return over
 
 
@@ -1464,6 +1474,8 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--rel-tolerance", dest="rel_tolerance", type=float,
                         help="relative numeric tolerance, e.g. 0.01 for 1%%")
         sp.add_argument("--ignore-case-values", action="store_true")
+        sp.add_argument("--nulls-differ", dest="nulls_differ", action="store_true",
+                        help="a value null on both sides counts as a difference (keys still match)")
         sp.add_argument("--where", action="append", metavar="EXPR",
                         help="row filter applied to both files, repeatable, e.g. "
                              "--where \"order_date:date between 2024-01-01..2024-03-31\" "

@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 import { marks } from "../ui/marks";
 import { Icon } from "../ui/icons";
-import { Button, Chip, CommitInput, ErrorNote, LinkButton, num, Pill, plural, Seg, type Tone as PillTone } from "../ui/kit";
+import { Button, Chip, CommitArea, CommitInput, ErrorNote, LinkButton, num, Pill, plural, Seg, type Tone as PillTone } from "../ui/kit";
 import { plainSteps } from "../columns/pairing";
 import { errorText, useSetupSend, useStepsRebuild, type CheckView, type Frame, type SetupReady, type Spec, type Step, type StepsMeta, type TryView } from "../setup/api";
 import { FrameTable } from "../setup/FrameTable";
@@ -12,7 +12,12 @@ import { setView, useView } from "../shell/view";
 import "./values.css";
 
 type Which = "A" | "B";
+type Mode = "both" | Which;                 // one list for both sides, or one side's own
 const other = (w: Which): Which => (w === "A" ? "B" : "A");
+const sameSteps = (sp: Spec) => JSON.stringify(sp.a_steps) === JSON.stringify(sp.b_steps);
+/** A side's steps in a few words - a custom expression by its name, the expression in the tooltip. */
+const fewWords = (steps: Step[], said: string[]) =>
+  plainSteps(steps, said).map((w, i) => (steps[i]?.op === "custom expression" ? "custom expression" : w)).join(" → ");
 
 /** The pair the editor shows: the view's pair, kept inside the list. */
 export const pairIndex = (s: SetupReady, pair: number) => Math.max(0, Math.min(pair, s.specs.length - 1));
@@ -56,20 +61,15 @@ export function PairHead({ s, spec }: { s: SetupReady; spec: Spec }) {
   );
 }
 
-/** One line on what the steps do to this pair. */
+/** One short line on what the steps do to this pair: `Both: trim · compared as number`. */
 function Say({ spec, labels }: { spec: Spec; labels: [string, string] }) {
-  const sides = (["A", "B"] as const).filter((w) => (w === "A" ? spec.a_steps : spec.b_steps).length);
-  if (!sides.length) return <p className="vx-say">Both sides are read as they are in the file, then compared as <b>{spec.kind}</b>.</p>;
+  const of = (w: Which) => (w === "A" ? [spec.a_steps, spec.a_said] as const : [spec.b_steps, spec.b_said] as const);
+  const said = (w: Which) => { const [st, sd] = of(w); return st.length ? <span title={sd.join(" → ")}>{fewWords(st, sd)}</span> : "as in the file"; };
+  const tail = <> · compared as <b>{spec.kind}</b></>;
+  if (sameSteps(spec)) return <p className="vx-say"><b>Both:</b> {said("A")}{tail}</p>;
   return (
     <p className="vx-say">
-      {sides.map((w, i) => {
-        const said = w === "A" ? spec.a_said : spec.b_said;
-        const words = plainSteps(w === "A" ? spec.a_steps : spec.b_steps, said);
-        return (
-          <span key={w}>{i > 0 && "; "}{labels[w === "A" ? 0 : 1]} runs {plural(said.length, "step")} on <code>{w === "A" ? spec.a_src : spec.b_src}</code> (<span title={said.join(" → ")}>{words.join(" → ")}</span>)</span>
-        );
-      })}
-      {sides.length === 1 && <>, {labels[sides[0] === "A" ? 1 : 0]} reads it as it is</>}; then both are compared as <b>{spec.kind}</b>.
+      {(["A", "B"] as const).map((w, i) => <span key={w}>{i > 0 && " · "}<b>{labels[i]}:</b> {said(w)}</span>)}{tail}
     </p>
   );
 }
@@ -78,10 +78,12 @@ function Say({ spec, labels }: { spec: Spec; labels: [string, string] }) {
 function ParamBox({ k, m, value, label, onDone }: { k: string; m: StepsMeta; value: string; label: string; onDone: (v: string) => void }) {
   const numeric = m.numeric.includes(k);
   return (
-    <span className="vx-param">
+    <span className={k === "expr" ? "vx-param expr" : "vx-param"}>
       <span className="lbl" aria-hidden="true">{shortLabel(m.labels[k] ?? k)}</span>
-      <CommitInput type={numeric ? "number" : "text"} aria-label={label} value={value} className={k === "expr" ? "wide" : k === "fmt" ? "" : "short"}
-                   min={numeric ? 1 : undefined} max={numeric ? 100000 : undefined} onDone={onDone} />
+      {k === "expr"
+        ? <CommitArea aria-label={label} value={value} className="expr" spellCheck={false} onDone={onDone} />
+        : <CommitInput type={numeric ? "number" : "text"} aria-label={label} value={value} className={k === "fmt" ? "" : "short"}
+                       min={numeric ? 1 : undefined} max={numeric ? 100000 : undefined} onDone={onDone} />}
     </span>
   );
 }
@@ -113,13 +115,17 @@ function DraftParams({ op, m, params, setParams }: { op: string; m: StepsMeta; p
           </span>
         </span>
       ) : (
-        <span key={k} className="vx-param">
+        <span key={k} className={k === "expr" ? "vx-param expr" : "vx-param"}>
           <span className="lbl" aria-hidden="true">{shortLabel(m.labels[k] ?? k)}</span>
-          <input type={m.numeric.includes(k) ? "number" : "text"} aria-label={m.labels[k] ?? k} value={params[k] ?? ""}
-                 className={k === "expr" ? "wide" : "short"}
-                 min={m.numeric.includes(k) ? 1 : undefined} max={m.numeric.includes(k) ? 100000 : undefined}
-                 placeholder={k === "expr" ? "upper(split_part(x, '-', 1))" : undefined}
-                 onChange={(e) => setParams({ ...params, [k]: e.target.value })} />
+          {k === "expr" ? (
+            <textarea aria-label={m.labels[k] ?? k} value={params[k] ?? ""} className="expr" spellCheck={false}
+                      rows={Math.min(6, Math.max(2, (params[k] ?? "").split("\n").length))}
+                      placeholder="case when x is null then 0 else x end" onChange={(e) => setParams({ ...params, [k]: e.target.value })} />
+          ) : (
+            <input type={m.numeric.includes(k) ? "number" : "text"} aria-label={m.labels[k] ?? k} value={params[k] ?? ""} className="short"
+                   min={m.numeric.includes(k) ? 1 : undefined} max={m.numeric.includes(k) ? 100000 : undefined}
+                   onChange={(e) => setParams({ ...params, [k]: e.target.value })} />
+          )}
         </span>
       ))}
       {op === "custom expression" && (
@@ -220,34 +226,60 @@ export function TransformBox({ s }: { s: SetupReady }) {
   const redo = useStepsRebuild();
   const meta = useStepsMeta();
   const { pair } = useView();
-  const [picked, setWhich] = useState<{ canon: string; which: Which } | null>(null);
+  const [picked, setMode] = useState<{ canon: string; mode: Mode } | null>(null);
   const [draft, setDraft] = useState<{ op: string; params: Record<string, string> } | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [both, setBoth] = useState(false);            // a new step goes to this side, or to both
   const check = useMutation({ mutationFn: (canon: string) => api.send<CheckView>("POST", "/api/setup/check", { canon }) });
   const labels = sideLabels(s.names[0], s.names[1]);
   const m = meta.data;
   const spec = s.specs[pairIndex(s, pair)];
   if (!spec || !m) return null;
   const canon = spec.canon;
-  const which: Which = picked?.canon === canon ? picked.which : !spec.a_steps.length && spec.b_steps.length ? "B" : "A";
+  const same = sameSteps(spec);
+  // both sides alike (none included) open as one list; else the side with steps
+  const fallback: Mode = same ? "both" : !spec.a_steps.length && spec.b_steps.length ? "B" : "A";
+  // a picked Both holds only while the sides agree - never one list over two different sides
+  const mode: Mode = picked?.canon === canon && (picked.mode !== "both" || same) ? picked.mode : fallback;
+  const both = mode === "both";
+  const which: Which = both ? "A" : mode;
+  const sides: Which[] = both ? ["A", "B"] : [which];
   const steps = which === "A" ? spec.a_steps : spec.b_steps;
   const said = which === "A" ? spec.a_said : spec.b_said;
   const wi = which === "A" ? 0 : 1;
   const pending = busy || send.isPending || redo.isPending;
 
-  const stepsCall = async (action: string, step: Step | null = null) =>
-    send.mutateAsync({ path: "/steps", body: { canon, which, action, step } });
+  const stepsCall = async (action: string, on: Which[] = sides) => {
+    for (const w of on) await send.mutateAsync({ path: "/steps", body: { canon, which: w, action, step: null } });
+  };
   const run = async (work: () => Promise<unknown>) => {
     setBusy(true);
     try { await work(); setErr(""); return true; } catch (e) { setErr(errorText(e)); return false; } finally { setBusy(false); }
   };
   /** The server keeps a side's steps as a list it adds to; a reorder or an edit is Clear, then each step again. */
-  const rebuild = (next: Step[]) => run(() => redo.mutateAsync({ canon, which, steps: next, was: steps }));
+  const was = (w: Which) => (w === "A" ? spec.a_steps : spec.b_steps);
+  /** Both: a side that fails puts back the sides done before it, so the two never part. */
+  const onEach = async (work: (w: Which) => Promise<unknown>, undo: (w: Which) => Promise<unknown>) => {
+    const done: Which[] = [];
+    try { for (const w of sides) { await work(w); done.push(w); } } catch (e) {
+      for (const w of done) await undo(w).catch(() => undefined);
+      throw e;
+    }
+  };
+  const rebuild = (next: Step[]) => run(() => onEach(
+    (w) => redo.mutateAsync({ canon, which: w, steps: next, was: was(w) }),
+    (w) => redo.mutateAsync({ canon, which: w, steps: was(w), was: next })));
+  /** Both: one list from now on - the steps on screen go to the other side too. */
+  const choose = async (v: Mode) => {
+    setDraft(null);
+    if (v === "both" && !same && !(await run(() => stepsCall("copy", [which])))) return;   // not copied: stay apart
+    setMode({ canon, mode: v });
+  };
   const add = async (step: Step) => {
-    const sides: Which[] = both ? ["A", "B"] : [which];
-    if (await run(async () => { for (const w of sides) await send.mutateAsync({ path: "/steps", body: { canon, which: w, action: "add", step } }); })) setDraft(null);
+    const ok = await run(() => onEach(
+      (w) => send.mutateAsync({ path: "/steps", body: { canon, which: w, action: "add", step } }),
+      (w) => send.mutateAsync({ path: "/steps", body: { canon, which: w, action: "pop", step: null } })));
+    if (ok) setDraft(null);
   };
   const pick = (op: string) => {
     const names = m.steps[op] ?? [];
@@ -281,19 +313,24 @@ export function TransformBox({ s }: { s: SetupReady }) {
       <div className="panel-body">
         <Say spec={spec} labels={labels} />
         <div className="vx-sides">
-          <Seg<Which> label="Which side" value={which} onChange={(w) => { setWhich({ canon, which: w }); setDraft(null); }}
-            options={(["A", "B"] as const).map((w, i) => ({
-              value: w, label: <span className="vx-side"><span className={`sw ${w.toLowerCase()}`} />{labels[i]} steps · {(w === "A" ? spec.a_steps : spec.b_steps).length}</span>,
-            }))} />
+          <Seg<Mode> label="Which side" value={mode} onChange={(v) => void choose(v)}
+            options={[
+              { value: "both", label: <span className="vx-side" title={same ? undefined : `Uses ${labels[wi]}'s steps on both sides`}><span className="sw a" /><span className="sw b" />Both sides{same ? ` · ${spec.a_steps.length}` : ""}</span> },
+              ...(["A", "B"] as const).map((w, i) => ({
+                value: w, label: <span className="vx-side"><span className={`sw ${w.toLowerCase()}`} />{labels[i]} steps · {(w === "A" ? spec.a_steps : spec.b_steps).length}</span>,
+              })),
+            ]} />
           {steps.length > 0 && <>
             <span className="grow" />
-            <LinkButton disabled={pending} onClick={() => void run(() => stepsCall("copy"))}>Copy to {labels[1 - wi]}</LinkButton>
+            {!both && <LinkButton disabled={pending} onClick={() => void run(() => stepsCall("copy"))}>Copy to {labels[1 - wi]}</LinkButton>}
             <LinkButton disabled={pending} onClick={() => void run(() => stepsCall("clear"))}>Clear</LinkButton>
           </>}
         </div>
 
-        <div className="pipe" aria-label={`${labels[wi]} steps`} role="list">
-          {!steps.length && !draft && <div className="vx-empty" role="listitem">No steps - {labels[wi]} reads <code>{which === "A" ? spec.a_src : spec.b_src}</code> as it is in the file.</div>}
+        <div className="pipe" aria-label={both ? "Steps on both sides" : `${labels[wi]} steps`} role="list">
+          {!steps.length && !draft && <div className="vx-empty" role="listitem">{both
+            ? <>No steps - both sides are read as they are in the file.</>
+            : <>No steps - {labels[wi]} reads <code>{which === "A" ? spec.a_src : spec.b_src}</code> as it is in the file.</>}</div>}
           {steps.map((st, i) => (
             <div className="pstep" role="listitem" key={`${i}-${st.op}`}>
               <span className="n">{i + 1}</span>
@@ -333,8 +370,7 @@ export function TransformBox({ s }: { s: SetupReady }) {
         <div className="field">
           <span className="vx-add-head">
             <span className="lbl" id="vx-add">Add a step</span>
-            <Seg<"one" | "both"> mini label="Add the step to" value={both ? "both" : "one"} onChange={(v) => setBoth(v === "both")}
-              options={[{ value: "one", label: `${labels[wi]} only` }, { value: "both", label: `both - ${labels[0]} and ${labels[1]}` }]} />
+            <span className="sub">{both ? `to both - ${labels[0]} and ${labels[1]}` : `to ${labels[wi]} only`}</span>
           </span>
           <div className="ops" role="group" aria-labelledby="vx-add">
             {Object.keys(m.steps).map((op) => (
@@ -354,19 +390,17 @@ export function TransformBox({ s }: { s: SetupReady }) {
         <span>Other conversions this run:</span>
         {!others.length && <span className="dim">none</span>}
         {others.map(({ x, j }) => {
-          const sides = (["A", "B"] as const).filter((w) => (w === "A" ? x.a_steps : x.b_steps).length);
-          const items = sides.length ? sides : [null];
-          return items.map((w) => (
-            <span className="vx-other" key={`${x.canon}-${w ?? "type"}`}>
-              <button type="button" className={`chip ${w ? w.toLowerCase() : ""}`} onClick={() => setView({ pair: j })}
-                      aria-label={`Edit ${x.a_src} and ${x.b_src}`}>
-                {w === "A" ? x.a_src : w === "B" ? x.b_src : x.canon}
-              </button>
-              <span className="m" title={w ? (w === "A" ? x.a_said : x.b_said).join(" → ") : undefined}>
-                {w ? (w === "A" ? plainSteps(x.a_steps, x.a_said) : plainSteps(x.b_steps, x.b_said)).join(" → ") : ""}{x.kind !== "text" ? `${w ? " → " : "read as "}${x.kind}` : ""}
-              </span>
+          const one = (w: Which) => { const st = w === "A" ? x.a_steps : x.b_steps, sd = w === "A" ? x.a_said : x.b_said;
+                                      return st.length ? fewWords(st, sd) : "as in the file"; };
+          const has = x.a_steps.length || x.b_steps.length;
+          const words = !has ? "" : sameSteps(x) ? `both: ${one("A")}` : `${labels[0]}: ${one("A")} · ${labels[1]}: ${one("B")}`;
+          const title = [x.a_said.length ? `${labels[0]}: ${x.a_said.join(" → ")}` : "", x.b_said.length ? `${labels[1]}: ${x.b_said.join(" → ")}` : ""].filter(Boolean).join("\n");
+          return (
+            <span className="vx-other" key={x.canon}>
+              <button type="button" className="chip" onClick={() => setView({ pair: j })} aria-label={`Edit ${x.a_src} and ${x.b_src}`}>{x.canon}</button>
+              <span className="m" title={title || undefined}>{words}{x.kind !== "text" ? `${words ? " → " : "read as "}${x.kind}` : ""}</span>
             </span>
-          ));
+          );
         })}
       </div>
     </>

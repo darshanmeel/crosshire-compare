@@ -265,7 +265,8 @@ def config_boxes(conf: dict, folders: set[str]) -> dict:
     own names (the React form's keys)."""
     s = conf.get("settings") or {}
     settings: dict = {"trim": bool(s.get("trim", True)), "empty_as_null": bool(s.get("empty_as_null", True)),
-                      "ignore_case": bool(s.get("ignore_case", False)), "tolerance": float(s.get("tolerance") or 0.0)}
+                      "ignore_case": bool(s.get("ignore_case", False)), "nulls_equal": bool(s.get("nulls_equal", True)),
+                      "tolerance": float(s.get("tolerance") or 0.0)}
     if s.get("display_rows"):               # the page's own switches stay as they are unless the config sets them
         settings["display_rows"] = int(s["display_rows"])
     if "null_tokens" in s:

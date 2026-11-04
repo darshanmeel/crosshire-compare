@@ -26,7 +26,7 @@ export function setup(over: Partial<SetupReady> = {}): SetupReady {
     specs: [{ canon: "emp_id", kind: "text", a_src: "emp_id", b_src: "EmployeeId", a_steps: [], b_steps: [], case: "", describe: "text", a_said: [], b_said: [] },
             { canon: "salary", kind: "number", a_src: "salary", b_src: "Salary", a_steps: [], b_steps: [], case: "", describe: "number", a_said: [], b_said: [] }],
     keys: [], compare: ["emp_id", "salary"], only_a: ["department"], only_b: ["Dept"], can_match: true, data_match: null,
-    said: [], settings: { trim: true, empty_as_null: true, ignore_case: false, tolerance: 0, null_tokens: "NULL, N/A", nokey_mode: "hash" },
+    said: [], settings: { trim: true, empty_as_null: true, ignore_case: false, nulls_equal: true, tolerance: 0, null_tokens: "NULL, N/A", nokey_mode: "hash" },
     looks_help: "What a sample of this side's values looks like", ...over,
   };
 }

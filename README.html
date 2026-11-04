@@ -340,17 +340,20 @@ export COMPARE_CONN_SAMPLE=duckdb:////home/me/crosshire-compare/examples/sample.
     <figure class="shot"><img src="docs/app-transform.png" alt="Values editor: pairs on the left, last_name with one Payroll step part N split by S, the step palette and a preview where every row matches" loading="lazy"><figcaption>FullName on Payroll, split by a space, N = 2 - "5 of 5 shown rows match after these steps"</figcaption></figure>
     <ul class="pts">
       <li><b>Open it</b> - click a pair's Transform cell in the column table. <b>Back to the column table</b> returns.</li>
-      <li><b>HR steps · Payroll steps</b> - one tab per side; each step runs on the result of the one before. <b>Copy to</b> the other side and <b>Clear</b> are links on the same row.</li>
-      <li><b>Add a step</b> - to the side on screen, or <em>both - HR and Payroll</em> at once (trim, upper, remove spaces).</li>
+      <li><b>Both sides · HR steps · Payroll steps</b> - <em>Both sides</em> is one list: every step added, edited, moved or removed changes both sides. A pair whose sides have the same steps (or none) opens on it; picking it on a pair whose sides differ puts the steps on screen on both. A side's own tab keeps its own steps, with <b>Copy to</b> the other side; <b>Clear</b> on the same row. Each step runs on the result of the one before.</li>
+      <li><b>The line above</b> - what the steps do in a few words: <em>Both: custom expression · compared as number</em>, or each side's when they differ; the full steps on hover.</li>
+      <li><b>Add a step</b> - to both sides, or to the side on screen, as the tab says.</li>
       <li><b>Text steps</b> - trim, upper, lower, left / right N characters, replace text, regex replace, strip leading zeros, digits only, part N split by S…</li>
       <li><b>Conversions</b> - to number, to date, to timestamp, to boolean. A conversion sets the pair's type.</li>
-      <li><b>Custom expression</b> - any DuckDB expression on <code>x</code>, e.g. <code>upper(split_part(x, '-', 1))</code>.</li>
+      <li><b>Custom expression</b> - any DuckDB expression on <code>x</code>, e.g. <code>upper(split_part(x, '-', 1))</code>. <code>x</code> is the text, as always - <code>trim(x)</code>, <code>nullif(x, '-')</code> do what they did. Only an expression that needs the pair's type gets it: on a number pair <code>coalesce(x, 0)</code> or <code>case when x is null then 0.0 else x end</code> sees a <code>DOUBLE</code> (thousands separators dropped; <code>' - '</code>, <code>.</code>, a space read as null); on a date pair a <code>DATE</code>. Typed in a box as wide as the step, over several lines. Checked when it is set: unbalanced brackets, a typo or a type mix is refused in a sentence, and the steps stay as they were.</li>
+      <li><b>If empty, use</b> - a null, or text of nothing but spaces (non-breaking ones too), becomes the value given, e.g. <code>0</code>.</li>
       <li><b>Preview on the first rows</b> - before, after the steps, as the type, the other side in its side colour, and a Match tick; the head says how many shown rows match.</li>
       <li><b>Check this column on all rows</b> - counts the values that do not convert, with examples.</li>
-      <li><b>Other conversions this run</b> - under the preview, every other pair's steps in plain words.</li>
+      <li><b>Other conversions this run</b> - under the preview, one line per other pair: its steps in a few words (<em>both: …</em> or each side's) and its type; the full steps on hover.</li>
     </ul>
     <ul class="pts">
-      <li><b>How values are read</b> - null tokens, empty string is null, trim whitespace, ignore case, numeric tolerance.</li>
+      <li><b>How values are read</b> - null tokens, empty string is null, trim whitespace, ignore case, null = null, numeric tolerance.</li>
+      <li><b>Null = null</b> - on by default: a value null on both sides is the same. Off, it is a difference - and with <em>empty string is null</em> on, so is empty on both sides. Keys always match null to null; without a key, a row holding a null then never matches. <code>csvdiff.py --nulls-differ</code> does the same.</li>
       <li><b>Text parameters</b> - taken as typed: one space is a real separator.</li>
       <li><b>Numeric tolerance</b> - only for number pairs; a text <code>001</code> against <code>1</code> stays a difference.</li>
     </ul>
@@ -788,7 +791,7 @@ docker run --rm -p 8501:8501 -v ./data:/data:ro -v ./out:/out --env-file .env cr
     <div class="run">
       <div class="row"><div class="k">01</div><div><div class="t">python -m pip install -r requirements-dev.txt</div><div class="d">Once - pytest and pytest-playwright.</div></div></div>
       <div class="row"><div class="k">02</div><div><div class="t">python -m playwright install chromium</div><div class="d">Once, for the browser runs; without it they skip - or use an installed Edge: <code>python -m pytest tests/e2e --browser-channel msedge</code>.</div></div></div>
-      <div class="row"><div class="k">03</div><div><div class="t">python -m pytest tests -q</div><div class="d">725 tests; sample counts in <code>tests/COUNTS.md</code>.</div></div></div>
+      <div class="row"><div class="k">03</div><div><div class="t">python -m pytest tests -q</div><div class="d">737 tests; sample counts in <code>tests/COUNTS.md</code>.</div></div></div>
       <div class="row"><div class="k">04</div><div><div class="t">cd web &amp;&amp; npm install &amp;&amp; npm run dev</div><div class="d">Hot reload at <code>http://localhost:5173</code>, with <code>python compare_app.py --no-browser</code> beside it.</div></div></div>
       <div class="row"><div class="k">05</div><div><div class="t">cd web &amp;&amp; npm test &amp;&amp; npm run build</div><div class="d">Before committing - <code>tests/test_web_build.py</code> fails on a stale build.</div></div></div>
     </div>

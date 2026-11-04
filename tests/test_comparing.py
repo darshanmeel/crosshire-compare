@@ -55,7 +55,7 @@ def test_the_page_switches_fill_in_their_defaults(monkeypatch):
     assert cm.page_settings(su.settings_of({"display_rows": 500}))["display_rows"] == 500
     monkeypatch.setenv("COMPARE_TABLE_FORMATS", "csv,parquet")
     assert cm.page_settings(su.settings_of(None))["out_fmt"] == "both"
-    assert cm.values_of(s) == {"trim": True, "empty_as_null": True, "ignore_case": False, "tolerance": 0.5,
+    assert cm.values_of(s) == {"trim": True, "empty_as_null": True, "ignore_case": False, "nulls_equal": True, "tolerance": 0.5,
                                "null_tokens": s["null_tokens"]}
 
 

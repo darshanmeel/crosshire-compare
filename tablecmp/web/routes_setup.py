@@ -22,7 +22,7 @@ from ..keys import key_uniqueness, suggest_keys
 from ..loading import BLANK_FILTER, FILTER_COLS
 from ..profile import profile_tables
 from ..values import (FORMAT_PRESETS, NUMERIC_PARAMS, PARAM_LABELS, STEPS, TYPES, conversion_report,
-                      function_catalog, try_steps)
+                      function_catalog, plain_error, try_steps)
 from . import jobs
 from . import setupws as sw
 from .workspace import Workspace, workspace
@@ -150,6 +150,7 @@ class SettingsIn(BaseModel):
     trim: bool | None = None
     empty_as_null: bool | None = None
     ignore_case: bool | None = None
+    nulls_equal: bool | None = None
     tolerance: float | None = Field(None, ge=0, le=1e9)
     null_tokens: str | None = None
     nokey_mode: Literal["hash", "position"] | None = None
@@ -312,10 +313,12 @@ def try_column(canon: str, which: Literal["A", "B"], ws: Workspace = Depends(wor
     """The first five rows of one side of a pair: in the file, after the steps, compared as."""
     A, B = sw.sides(ws)
     spec = _spec(ws, canon)
+    side = A if which == "A" else B
     try:
-        df = try_steps(A if which == "A" else B, spec.src(which), spec.steps(which), spec.kind, sw.opts(ws))
+        df = try_steps(side, spec.src(which), spec.steps(which), spec.kind, sw.opts(ws))
     except duckdb.Error as exc:
-        return {**sw.frame(None), "error": f"DuckDB says: {exc}"}
+        said = plain_error(exc, [(side, which, sw.names(ws)["AB".index(which)])], [spec])
+        return {**sw.frame(None), "error": said}
     return {**sw.frame(df), "error": ""}
 
 
@@ -328,7 +331,7 @@ def check_column(body: CanonIn, ws: Workspace = Depends(workspace)) -> dict:
     try:
         df = conversion_report(A, B, [spec], NA, NB, sw.opts(ws))
     except duckdb.Error as exc:
-        raise HTTPException(400, f"DuckDB says: {exc}") from exc
+        raise HTTPException(400, plain_error(exc, [(A, "A", NA), (B, "B", NB)], [spec])) from exc
     return {**sw.frame(df), "said": "" if len(df) else "Text with no steps - nothing to convert."}
 
 

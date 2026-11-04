@@ -20,7 +20,7 @@ export type Spec = {
   a_said: string[]; b_said: string[];    // each step as the page says it: "left N characters (N=10)"
 };
 export type Settings = {
-  trim: boolean; empty_as_null: boolean; ignore_case: boolean; tolerance: number; null_tokens: string;
+  trim: boolean; empty_as_null: boolean; ignore_case: boolean; nulls_equal: boolean; tolerance: number; null_tokens: string;
   nokey_mode: "hash" | "position";
 };
 export type SetupReady = {
