@@ -5,6 +5,7 @@ import { DiffRowsTab } from "./DiffRowsTab";
 import { DownloadsTab } from "./DownloadsTab";
 import { OneSidedTab } from "./OneSidedTab";
 import { ReportTab } from "./ReportTab";
+import { SetAsideTab } from "./SetAsideTab";
 import { SummaryView } from "./SummaryView";
 
 export function ResultsView({ run, limit }: { run: RunView; limit: number }) {
@@ -14,6 +15,7 @@ export function ResultsView({ run, limit }: { run: RunView; limit: number }) {
       {tab === "summary" && <SummaryView run={run} />}
       {tab === "rows" && <DiffRowsTab run={run} />}
       {tab === "onesided" && <OneSidedTab run={run} />}
+      {tab === "aside" && <SetAsideTab />}
       {tab === "report" && <ReportTab run={run} limit={limit} />}
       {tab === "downloads" && <DownloadsTab run={run} limit={limit} />}
     </div>

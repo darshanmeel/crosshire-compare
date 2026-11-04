@@ -36,35 +36,42 @@ def test_every_bucket_counts_its_own_rows(c, run):
         for col in body["columns"]:
             side = "both" if col["sides"] == ["a", "b"] else col["sides"][0]
             d = get(c, f"/api/results/{run['id']}/values", column=col["column"], subset=body["subset"], side=side,
-                    size=500)
-            assert [s["rows"] for s in d["sides"]] == [rows[b["id"]]] * len(col["sides"]), (b, col)
+                    differs=col["differs"], size=500)
+            want = rows[b["id"]]                                          # with one column compared, its rows are the bucket's
+            assert [s["rows"] for s in d["sides"]] == [want] * len(col["sides"]), (b, col)
             if d["values"] <= 500:                                        # every value on one page: they add up
-                assert [sum(r["n"][i] for r in d["rows"]) for i in range(len(col["sides"]))] == [rows[b["id"]]] * len(col["sides"])
+                assert [sum(r["n"][i] for r in d["rows"]) for i in range(len(col["sides"]))] == [want] * len(col["sides"])
 
 
-def test_the_defaults_tick_the_key_and_on_differing_buckets_the_worst_three(c, run):
+def test_the_defaults_tick_the_columns_that_differ_most_and_elsewhere_the_key(c, run):
     base = f"/api/results/{run['id']}/buckets"
-    want = {"matched": ["emp_id", "department"], "differ": ["emp_id", "department"],
-            "same": ["emp_id"], "left": ["emp_id"], "right": ["emp_id"]}
-    for b, cols in want.items():
+    for b in ("matched", "differ", "same", "left", "right"):
         d = get(c, base + "/" + b)
-        assert d["shown"] == [x["column"] for x in d["columns"]] == cols, b
+        assert d["shown"] == [x["column"] for x in d["columns"]], b
+        assert d["shown"] == (["department"] if b in ("matched", "differ") else ["emp_id"]), b
         assert d["groups"][0] == {"title": "Key columns", "items": [{"name": "emp_id", "label": "emp_id"}]}
     left = get(c, base + "/left")
     assert left["subset"] == "only_a" and {tuple(x["sides"]) for x in left["columns"]} == {("a",)}
     assert get(c, base + "/right")["columns"][0]["sides"] == ["b"]
-    assert get(c, base + "/differ", add=["department"], exact=True)["columns"][0]["column"] == "department"
+    assert get(c, base + "/differ", add=["emp_id"], exact=True)["columns"][0]["column"] == "emp_id"
     assert get(c, base + "/differ", exact=True)["empty"]                # everything unticked
 
 
-def test_the_worst_three_mismatched_columns_on_the_auto_run(c):
+def test_every_mismatched_column_counts_only_its_own_differing_rows(c):
     rid = auto_run(c)["run"]["id"]
     d = get(c, f"/api/results/{rid}/buckets/differ")
     mism = next(g for g in d["groups"] if g["title"] == "Mismatched columns")["items"]
-    assert d["shown"] == [COUNTS["key"]] + [o["name"] for o in mism[:3]] and len(mism) > 3
+    assert d["shown"] == [o["name"] for o in mism][:3] and len(mism) > 3
+    d = get(c, f"/api/results/{rid}/buckets/differ", add=[COUNTS["key"]] + [o["name"] for o in mism], exact=True)
     assert d["by_key"]["tables"][0]["column"] == COUNTS["key"]
+    assert d["columns"][0]["differs"] == ""                                      # the key: all the differing rows
+    worst = d["columns"][-1]                                                     # the least: fewer rows than the bucket
+    n = int(next(o for o in mism if o["name"] == worst["column"])["label"].rsplit(" · ", 1)[1].replace(",", ""))
+    assert worst["differs"] == worst["column"] and f":red[{n:,} rows differ]" in worst["title"]
+    v = get(c, f"/api/results/{rid}/values", column=worst["column"], subset="differ", side="both", differs=worst["differs"], size=10)
+    assert [s["rows"] for s in v["sides"]] == [n, n] and n < int(COUNTS["diff_rows"])
     one = get(c, f"/api/results/{rid}/buckets/left")
-    assert one["shown"] == [COUNTS["key"]]
+    assert one["shown"] == [COUNTS["key"]]                                       # one side: the key
 
 
 def test_the_key_values_table_pages_every_value(c, run):

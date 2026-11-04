@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..sql import ident, lit
-from ..values import ColSpec
+from ..values import ColSpec, cast_date
 from .profile_held import held_answer
 from .routes_profiling import MONTHS, WEEKDAYS, _casts_held, _held, _reads, _spec, _value, _when_ok, read_when
 from .workspace import Workspace, workspace
@@ -152,8 +152,8 @@ def when_facts(con, rel: str, spec: ColSpec, *, kind: str, read_from: bool = Fal
         # the digits after the seconds' point as the values are written
         frac = "coalesce(max(length(regexp_extract(r, ':[0-9]{2}[.]([0-9]+)', 1))), 0)"
     else:
-        con.execute(f"CREATE OR REPLACE TEMP TABLE {_T} AS SELECT try_cast({c} AS TIMESTAMP) AS v FROM {rel} "
-                    f"WHERE try_cast({c} AS TIMESTAMP) IS NOT NULL")
+        con.execute(f"CREATE OR REPLACE TEMP TABLE {_T} AS SELECT {cast_date(c)} AS v FROM {rel} "
+                    f"WHERE {cast_date(c)} IS NOT NULL")
         # the most digits a microsecond part needs once its trailing zeros go
         frac = ("coalesce(max(CASE WHEN f = 0 THEN 0 ELSE 6 - length(regexp_extract("
                 "lpad(CAST(f AS VARCHAR), 6, '0'), '0*$')) END), 0)")

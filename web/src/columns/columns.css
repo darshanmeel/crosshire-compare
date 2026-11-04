@@ -114,3 +114,8 @@
   #columns > .sec-head .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-left: 0; }
   #columns > .sec-head .actions .btn { padding: 0 9px; gap: 6px; font-size: 11px; letter-spacing: .04em; }
 }
+
+/* Read as: the other ways a column's values could be read */
+.cols-could { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-top: 4px; font-size: 12px; color: var(--fs-text2); }
+.cols-could .lbl { font-size: 11px; }
+.cols-could button { min-height: 32px; padding: 0 6px; border: 0; background: none; color: var(--fs-accent); font: inherit; cursor: pointer; text-decoration: underline; white-space: nowrap; }

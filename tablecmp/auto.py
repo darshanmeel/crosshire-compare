@@ -11,8 +11,8 @@ from .keyformat import Fix, applied, key_format_fixes, suggestion
 from .keys import key_affinity, probe, suggest_keys
 from .profile import profile_tables
 from .sources import Side
-from .sql import ident, lit, scratch
-from .values import DATE_TYPES, FALLBACK_FORMATS, ColSpec, ReadOptions, fold_nulls, raw_text
+from .sql import ident, scratch
+from .values import DATE_TYPES, ColSpec, ReadOptions, cast_date, fold_nulls, raw_text, strptime_any
 from .sources import source_expr
 
 DATEY = re.compile(r"date|day|time|stamp|_dt$|_at$|^dt_|period|month|year", re.I)
@@ -24,11 +24,10 @@ def probe_types(side: Side, specs: list[ColSpec], which: str, opts: ReadOptions
     """One pass over the first PROBE_ROWS rows: how many values of each column read as
     a number, a number once commas go, an ISO date, d/m/y, m/d/y, any known date
     spelling, a date with a time of day, or a boolean."""
-    fl = "[" + ", ".join(lit(f) for f in FALLBACK_FORMATS) + "]"
     aggs, names = [], []
     for sp in specs:
         t = f"trim({fold_nulls(raw_text(side, sp.src(which)), opts.tokens)})"
-        ts = f"coalesce(try_cast({t} AS TIMESTAMP), try_strptime({t}, {fl}))"
+        ts = f"coalesce({cast_date(t)}, {strptime_any(t)})"
         aggs += [f"count({t})",
                  f"count(try_cast({t} AS DOUBLE))",
                  f"count(try_cast(replace({t}, ',', '') AS DOUBLE))",

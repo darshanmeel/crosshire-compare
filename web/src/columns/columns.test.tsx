@@ -85,6 +85,20 @@ test("a changed column, type or case goes to the server with the table's version
   expect(sent(calls, "/api/setup/cell", 2)).toMatchObject({ row: 0, column: "Case", value: "ignore" });
 });
 
+test("could be: the other ways a column reads, one click to change the type", async () => {
+  const ways = { A: { emp_id: [{ type: "number", label: "number" }, { type: "date", format: "%d/%m/%y", label: "date · 27/08/26" }, { type: "text", label: "text" }],
+                      salary: [{ type: "number", label: "number" }, { type: "text", label: "text" }] }, B: {} };
+  const calls = stub(setup(), (url) => (url === "/api/setup/possible-types" ? ways : setup()));
+  mount(<ColumnsSection />);
+  await userEvent.click(await screen.findByRole("button", { name: "Read emp_id as number" }));
+  await waitFor(() => expect(writes(calls, "/api/setup/cell")).toHaveLength(1));
+  expect(sent(calls, "/api/setup/cell")).toMatchObject({ row: 0, column: "Type", value: "number" });
+  expect(screen.queryByRole("button", { name: "Read emp_id as text" })).not.toBeInTheDocument();     // already its type
+  expect(screen.queryByRole("button", { name: /^Read salary as/ })).not.toBeInTheDocument();          // text alone is no choice
+  await userEvent.click(screen.getByRole("button", { name: "Read emp_id as date · 27/08/26" }));
+  expect(getView().view).toBe("values");                                                               // the format is set there
+});
+
 test("Case is offered on text pairs only; blank says what the switch makes it", async () => {
   stub(setup());
   mount(<ColumnsSection />);

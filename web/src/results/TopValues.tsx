@@ -137,15 +137,15 @@ export function RankKey() {
 /** Every side's top ten values of a column as bars on one axis, and every value as a paged table -
  *  over all rows, or a bucket's rows (`subset`); `sides` narrows it to the one side a set of rows has.
  *  `where` (the bucket) goes into its names, so a bucket's column is told apart from the Summary's. */
-export function ValueDetail({ runId, column, names, subset, sides = ["a", "b"], title, where }: {
-  runId: string; column: string; names: [string, string]; subset?: Subset; sides?: ("a" | "b")[]; title?: ReactNode; where?: string;
+export function ValueDetail({ runId, column, names, subset, differs, sides = ["a", "b"], title, where }: {
+  runId: string; column: string; names: [string, string]; subset?: Subset; differs?: string; sides?: ("a" | "b")[]; title?: ReactNode; where?: string;
 }) {
   const of = where ? `${column} in ${where}` : column;
   const [basis, setBasis] = useState<Basis>("all");
   const [view, setView] = useState<"chart" | "table">("chart");
   const [page, setPage] = useState(1);                 // the all-values table's page
   const side: Side = sides.length > 1 ? "both" : sides[0];
-  const q = useValues(runId, { column, subset, side, size: 10, basis });
+  const q = useValues(runId, { column, subset, differs, side, size: 10, basis });
   const d = q.data;
   const ix = sides.map((_, i) => i);
   const nm = (i: number) => names[sides[i] === "a" ? 0 : 1];
@@ -202,7 +202,7 @@ export function ValueDetail({ runId, column, names, subset, sides = ["a", "b"], 
           {d.basis === "nonnull" ? " with a value" : ""}. Axis scaled to {max}%.
         </p>
       )}
-      <AllValues runId={runId} column={column} of={of} subset={subset} sides={sides} names={ix.map(nm)} basis={basis} page={page} setPage={setPage} quiet={!!q.error} />
+      <AllValues runId={runId} column={column} of={of} subset={subset} differs={differs} sides={sides} names={ix.map(nm)} basis={basis} page={page} setPage={setPage} quiet={!!q.error} />
     </div>
   );
 }
@@ -210,11 +210,11 @@ export function ValueDetail({ runId, column, names, subset, sides = ["a", "b"], 
 const PAGE = 25;
 
 /** Every value of a column with its rows and % on each side, a page at a time, scrolling inside the panel. */
-function AllValues({ runId, column, of, subset, sides, names, basis, page, setPage, quiet }: {
-  runId: string; column: string; of: string; subset?: Subset; sides: ("a" | "b")[]; names: string[]; basis: Basis;
+function AllValues({ runId, column, of, subset, differs, sides, names, basis, page, setPage, quiet }: {
+  runId: string; column: string; of: string; subset?: Subset; differs?: string; sides: ("a" | "b")[]; names: string[]; basis: Basis;
   page: number; setPage: (p: number) => void; quiet: boolean;
 }) {
-  const q = useValues(runId, { column, subset, side: sides.length > 1 ? "both" : sides[0], basis, page, size: PAGE });
+  const q = useValues(runId, { column, subset, differs, side: sides.length > 1 ? "both" : sides[0], basis, page, size: PAGE });
   const d = q.data;
   const ix = sides.map((_, i) => i);
   const whole = (i: number) => (d ? d.sides[i].rows - (d.basis === "nonnull" ? d.sides[i].nulls : 0) : 0);

@@ -10,7 +10,7 @@ import duckdb
 
 from .sources import Side, source_expr
 from .sql import COLUMNS_A_STATEMENT, ident, lit, scratch
-from .values import DATE_TYPES, FORMAT_PRESETS, NUMERIC_TYPES, ReadOptions, raw_text
+from .values import DATE_TYPES, FORMAT_PRESETS, NUMERIC_TYPES, ReadOptions, raw_text, strptime_any
 
 SAMPLE_ROWS = 50_000        # the rows the distinct values are taken from
 SHARE = 0.98                # of the values that must convert
@@ -117,7 +117,6 @@ def _decide_sql(col: str, n: int, opts: ReadOptions) -> str:
     """The first pass: one query over the column's distinct values, the cheap checks as
     aggregates, the column's name first."""
     words = "[" + ", ".join(lit(w) for w in BOOL_WORDS) + "]"
-    fl = "[" + ", ".join(lit(f) for f in FORMAT_PRESETS.values()) + "]"
     aggs = [f"{lit(col)} AS col", "count(*)",
             f"count(*) FILTER (WHERE list_contains({words}, lower(v)))",
             f"list(v ORDER BY rn) FILTER (WHERE list_contains({words}, lower(v)))",
@@ -131,7 +130,7 @@ def _decide_sql(col: str, n: int, opts: ReadOptions) -> str:
             "count(*) FILTER (WHERE try_cast(v AS TIMESTAMP) <> CAST(try_cast(v AS DATE) AS TIMESTAMP))",
             # any known spelling at all, the whole list in one go: what sends a column to
             # the second pass, where the spellings are tried one at a time
-            f"count(try_strptime(v, {fl}))"]
+            f"count({strptime_any('v', list(FORMAT_PRESETS.values()))})"]
     return f"SELECT {', '.join(aggs)} " + _values_sql(col, n, opts)
 
 
@@ -155,6 +154,8 @@ def _decide(row: tuple, spellings: tuple | None = None) -> str:
         return "number" if comma is None else f"number · {comma} has thousands separators"
     known = ([(f, ex) for f, (cnt, ex) in zip(fmts, zip(spellings[0::2], spellings[1::2])) if ok(cnt)]
              if spellings else [])
+    short = {f.replace("%y", "%Y") for f, _ in known if "%y" in f}     # 03/11/26: %Y would read the year 26
+    known = [k for k in known if k[0] not in short]
     if ok(iso):
         kind = "timestamp" if timed else "date"
         fmt, ex = known[0] if known else ("ISO, no format needed", iso_ex)
@@ -163,3 +164,47 @@ def _decide(row: tuple, spellings: tuple | None = None) -> str:
         fmt, ex = known[0]
         return f"{'timestamp' if has_time(fmt) else 'date'} · {ex} → {fmt}"
     return ""
+
+
+POSSIBLE_ROWS = 5_000       # the rows possible_types reads a column on
+
+
+def possible_types(side: Side, cols: list[str]) -> dict[str, list[dict]]:
+    """{column: every way its values could be read} - number, boolean, a date or timestamp per
+    spelling that reads SHARE of a sample's values, text always last. A date spelling carries its
+    format and its example, as the Values page's looks-like list names them."""
+    if not cols:
+        return {}
+    con = scratch(ordered=True)
+    sel = ", ".join(f"{raw_text(side, c)} AS {ident(c)}" for c in cols)
+    con.execute(f"CREATE TEMP TABLE pv AS SELECT {sel} FROM (SELECT * FROM {source_expr(side)} LIMIT {POSSIBLE_ROWS})")
+    words = ", ".join(lit(w) for w in BOOL_WORDS)
+    formats = list(FORMAT_PRESETS.items())
+    out: dict[str, list[dict]] = {}
+    for i in range(0, len(cols), COLUMNS_A_STATEMENT):
+        part = cols[i:i + COLUMNS_A_STATEMENT]
+        branches = []
+        for c in part:
+            t = f"nullif(trim(CAST({ident(c)} AS VARCHAR)), '')"
+            fmts = ", ".join(f"count(try_strptime({t}, {lit(f)}))" for _, f in formats)
+            branches.append(f"SELECT {lit(c)}, count({t}), count(try_cast({t} AS DOUBLE)), "
+                            f"count(*) FILTER (WHERE lower({t}) IN ({words})), {fmts} FROM pv")
+        for row in con.execute(" UNION ALL ".join(branches)).fetchall():
+            out[row[0]] = _ways(row[1], row[2], row[3], [(k, f, n) for (k, f), n in zip(formats, row[4:])])
+    return out
+
+
+def _ways(n: int, numbers: int, bools: int, dates: list[tuple[str, str, int]]) -> list[dict]:
+    fits = lambda got: n and got / n >= SHARE
+    ways: list[dict] = []
+    if fits(numbers):
+        ways.append({"type": "number", "label": "number"})
+    if fits(bools):
+        ways.append({"type": "boolean", "label": "boolean"})
+    fit = [(k, f) for k, f, got in dates if fits(got)]
+    short = {f.replace("%y", "%Y") for _, f in fit if "%y" in f}      # 03/11/26: %Y would read the year 26
+    for k, f in fit:
+        if f not in short:
+            kind = "timestamp" if has_time(f) else "date"
+            ways.append({"type": kind, "format": f, "label": f"{kind} · {k}"})
+    return ways + [{"type": "text", "label": "text"}]

@@ -229,7 +229,7 @@ def open_side(block: dict, which: str, passwords: dict[str, str] | None = None, 
     except (TypeError, ValueError):
         raise ConfigError(f"{name}: skip_rows is not a number") from None
     side.quote = str(block.get("quote", '"'))
-    side.bad_rows = str(block.get("bad_rows") or "keep")
+    side.bad_rows = str(block.get("bad_rows") or "set_aside")
     try:
         schema = source_schema(side.csv_path, side.kind, side.delimiter, side.header, file_stamp(side.csv_path),
                                **side.read_opts)

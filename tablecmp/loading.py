@@ -15,7 +15,7 @@ import pandas as pd
 
 from . import connections as cx
 from . import databases as db
-from .sources import (FOLDER_LIST_MAX, Side, apply_names, capture_set_aside, file_stamp, looks_headerless,
+from .sources import (FOLDER_LIST_MAX, Side, apply_names, capture_set_aside, file_stamp, first_fields_said, join_said, looks_headerless,
                       path_allowed, row_count, short_header, snapshot, work_dir)
 
 DEFAULT_NAMES = {"A": "Left", "B": "Right", "P": "Table"}    # what a side is called until it is named
@@ -131,7 +131,7 @@ class ReadAsked:
     stop_at_blank: bool = False       # excel: stop at the first fully empty row
     skip_rows: int = 0                # csv: lines above the header to skip
     quote: str = '"'                  # csv: '"', "'" or "" for none
-    bad_rows: str = "keep"            # csv: keep | set_aside the rows with too few or too many fields
+    bad_rows: str = "set_aside"       # csv: set_aside | keep the rows with too few or too many fields
 
 
 def names_warning(names_text: str, schema: dict[str, str]) -> str:
@@ -184,6 +184,10 @@ def loaded_caption(side: Side) -> str:
 def loaded_notes(side: Side) -> list[tuple[str, str]]:
     """The warnings and errors under a loaded side, as (tone, text)."""
     out: list[tuple[str, str]] = []
+    if side.first_cut_rows:
+        out.append(("warning", first_fields_said(side)))
+    if side.fixed_rows:
+        out.append(("info", join_said(side)))
     if side.rows == 0:
         out.append(("warning", "The filter left no rows." if side.cut else
                     "The fetch returned no rows." if side.is_database else "The file has no rows."))
@@ -222,6 +226,8 @@ def retire(old: Side, new: Side, held_fetch: str = "") -> None:
         Path(old.cache_path).unlink(missing_ok=True)
     if old.set_aside_path and old.set_aside_path != new.set_aside_path:
         Path(old.set_aside_path).unlink(missing_ok=True)
+    if old.clean_path and old.clean_path != new.clean_path:
+        Path(old.clean_path).unlink(missing_ok=True)
     if old.is_database and old.csv_path and old.csv_path != new.csv_path and old.csv_path != held_fetch:
         Path(old.csv_path).unlink(missing_ok=True)
 
@@ -299,7 +305,7 @@ def config_boxes(conf: dict, folders: set[str]) -> dict:
                        folder=str(b["folder"]) if known else "", file=str(b["file"]) if known else "",
                        sheet=str(b.get("sheet") or ""), cell_range=str(b.get("cell_range") or ""),
                        stop_at_blank=bool(b.get("stop_at_blank")), skip_rows=int(b.get("skip_rows") or 0),
-                       quote=str(b.get("quote", '"')), bad_rows=str(b.get("bad_rows") or "keep"))
+                       quote=str(b.get("quote", '"')), bad_rows=str(b.get("bad_rows") or "set_aside"))
         out[tag] = box
     return out
 

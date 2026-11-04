@@ -17,7 +17,7 @@ from ..keys import any_null, combo
 from ..loading import DEFAULT_NAMES
 from ..outputs import default_save_folder, run_id
 from ..sql import ident, lit
-from ..values import ColSpec
+from ..values import ColSpec, cast_date
 from . import jobs
 from . import profile_held
 from . import setupws as sw
@@ -175,7 +175,7 @@ def histogram(con, rel: str, spec: ColSpec, bins: int) -> list[dict]:
     timestamps are binned on their epoch seconds and given back as ISO text."""
     c = ident(spec.canon)
     x = (f"try_cast({c} AS DOUBLE)" if spec.kind == "number"
-         else f"epoch(try_cast({c} AS TIMESTAMP))")
+         else f"epoch({cast_date(c)})")
     x = f"(SELECT {x} AS x FROM {rel}) WHERE isfinite(x)"   # NaN and Infinity read as numbers but have no bin
     lo, hi = con.execute(f"SELECT min(x), max(x) FROM {x}").fetchone()
     if lo is None:
@@ -233,7 +233,7 @@ def _when_ok(t: str) -> str:
 
 def _reads(v: str, kind: str) -> list[tuple[str, str]]:
     """(form, the value read as a TIMESTAMP in it) for a date or a timestamp."""
-    iso = (f"CASE WHEN length({v}) {'<=' if kind == 'date' else '>'} 10 THEN try_cast({v} AS TIMESTAMP) END")
+    iso = (f"CASE WHEN length({v}) {'<=' if kind == 'date' else '>'} 10 THEN {cast_date(v)} END")
     return [("ISO", iso)] + [(f, f"try_strptime(rtrim({v}, 'Z'), {lit(f)})")
                              for f in (DATE_FORMATS if kind == "date" else TIME_FORMATS)]
 
@@ -389,7 +389,7 @@ def parts(con, rel: str, spec: ColSpec, n: int, when: str = "", as_number: bool 
             groups = [("Digits before the point", _band(b, 15), "k"), ("Places after the point", _band(a, 9), "k"),
                       ("Before · after", f"({_band(b, 15)}) || ' · ' || ({_band(a, 9)})", "n")]
         elif spec.kind in ("date", "timestamp"):
-            con.execute(f"CREATE TEMP VIEW t AS SELECT v FROM (SELECT try_cast({c} AS TIMESTAMP) AS v FROM {rel}) "
+            con.execute(f"CREATE TEMP VIEW t AS SELECT v FROM (SELECT {cast_date(c)} AS v FROM {rel}) "
                         "WHERE v IS NOT NULL")
             groups = _when_groups(spec.kind)
         else:

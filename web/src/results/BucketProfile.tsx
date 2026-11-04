@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import type { RunView } from "../compare/types";
 import { Expander } from "../ui/Expander";
 import { Icon } from "../ui/icons";
-import { ErrorNote, InfoTip, Loading, num, Seg } from "../ui/kit";
+import { ErrorNote, InfoTip, Loading, num, Seg, Tabs } from "../ui/kit";
 import { ColumnPick, notCompared } from "./ColumnPick";
 import { marks } from "../ui/marks";
 import { Pager } from "./DistinctValues";
@@ -16,19 +16,20 @@ import { Findings, type Finding } from "../profiling/column/Findings";
 import "./values.css";
 import { qs, type BucketBody, type BucketFacts, type Frame, type SideFacts } from "./types";
 
-/** Profile by bucket, folded under the Summary: each ticked column's values on one bucket of rows
- * (keys matched, matched and same, matched but different, only in A, only in B) - the top ten as
- * bars and every value as a paged table, as an opened row of the Columns table. The bucket is held
+/** Profile by bucket, open under the Summary: the ticked columns' values on one bucket of rows (keys
+ * matched, matched and same, matched but different, only in A, only in B), a tab a column - the top
+ * ten as bars and every value as a paged table, counted when its tab opens. The bucket is held
  * by its id across runs (its label carries this run's counts). */
 export function BucketProfile({ run, buckets, first, sidedTip }:
   { run: RunView; buckets: { id: string; label: string }[]; first: string; sidedTip: string }) {
   const [held, setHeld] = usePick<string>("bucket_id", "");
   const bucket = buckets.some((b) => b.id === held) ? held : first;
-  // null: the plan's own columns (the key, and where rows differ the worst three); a list: exactly those, in the order ticked.
+  // null: the plan's own columns (the three that differ most, or the key); a list: exactly those, in the order ticked.
   const [picked, setPicked] = usePick<string[] | null>(`bucket_pick_${bucket}`, null);
   // Simple: the top values, as it always was; Extended adds each column's facts as pills
   const [depth, setDepth] = usePick<"simple" | "extended">("bucket_depth", "simple");
-  const [open, setOpen] = usePick("fold_bucket", false);     // a closed fold under the Summary, kept as left
+  const [open, setOpen] = usePick("fold_bucket", true);      // an open fold under the Summary, kept as left
+  const [tab, setTab] = usePick<string>(`bucket_tab_${bucket}`, "");
   const ask = picked ? `${qs("add", picked)}${picked.length ? "&" : "?"}exact=true` : "";
   const q = useQuery({
     // the last body stays while columns are ticked, never under another bucket
@@ -47,6 +48,8 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
   const now = picked ?? d?.shown ?? [];
   const nc = notCompared(d?.groups);
   const where = (buckets.find((b) => b.id === bucket)?.label ?? bucket).replace(/ \([\d,]+\)$/, "");   // its name, without the count
+  const counted = d ? inOrder(d.columns, now) : [];
+  const p = counted.find((c) => c.column === tab) ?? counted[0];     // the tab left, or the first when it was unticked
   return (
     <section className="panel fold buckets" aria-label="Profile by bucket">
       <Expander open={open} onToggle={setOpen} title={<>Profile by bucket <span className="sub">the top values of a set of rows</span></>}>
@@ -57,7 +60,7 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
             <Seg label="Column profile" mini value={depth} onChange={setDepth}
               options={[{ label: "Simple", value: "simple", title: "The top values of each column" },
                         { label: "Extended", value: "extended", title: "Nulls, distinct, top value, range, shapes, first and last characters and spellings - a side each" }]} />
-            <InfoTip label="About Profile by bucket" text="The key is counted (and where rows differ the three columns that differ most) - tick any other. Not compared columns show in orange. Paired rows count both sides, one-sided rows their own side." />
+            <InfoTip label="About Profile by bucket" text="A tab for each ticked column. Where keys matched, the three columns that differ most, each counted on the rows where it differs; on the other buckets the key, or any three columns with no key. Tick more below. Not compared columns show in orange. Paired rows count both sides, one-sided rows their own side." />
           </div>
         </div>
         {sidedTip && <p className="caption">{marks(sidedTip)}</p>}
@@ -77,11 +80,15 @@ export function BucketProfile({ run, buckets, first, sidedTip }:
             {d.groups.length > 0 && <ColumnPick label="Columns to count" groups={d.groups} shown={d.shown} now={now} set={setPicked} />}
             {d.empty
               ? <p className="caption">{d.empty}</p>
-              : <div className="bucket-grids">{inOrder(d.columns, now).map((p) => (
-                  <div key={`${d.subset}:${p.sides.join("")}:${p.column}`} className={nc.has(p.column) ? "nc" : undefined}>
-                    {facts && <ColumnFacts sides={facts.get(p.column)} loading={f.isFetching} failed={!!f.error} />}
-                    <ValueDetail runId={run.id} column={p.column} names={run.names} subset={d.subset} sides={p.sides} title={marks(p.title)} where={where} />
-                  </div>))}</div>}
+              : <>
+                  <Tabs label="Column" value={p.column} onChange={setTab} items={counted.map((c) => ({ label: c.column, value: c.column }))} />
+                  <div className="bucket-grids">
+                    <div key={`${d.subset}:${p.sides.join("")}:${p.column}`} className={nc.has(p.column) ? "nc" : undefined}>
+                      {facts && <ColumnFacts sides={facts.get(p.column)} loading={f.isFetching} failed={!!f.error} />}
+                      <ValueDetail runId={run.id} column={p.column} names={run.names} subset={d.subset} differs={p.differs || undefined} sides={p.sides} title={marks(p.title)} where={where} />
+                    </div>
+                  </div>
+                </>}
           </>
         )}
       </div>

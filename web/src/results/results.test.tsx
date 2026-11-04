@@ -6,7 +6,7 @@ import { beforeEach, vi } from "vitest";
 import type { CompareState, RunView } from "../compare/types";
 import { getView, setView } from "../shell/view";
 import { compareState } from "../setup/testkit";
-import { body, json, mount, type Call } from "../sources/testkit";
+import { body, json, mount, view, type Call } from "../sources/testkit";
 import { serveKeyValues, serveValues, valuesBody } from "./testkit";
 import { BucketProfile } from "./BucketProfile";
 import { RankKey, StackStrip } from "./TopValues";
@@ -59,7 +59,8 @@ const bucketBody = (bucket: string) => ({
       [["E1", 40, 12, 30, 15, "salary, department"], ["E2-a-very-long-key-value-that-must-not-break-the-row", 8, 8, 100, 8, "salary"]]) }],
     after: "**Every column across these rows** - its values, counted on each side",
   } : null,
-  columns: [{ column: "emp_id", title: "**emp_id** · key", sides: bucket === "left" ? ["a"] : ["a", "b"] }],
+  columns: [{ column: "emp_id", title: "**emp_id** · key", sides: bucket === "left" ? ["a"] : ["a", "b"] },
+    ...(bucket === "differ" ? [{ column: "salary", differs: "salary", title: "**salary** · :red[12 rows differ]", sides: ["a", "b"] }] : [])],
   empty: "",
   shown: ["emp_id"], groups: [{ title: "Key columns", items: [{ name: "emp_id", label: "emp_id" }] },
                               { title: "Compared columns", items: [{ name: "department", label: "department" }] }],
@@ -121,6 +122,24 @@ function serve(calls: Call[], st: () => CompareState = () => state()) {
     return json({ detail: "not here" }, 404);
   });
 }
+
+test("rows set aside have their own tab, only when a side has any", async () => {
+  vi.stubGlobal("fetch", serve([]));
+  const { unmount } = mount(<ResultsPage />);
+  await screen.findByRole("tab", { name: /^Summary/ });
+  expect(screen.queryByRole("tab", { name: /Rows set aside/ })).not.toBeInTheDocument();
+  unmount();
+  const inner = serve([], () => state({ run: { ...RUN, set_aside: { A: 2, B: 0 } } }));
+  const info = { rows: 2, kept: 2, fields: 3, said: "2 rows set aside - 2 with 4 fields (the header has 3)", by: [{ fields: 4, rows: 2 }] };
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === "/api/sources") return json(body({ sides: { A: view("A", { set_aside: info }), B: view("B"), P: view("P") } }));
+    if (url.startsWith("/api/sources/A/set-aside?")) return json({ ...info, page: 1, size: 25, lines: [{ line: 7, fields: 4, raw: "1,a,12,33" }] });
+    return inner(url, init);
+  }));
+  mount(<ResultsPage />);
+  await userEvent.click(await screen.findByRole("tab", { name: /Rows set aside/ }));
+  expect(await screen.findByText("1,a,12,33")).toBeInTheDocument();
+});
 
 const side = (side: "A" | "B", label: string, nulls: number) => ({
   side, label, rows: 649, nulls, null_pct: nulls ? 1.54 : 0, distinct: 649, top: { value: "E1", n: 1, pct: 0.15 },
@@ -197,8 +216,6 @@ test("the Summary: tiles, the Columns panel with its one-sided foot, and Profile
   // the key line is said once, in the caption under the tiles
   expect(screen.getByText("emp_id", { selector: ".summary > .caption b" }).parentElement).toHaveTextContent(
     "Rows are matched on emp_id - 2,960 rows matched · Match figures are measured on the 2,960 rows that paired.");
-  expect(screen.queryByRole("group", { name: "Bucket" })).toBeNull();          // Profile by bucket is a closed fold
-  await userEvent.click(screen.getByText("Profile by bucket"));
   const bucket = await screen.findByRole("group", { name: "Bucket" });
   expect(within(bucket).getByRole("button", { name: "Matched but different (649)" })).toHaveAttribute("aria-pressed", "true");
   expect(await screen.findByText("Every column across these rows")).toBeInTheDocument();
@@ -225,6 +242,13 @@ test("the Summary: tiles, the Columns panel with its one-sided foot, and Profile
   expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=emp_id&subset=differ&side=both&basis=all&size=10");
   expect(screen.getByRole("table", { name: "Values of emp_id in Matched but different" })).toBeInTheDocument();
   expect(screen.getByRole("group", { name: "Percent of for emp_id in Matched but different" })).toBeInTheDocument();
+  // a tab a column: only the open one is counted; one that differs is counted on the rows where it differs, chart and table
+  expect(calls.some(([u]) => u.includes("column=salary&subset=differ"))).toBe(false);
+  await userEvent.click(screen.getByRole("tab", { name: "salary" }));
+  await screen.findByRole("list", { name: "Top values of salary in Matched but different" });
+  expect(screen.queryByRole("list", { name: "Top values of emp_id in Matched but different" })).toBeNull();
+  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=salary&subset=differ&side=both&differs=salary&basis=all&size=10");
+  expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=salary&subset=differ&side=both&differs=salary&basis=all&page=1&size=25");
   await userEvent.click(within(bucket).getByRole("button", { name: "Keys matched (2,960)" }));
   await waitFor(() => expect(calls.some(([u]) => u === "/api/results/r1/buckets/matched")).toBe(true));
   const pick = await screen.findByRole("group", { name: "Columns to count" });
@@ -245,7 +269,6 @@ test("Profile by bucket on one side's rows shows that side alone", async () => {
   const calls: Call[] = [];
   vi.stubGlobal("fetch", serve(calls));
   mount(<BucketProfile run={RUN} buckets={[{ id: "left", label: "Only in HR (40)" }]} first="left" sidedTip="" />);
-  await userEvent.click(screen.getByText("Profile by bucket"));
   const chart = await screen.findByRole("list", { name: "Top values of emp_id in Only in HR" });
   expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=emp_id&subset=only_a&side=a&basis=all&size=10");
   expect(within(chart).getAllByRole("listitem")[0].querySelectorAll(".vc-share")).toHaveLength(1);
@@ -259,7 +282,6 @@ test("Profile by bucket: a bucket opened for the first time never shows another 
   vi.stubGlobal("fetch", serve(calls));
   mount(<BucketProfile run={RUN} first="left" sidedTip=""
     buckets={[{ id: "left", label: "Only in HR (40)" }, { id: "matched", label: "Keys matched (2,960)" }]} />);
-  await userEvent.click(screen.getByText("Profile by bucket"));
   await screen.findByRole("list", { name: "Top values of emp_id in Only in HR" });
   await userEvent.click(within(screen.getByRole("group", { name: "Bucket" })).getByRole("button", { name: "Keys matched (2,960)" }));
   const chart = await screen.findByRole("list", { name: "Top values of emp_id in Keys matched" });
@@ -365,19 +387,19 @@ test("One-sided rows: B's panel reads B's own column names, from the Summary's l
   expect(screen.getByText("Dept", { selector: ".pattern span" })).toBeInTheDocument();
 });
 
-test("the Summary's two folds start closed and stay as they were left", async () => {
+test("the Summary's folds start Profile by bucket open, Columns & values closed, and stay as they were left", async () => {
   vi.stubGlobal("fetch", serve([]));
   mount(<ResultsView run={RUN} limit={1000} />);
   await screen.findByRole("table", { name: "Columns" });
   const fold = (name: string) => screen.getByRole("region", { name }).querySelector("details")!;
-  expect(fold("Profile by bucket").open).toBe(false);
+  expect(fold("Profile by bucket").open).toBe(true);
   expect(fold("Columns & values").open).toBe(false);
   await userEvent.click(screen.getByText("Profile by bucket"));
-  expect(fold("Profile by bucket").open).toBe(true);
+  expect(fold("Profile by bucket").open).toBe(false);
   cleanup();
   mount(<ResultsView run={RUN} limit={1000} />);
   await screen.findByRole("table", { name: "Columns" });
-  expect(fold("Profile by bucket").open).toBe(true);
+  expect(fold("Profile by bucket").open).toBe(false);
   expect(fold("Columns & values").open).toBe(false);
 });
 
@@ -399,7 +421,6 @@ test("Profile by bucket: Simple by default, Extended reads each column's facts a
   const calls: Call[] = [];
   vi.stubGlobal("fetch", serve(calls));
   mount(<ResultsView run={RUN} limit={1000} />);
-  await userEvent.click(await screen.findByText("Profile by bucket"));
   const depth = await screen.findByRole("group", { name: "Column profile" });
   expect(within(depth).getByRole("button", { name: "Simple" })).toHaveAttribute("aria-pressed", "true");
   await screen.findByText("Every column across these rows");
@@ -446,17 +467,17 @@ test("the Summary's top values: a strip of five a side, a histogram for numbers,
   // the shades fade 1st to 5th, null is hatched, the rest take the other values' grey
   const tones = within(list).getAllByRole("listitem").map((li) => li.querySelector(".vc-seg.a")!.classList[1]);
   expect(tones).toEqual(["r1", "r2", "r3", "r4", "r5", "rnull", "ro", "ro", "ro", "ro"]);
-  expect(screen.getByText(/^Top 10 of 41 values cover 87\.60% of HR rows and/)).toHaveTextContent("Axis scaled to 50%.");
+  expect(within(list.closest(".vc-detail-body") as HTMLElement).getByText(/^Top 10 of 41 values cover 87\.60% of HR rows and/)).toHaveTextContent("Axis scaled to 50%.");
   expect(calls.map(([u]) => u)).toContain("/api/results/r1/values?column=department&side=both&basis=all&size=10");
   const every = await screen.findByRole("table", { name: "Values of department" });
   expect(asked(calls, "column=department&side=both&basis=all&page=1&size=25")).toBe(true);
   expect(within(every).getAllByRole("row")).toHaveLength(26);
-  expect(screen.getByText(/^Values/, { selector: ".vc-all-foot span" })).toHaveTextContent("Values 1–25 of 41");
-  await userEvent.click(screen.getByRole("button", { name: "Next" }));
+  expect(within(every.closest(".vc-all") as HTMLElement).getByText(/^Values/, { selector: ".vc-all-foot span" })).toHaveTextContent("Values 1–25 of 41");
+  await userEvent.click(within(screen.getByRole("navigation", { name: "Pages of department" })).getByRole("button", { name: "Next" }));
   await waitFor(() => expect(within(every).getAllByRole("row")).toHaveLength(17));
   expect(asked(calls, "column=department&side=both&basis=all&page=2&size=25")).toBe(true);
   expect(screen.getByRole("navigation", { name: "Pages of department" })).toHaveTextContent("Page 2 of 2");
-  await userEvent.click(screen.getByRole("button", { name: "% of non-null" }));
+  await userEvent.click(within(screen.getByRole("group", { name: "Percent of" })).getByRole("button", { name: "% of non-null" }));
   await waitFor(() => expect(asked(calls, "column=department&side=both&basis=nonnull&size=10")).toBe(true));
   await waitFor(() => expect(asked(calls, "column=department&side=both&basis=nonnull&page=1&size=25")).toBe(true));   // back to page one
   await userEvent.click(within(screen.getByRole("group", { name: "Show values as" })).getByRole("button", { name: "Table" }));

@@ -64,6 +64,14 @@ export const STALE_TABLE = "The column table changed since - it is shown again a
 
 export { errorText } from "../api/client";
 
+/** GET /api/setup/possible-types - every way a column could be read, per side. */
+export type PossibleType = { type: string; label: string; format?: string };
+export type PossibleTypes = Record<"A" | "B", Record<string, PossibleType[]>>;
+export function usePossibleTypes(rev: unknown) {
+  return useQuery({ queryKey: ["setup-possible-types", rev], retry: false, staleTime: Infinity,
+                    queryFn: () => api.get<PossibleTypes>("/api/setup/possible-types") });
+}
+
 export function useSetup() {
   return useQuery({ queryKey: SETUP_KEY, queryFn: () => api.get<SetupView>("/api/setup") });
 }

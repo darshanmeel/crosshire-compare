@@ -31,9 +31,10 @@ def test_a_bucket_counts_its_rows_and_adds_what_is_asked_for(c):
     base, key = f"/api/results/{run['id']}/buckets", COUNTS["key"]
     d = c.get(f"{base}/differ").json()
     assert d["by_key"]["title"].startswith("**By key value** - where the :red[") and d["by_key"]["tables"]
-    assert d["subset"] == "differ" and d["shown"][0] == key                       # the key is ticked as well
+    assert d["subset"] == "differ" and key not in d["shown"] and len(d["shown"]) == 3    # the three that differ most
     cols = [x["column"] for x in d["columns"]]
-    assert cols == d["shown"] and d["columns"][0]["title"] == f"**{key}** · key"
+    assert cols == d["shown"] and d["columns"][0]["title"].endswith("rows differ]")
+    assert c.get(f"{base}/differ", params={"add": [key], "exact": True}).json()["columns"][0]["title"] == f"**{key}** · key"
     extra = next(o["name"] for g in d["groups"] for o in g["items"] if o["name"] not in cols)
     more = c.get(f"{base}/differ", params={"add": [extra]}).json()
     assert [x["column"] for x in more["columns"]] == cols + [extra]
@@ -44,7 +45,8 @@ def test_a_bucket_counts_its_rows_and_adds_what_is_asked_for(c):
     left = c.get(f"{base}/left").json()
     assert left["groups"][0] == {"title": "Key columns", "items": [{"name": key, "label": key}]}
     assert left["by_key"] is None and left["empty"] == "" and left["subset"] == "only_a"
-    assert left["columns"] == [{"column": key, "title": f"**{key}** · key", "sides": ["a"]}]
+    assert left["columns"][0] == {"column": key, "differs": "", "title": f"**{key}** · key", "sides": ["a"]}
+    assert len(left["columns"]) == 1                                             # the key alone
     assert c.get(f"{base}/nowhere").status_code == 404
 
 

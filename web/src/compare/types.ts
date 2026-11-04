@@ -6,7 +6,7 @@ export type Segment = { text: string; bold: boolean };
 export type VerdictView = { tone: "ok" | "warn" | "bad"; word: string; when: string; segments: Segment[] };
 export type RunView = {
   id: string; at: string; pair: string; mode: "key" | "hash" | "position"; names: [string, string];
-  keys: string[]; columns: string[]; matched: number; diff_rows: number; stale: boolean; verdict: VerdictView;
+  keys: string[]; columns: string[]; matched: number; diff_rows: number; stale: boolean; verdict: VerdictView; set_aside?: { A: number; B: number };
 };
 export type CompareSettings = { display_rows: number; auto_rerun: boolean; out_fmt: "csv" | "parquet" | "both"; auto_profile: boolean };
 export type CompareState = {

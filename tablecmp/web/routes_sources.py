@@ -19,7 +19,7 @@ from .. import databases as db
 from .. import excel, filepick, loading
 from ..connforms import CAP_DEFAULT
 from ..sources import (SET_ASIDE_KEPT, BadQuote, FileChanged, Side, add_derived, column_values, file_stamp, folder_files,
-                       in_folder, kind_of, path_allowed, preview_rows, quick_clause, quote_problem, read_opts,
+                       first_fields_preview, in_folder, join_preview, kind_of, path_allowed, preview_rows, quick_clause, quote_problem, read_opts,
                        set_aside_page, slug, source_schema, work_dir)
 from .. import setup as su
 from . import jobs, runs
@@ -61,7 +61,7 @@ class PickIn(BaseModel):
     stop_at_blank: bool = False                     # an Excel file: the table ends at its first empty row
     skip_rows: int = Field(0, ge=0, le=1_000_000)   # a CSV: lines above the header to skip
     quote: Literal['"', "'", ""] = '"'               # a CSV: the quote character, "" = none
-    bad_rows: Literal["keep", "set_aside"] = "keep"  # a CSV: rows with too few or too many fields
+    bad_rows: str = Field("set_aside", pattern=r"^(keep|set_aside|join_numbers|first:[1-9][0-9]{0,4})$")  # a CSV: rows with too few or too many fields
 
 
 class BrowseIn(BaseModel):
@@ -235,6 +235,26 @@ def schema(tag: str, pick: PickIn, ws: Workspace = Depends(workspace)) -> dict:
         else:
             out["columns"] = [{"name": n, "type": t} for n, t in found.items()]
     return out
+
+
+@router.post("/{tag}/first-fields")
+def first_fields_view(tag: str, pick: PickIn, n: int = Query(0, ge=0, le=99_999), join: bool = False,
+                      ws: Workspace = Depends(workspace)) -> dict:
+    """A CSV's first rows cut to their first n fields (0: as many as the header has) or, with `join`,
+    with their split numbers joined, and the field counts in a sample - what to look at before
+    reading a file that way. Read-only."""
+    _tag(tag)
+    got = resolve_pick(ws, tag, pick)
+    if got.error or not got.path or kind_of(got.path) != "csv":
+        raise HTTPException(400, got.error or "Only a CSV has fields to cut.")
+    delim, header, opts = read_as("csv", pick)
+    try:
+        names = list(source_schema(got.path, "csv", delim, header, file_stamp(got.path), **{**opts, "bad_rows": "set_aside"}))
+        if join:
+            return join_preview(got.path, delim, header, opts["skip_rows"], opts["quote"], names)
+        return first_fields_preview(got.path, delim, header, opts["skip_rows"], opts["quote"], n, names)
+    except (duckdb.Error, ValueError) as exc:
+        raise HTTPException(400, quote_problem(exc, got.label) if isinstance(exc, duckdb.Error) and quote_problem(exc, got.label) else str(exc)) from exc
 
 
 class LoadIn(PickIn):

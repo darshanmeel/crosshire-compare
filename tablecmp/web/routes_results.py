@@ -17,7 +17,7 @@ from ..compare import (bucket_rows, cd_occ, cells_table, column_ledger, diffs_by
                        paired_where, row_key, side_filter, side_labels, value_pairs)
 from ..profile import label
 from ..sql import ident, lit, memory_limit_bytes, scratch
-from ..values import BYTES_A_CELL, HOLD_SHARE, ColSpec
+from ..values import BYTES_A_CELL, HOLD_SHARE, ColSpec, cast_date
 from . import runs
 from . import setupws as sw
 from .routes_profiling import HIST_KINDS, _when, histogram
@@ -109,10 +109,12 @@ SUBSETS = {"matched": "matched", "same": "same", "differ": "differ", "left": "on
 
 def bucket_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> dict:
     """One bucket: which columns it counts and how - each column's values come from /values with
-    `subset`, on the bucket's rows. The columns are the plan's own (the key, and on the paired
-    buckets that differ the worst three) plus `add`, or - with `exact` - `add` alone, so a reader
-    can untick a default. `groups` lists every column the bucket can count, as the page offers
-    them: the key, the compared columns, the ones not compared."""
+    `subset`, on the bucket's rows. The columns are the plan's own (the three that differ most, or
+    the key) plus `add`, or - with `exact` - `add` alone, so a
+    reader can untick a default. On Matched but different a column that differs carries `differs`:
+    its values are counted on the rows where that column itself differs. `groups` lists every
+    column the bucket can count, as the page offers them: the key, the compared columns, the ones
+    not compared."""
     NA, NB = run["names"]
     res = run["result"]
     keys, cols = rs.run_keys(run), rs.run_columns(run)
@@ -138,9 +140,12 @@ def bucket_body(run: dict, bucket: str, add: list[str], exact: bool = False) -> 
         {"title": "Not compared", "tone": "nc", "items": [item(c) for c in own if c not in keys and c not in cols]},
     ) if g["items"]]
     one = {"left": ["a"], "right": ["b"]}.get(bucket)
-    out["columns"] = [{"column": col,
+    by = (res.diffs_by_column or {}) if bucket == "differ" else {}
+    differs = lambda c: c if by.get(c) and c not in keys and c in cols else ""
+    out["columns"] = [{"column": col, "differs": differs(col),
                        "title": f"**{col}**" + (" · key" if col in keys else
-                                                f" · :orange[only in {side_name[own[col]]}]" if col in own else ""),
+                                                f" · :orange[only in {side_name[own[col]]}]" if col in own else
+                                                f" · :red[{by[col]:,} rows differ]" if differs(col) else ""),
                        "sides": one or ([own[col].lower()] if col in own else ["a", "b"])}
                       for col in _counted(keys, shown, others, add, exact)]
     out["empty"] = "" if out["columns"] else "Tick a column to count its values on these rows."
@@ -466,7 +471,7 @@ def _value_hist(run: dict, subset: str, side: str, column: str, differs: str, ki
     k = (subset, side, column, differs, bins)
     if k not in cache:
         con, out = run["con"], []
-        x = "try_cast(v AS DOUBLE)" if kind == "number" else "epoch(try_cast(v AS TIMESTAMP))"
+        x = "try_cast(v AS DOUBLE)" if kind == "number" else f"epoch({cast_date('v')})"
         q = "quantile_cont" if kind == "number" else "quantile_disc"
         for s in ("a", "b") if side == "both" else (side,):
             rows = _value_rows(run, subset, s, column, differs, need=False)

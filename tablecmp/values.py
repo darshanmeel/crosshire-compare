@@ -25,9 +25,30 @@ NUMERIC_TYPES = ("INT", "DECIMAL", "NUMERIC", "DOUBLE", "FLOAT", "REAL", "BIGINT
 DATE_TYPES = ("DATE", "TIMESTAMP", "DATETIME")
 TYPES = ["text", "number", "date", "timestamp", "boolean"]
 CASES = ["", "ignore", "exact"]         # a text pair's case: blank follows the global switch
+# two-digit years before %Y/%m/%d and %d/%m/%Y, which read 03/11/26 as the year 3 or 26; %n takes
+# up to nine digits of a fraction, %f six
 FALLBACK_FORMATS = ["%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S",
+                    "%d/%m/%y %H:%M:%S.%n", "%d/%m/%y %H:%M:%S", "%d/%m/%y", "%d-%m-%y",
                     "%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y%m%d",
                     "%d-%b-%Y", "%d %b %Y", "%b %d %Y"]
+
+
+def cast_date(t: str, to: str = "TIMESTAMP") -> str:
+    """try_cast to a date type, but not a value starting with a day: a cast reads 03/11/26 or
+    03-11-26 as the year 3. Those are left to the formats; 2026/11/03 still casts."""
+    return f"CASE WHEN NOT regexp_matches(CAST({t} AS VARCHAR), '^\\s*[0-9][0-9]?[-/]') THEN try_cast({t} AS {to}) END"
+
+
+def strptime_any(t: str, formats: list[str] | None = None) -> str:
+    """The first of the formats that reads t, as a plain TIMESTAMP. A %n format is read on its own:
+    one in a list makes the whole read TIMESTAMP_NS, which 9999-12-31 overflows."""
+    formats = FALLBACK_FORMATS if formats is None else formats
+    plain = [lit(f) for f in formats if "%n" not in f]
+    reads = [f"try_strptime({t}, [{', '.join(plain)}])"] if plain else []
+    reads += [f"CAST(try_strptime({t}, {lit(f)}) AS TIMESTAMP)" for f in formats if "%n" in f]
+    return f"coalesce({', '.join(reads)})"
+
+
 NULL_TOKENS_DEFAULT = "NULL, \\N, N/A, NA, NaN, None, (null)"
 
 # what a date / time value looks like -> the strptime format that reads it
@@ -35,7 +56,8 @@ FORMAT_PRESETS = {
     "2026-08-27": "%Y-%m-%d", "27/08/2026": "%d/%m/%Y", "08/27/2026": "%m/%d/%Y",
     "20260827": "%Y%m%d", "27-08-2026": "%d-%m-%Y", "27.08.2026": "%d.%m.%Y",
     "27-Aug-2026": "%d-%b-%Y", "27 August 2026": "%d %B %Y", "Aug 27, 2026": "%b %d, %Y",
-    "27/08/26": "%d/%m/%y", "2026-08-27 10:11:12": "%Y-%m-%d %H:%M:%S",
+    "27/08/26": "%d/%m/%y", "27/08/26 10:11:12": "%d/%m/%y %H:%M:%S",
+    "27/08/26 10:11:12.123456789": "%d/%m/%y %H:%M:%S.%n", "2026-08-27 10:11:12": "%Y-%m-%d %H:%M:%S",
     "2026-08-27 10:11:12.123": "%Y-%m-%d %H:%M:%S.%g",
     "2026-08-27 10:11:12.123456": "%Y-%m-%d %H:%M:%S.%f",
     "2026-08-27T10:11:12": "%Y-%m-%dT%H:%M:%S", "27/08/2026 10:11": "%d/%m/%Y %H:%M",
@@ -417,10 +439,9 @@ def typed_exprs(text: str, kind: str, fmt: str = "", trim_text: bool = True) -> 
         return dbl, (f"coalesce({fast}, {strip.format(dec38)}, CAST({dbl} AS VARCHAR), {text})")
     if kind in ("date", "timestamp"):
         if fmt.strip():
-            ts = f"try_strptime({t}, {lit(fmt.strip())})"
+            ts = strptime_any(t, [fmt.strip()])
         else:
-            fl = "[" + ", ".join(lit(f) for f in FALLBACK_FORMATS) + "]"
-            ts = f"coalesce(try_cast({t} AS TIMESTAMP), try_strptime({t}, {fl}))"
+            ts = f"coalesce({cast_date(t)}, {strptime_any(t)})"
         if kind == "date":
             ts = f"CAST({ts} AS DATE)"
         return ts, f"coalesce(CAST({ts} AS VARCHAR), {text})"

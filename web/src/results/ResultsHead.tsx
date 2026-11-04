@@ -49,6 +49,7 @@ export function ResultsHead({ run, stale }: { run: RunView; stale: boolean }) {
   const s = useSummary(run.id).data;
   const [NA, NB] = run.names;
   const c = s ? countsOf(s) : null;
+  const aside = (run.set_aside?.A ?? 0) + (run.set_aside?.B ?? 0);
   const what = run.mode === "key" ? "distinct keys across both files" : "rows across both files";
   return (
     <div className="results-head">
@@ -62,6 +63,7 @@ export function ResultsHead({ run, stale }: { run: RunView; stale: boolean }) {
         { label: "Summary", value: "summary" },
         { label: "Differing rows", value: "rows", count: run.diff_rows },
         { label: "One-sided rows", value: "onesided", count: c ? c.onlyA + c.onlyB : undefined },
+        ...(aside ? [{ label: "Rows set aside", value: "aside" as const, count: aside }] : []),
         { label: "Report", value: "report" },
         { label: "Downloads", value: "downloads" },
       ]} />

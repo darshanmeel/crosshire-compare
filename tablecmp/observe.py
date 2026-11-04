@@ -19,7 +19,7 @@ from .keys import ID_WORDS, MAX_KEY_COLS, RELATED, beyond_chance, combo         
 from .profile import show
 from .sources import Side, source_expr
 from .sql import columns_a_statement, ident, lit, memory_limit_bytes
-from .values import BYTES_A_CELL, HOLD_SHARE, ColSpec, ReadOptions, fold_nulls, raw_text
+from .values import BYTES_A_CELL, HOLD_SHARE, ColSpec, ReadOptions, cast_date, fold_nulls, raw_text
 
 OUTLIER_COLS = ["Column", "Type", "P1", "P5", "P25", "Median", "P75", "P95", "P99", "Std dev",
                 "Low fence", "High fence", "Outliers", "Outlier %", "Lowest", "Highest",
@@ -83,7 +83,7 @@ def measurable(s: ColSpec) -> str:
     if s.kind == "number":
         v = f"try_cast({c} AS DOUBLE)"
         return v, f"isfinite({v}) AND abs({v}) < {HUGE!r}"
-    v = f"try_cast({c} AS {s.kind.upper()})"
+    v = cast_date(c, s.kind.upper())
     return v, f"isfinite({v})"
 
 

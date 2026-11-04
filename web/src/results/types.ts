@@ -12,7 +12,7 @@ export type Summary = {
 export type BucketBody = {
   bucket: string; subset: Subset;
   by_key: { title: string; tables: { column: string; title: string; table: Frame }[]; after: string } | null;
-  columns: { column: string; title: string; sides: ("a" | "b")[] }[];
+  columns: { column: string; title: string; sides: ("a" | "b")[]; differs?: string }[];   // differs: counted where this column differs
   empty: string;
   shown: string[]; groups: { title: string; tone?: "nc"; items: { name: string; label: string }[] }[];   // the plan's own, every column by kind
 };

@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from "react";
 
 export type View = "setup" | "values" | "rows" | "results" | "log" | "config";
-export type ResultsTab = "summary" | "rows" | "onesided" | "report" | "downloads";
+export type ResultsTab = "summary" | "rows" | "onesided" | "aside" | "report" | "downloads";
 export type ViewState = {
   view: View; drawer: "connections" | null; tab: ResultsTab; pair: number; column: string | null;
   anchor: string | null;     // a section of the setup to scroll to once it is drawn: "sources" | "columns" | "rows"

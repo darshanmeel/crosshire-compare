@@ -3,7 +3,7 @@
 // the column table (POST /api/setup/cell); the server makes the table whole again and sends it back.
 import { useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import type { Editable, Row, SetupReady } from "../setup/api";
+import { usePossibleTypes, type Editable, type PossibleType, type Row, type SetupReady } from "../setup/api";
 import { setView } from "../shell/view";
 import { Icon } from "../ui/icons";
 import { CommitInput, LinkButton, Seg } from "../ui/kit";
@@ -67,6 +67,24 @@ function Detail({ row, i, s, busy, edit }: { row: Row; i: number; s: SetupReady;
   );
 }
 
+/** Every other way this pair's values could be read: a click reads it so; a date spelling opens its Values page to name the format. */
+function CouldBe({ row, i, s, si, busy, edit }: { row: Row; i: number; s: SetupReady; si: number; busy: boolean; edit: Edit }) {
+  const p = usePossibleTypes(JSON.stringify(s.columns)).data;
+  const a: PossibleType[] = p?.A?.[row["A column"]] ?? [], b: PossibleType[] = p?.B?.[row["B column"]] ?? [];
+  const ways = [...new Map([...a, ...b].map((w) => [w.label, w])).values()].filter((w) => w.format || w.type !== row.Type);
+  if (!ways.length || (ways.length === 1 && ways[0].type === "text")) return null;
+  return (
+    <div className="cols-could">
+      <span className="lbl">could be</span>
+      {ways.map((w) => (
+        <button key={w.label} type="button" disabled={busy} aria-label={`Read ${row["Common name"]} as ${w.label}`}
+                title={w.format ? `Reads as ${w.format} - opens this pair's steps to set the format` : `Read as ${w.type}`}
+                onClick={() => { if (w.type !== row.Type) edit(i, "Type", w.type); if (w.format && si >= 0) setView({ view: "values", pair: si }); }}>{w.label}</button>
+      ))}
+    </div>
+  );
+}
+
 function PairRow({ row, i, s, busy, edit, setRole, open, toggle }: {
   row: Row; i: number; s: SetupReady; busy: boolean; edit: Edit; setRole: (i: number, r: Role) => void; open: boolean; toggle: () => void;
 }) {
@@ -91,6 +109,7 @@ function PairRow({ row, i, s, busy, edit, setRole, open, toggle }: {
                 onChange={(e) => edit(i, "Type", e.target.value)}>
           {s.types.map((t) => <option key={t}>{t}</option>)}
         </select>
+        <CouldBe row={row} i={i} s={s} si={si} busy={busy} edit={edit} />
       </td>
       <td className="cols-steps" data-label="Transform">
         {both && si >= 0 && (steps

@@ -11,7 +11,10 @@ export type SideView = {
   quote?: Quote; bad_rows?: BadRows; set_aside?: SetAsideInfo | null;
 };
 export type Quote = '"' | "'" | "";
-export type BadRows = "keep" | "set_aside";
+export type BadRows = "keep" | "set_aside" | "join_numbers" | `first:${number}`;
+/** POST /api/sources/{tag}/first-fields - a sample's field counts and its first rows cut to their first fields. */
+export type FirstFieldsPreview = { fields: number; width: number; columns: string[]; sampled: number; by: { fields: number; rows: number }[]; unplaced?: number; guessed?: number;
+                                   rows: { line: number; fields: number; values: string[]; left_out: string }[] };
 /** The rows Load set aside for having too few or too many fields: all, kept to show, the width a row should have. */
 export type SetAsideInfo = { rows: number; kept: number; fields: number; said: string; by: { fields: number | null; rows: number }[] };
 export type SetAsidePage = SetAsideInfo & { page: number; size: number; lines: { line: number; fields: number | null; raw: string }[] };
@@ -41,7 +44,7 @@ export function blankForm(tag: Tag): SideForm {
   return { name: DEFAULT_NAMES[tag], how: "upload", path: "", folder: "", file: "", delimiter: ",", header: true,
            where: "", order_by: [], desc: false, limit: 0, column_names: "", snapshot: true,
            connection: "", db_mode: "table", table: "", sql: "", cap: CAP_DEFAULT, password: "",
-           sheet: "", cell_range: "", stop_at_blank: false, skip_rows: 0, quote: '"', bad_rows: "keep" };
+           sheet: "", cell_range: "", stop_at_blank: false, skip_rows: 0, quote: '"', bad_rows: "set_aside" };
 }
 
 /** Where the table sits in a file - cleared whenever the user picks another file, so a range or a

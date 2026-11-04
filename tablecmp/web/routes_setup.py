@@ -21,6 +21,7 @@ from ..compare import OPS
 from ..keys import key_uniqueness, suggest_keys
 from ..loading import BLANK_FILTER, FILTER_COLS
 from ..profile import profile_tables
+from ..sniff import possible_types as sniff_possible
 from ..values import (FORMAT_PRESETS, NUMERIC_PARAMS, PARAM_LABELS, STEPS, TYPES, conversion_report,
                       function_catalog, plain_error, try_steps)
 from . import jobs
@@ -263,6 +264,14 @@ def put_settings(body: SettingsIn, ws: Workspace = Depends(workspace)) -> dict:
     with ws.lock:
         ws.data["settings"] = {**(ws.data.get("settings") or {}), **body.model_dump(exclude_none=True)}
     return sw.settings(ws)
+
+
+@router.get("/possible-types")
+def possible_types(ws: Workspace = Depends(workspace)) -> dict:
+    """Every way each loaded side's columns could be read, on a sample of their values - read-only."""
+    with ws.lock:
+        A, B = sw.sides(ws)
+        return {"A": sniff_possible(A, A.columns), "B": sniff_possible(B, B.columns)}
 
 
 @router.get("/steps")

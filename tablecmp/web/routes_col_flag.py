@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import profiling
 from ..sql import ident, scratch
-from ..values import ColSpec, register, typed_exprs
+from ..values import ColSpec, cast_date, register, typed_exprs
 from . import setupws as sw
 from .profile_held import held_answer, memo
 from .routes_profiling import _casts_held, _held, _spec, _value, read_when, reads_as
@@ -147,7 +147,7 @@ def group_expr(spec: ColSpec, how: str, when: str = "", form: str = "") -> str:
     """The SQL a group option reads its column with: as it is, its year, or as a number."""
     c = ident(spec.canon)
     if how == "year":
-        t = read_when(_value(spec), when, form) if when else f"try_cast({c} AS TIMESTAMP)"
+        t = read_when(_value(spec), when, form) if when else cast_date(c)
         return f"CAST(year({t}) AS VARCHAR)"
     return c
 

@@ -79,6 +79,12 @@ def verdict_parts(run: dict, NA: str, NB: str) -> dict:
     for n, name in ((res.set_aside_left, NA), (res.set_aside_right, NB)):
         if n:
             seg += [(" · ", False), (f"{n:,}", True), (f" row{'s' if n != 1 else ''} set aside in {name}", False)]
+    for n, name in ((res.fixed_left, NA), (res.fixed_right, NB)):
+        if n:
+            seg += [(" · ", False), (f"{n:,}", True), (f" row{'s' if n != 1 else ''} with split numbers joined in {name}", False)]
+    for n, name in ((res.first_cut_left, NA), (res.first_cut_right, NB)):
+        if n:
+            seg += [(" · ", False), (f"{n:,}", True), (f" row{'s' if n != 1 else ''} cut to the first fields in {name}", False)]
     return {"tone": v.tone, "word": v.word, "segments": seg, "when": f"{run['seconds']:.1f}s at {run['at']}"}
 
 
@@ -249,7 +255,8 @@ def first_bucket(names: dict, want: str | None) -> str:
     return "differ" if "differ" in names else next(iter(names))
 
 
-BUCKET_SHOWN = 3                        # mismatched columns ticked besides the key on the paired buckets that differ
+BUCKET_SHOWN = 3                        # mismatched columns the One-sided rows' Columns menu ticks besides the key
+BUCKET_TICKED = 3                       # columns a bucket ticks without asking
 
 
 def mismatched(run: dict, cols: list[str]) -> list[str]:
@@ -260,11 +267,11 @@ def mismatched(run: dict, cols: list[str]) -> list[str]:
 
 def bucket_plan(run: dict, bucket: str, keys: list[str], cols: list[str]) -> tuple[dict, list[str], list[str]]:
     """For a bucket: the one-sided columns its rows carry (with their side), the columns ticked
-    without asking, and the others. Ticked without asking: the key, and on Keys matched and
-    Matched but different the BUCKET_SHOWN columns that differ most - the reader ticks the rest."""
+    without asking, and the others. Ticked without asking: where keys matched, the three columns
+    that differ most; anywhere else, or when none differs, the key, or with no key any three."""
     own = bucket_columns(run, bucket)
     mine = [c for c in own if c not in keys and c not in cols]
     rest = [c for c in cols if c not in keys]
-    first = mismatched(run, rest)[:BUCKET_SHOWN] if bucket in ("matched", "differ") else []
-    shown = list(keys) + first
-    return own, shown, [c for c in rest + mine if c not in first]
+    bad = mismatched(run, rest) if bucket in ("matched", "differ") else []
+    shown = bad[:BUCKET_TICKED] or list(keys) or (rest + mine)[:BUCKET_TICKED]
+    return own, shown, [c for c in list(keys) + rest + mine if c not in shown]

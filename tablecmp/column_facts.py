@@ -7,6 +7,7 @@ any rows. No n-grams and no parts: the rows a bucket holds are few, the facts sh
 from __future__ import annotations
 
 from .sql import ident
+from .values import cast_date
 from .web.routes_col_text import by_fingerprint
 
 TOP = 3                 # shapes, first and last characters listed
@@ -39,8 +40,8 @@ def column_facts(con, rel: str, columns: list[str]) -> dict[str, dict]:
         aggs += [f"count({v})", f"count(DISTINCT {v})", f"min(length({v}))", f"max(length({v}))",
                  f"count(try_cast({v} AS DOUBLE))", f"min(try_cast({v} AS DOUBLE))",
                  f"max(try_cast({v} AS DOUBLE))", f"avg(try_cast({v} AS DOUBLE))",
-                 f"count(try_cast({v} AS TIMESTAMP))", f"min(try_cast({v} AS TIMESTAMP))",
-                 f"max(try_cast({v} AS TIMESTAMP))"]
+                 f"count({cast_date(v)})", f"min({cast_date(v)})",
+                 f"max({cast_date(v)})"]
     got = con.execute(f"SELECT count(*), {', '.join(aggs)} FROM {r}").fetchone()
     rows, out = int(got[0]), {}
     for i, c in enumerate(columns):
